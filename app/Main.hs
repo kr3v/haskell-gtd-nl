@@ -56,4 +56,6 @@ main = do
             postCpp <- haskellApplyCppHs path content
             case haskellParse path postCpp of
               Left e -> print e
-              Right m -> haskellGetIdentifiers m
+              Right m -> do
+                haskellGetIdentifiers m
+                haskellGetExportedIdentifiers m

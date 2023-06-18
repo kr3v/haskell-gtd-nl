@@ -51,4 +51,4 @@ cabalGetExportedModules pkg = do
   return (srcDirs, modules)
 
 haskellPath :: FilePath -> CabalLibSrcDir -> ModuleName -> FilePath
-haskellPath dir src mod = dir </> getSymbolicPath src </> (toFilePath mod ++ ".hs")\
+haskellPath dir src mod = dir </> getSymbolicPath src </> (toFilePath mod ++ ".hs")

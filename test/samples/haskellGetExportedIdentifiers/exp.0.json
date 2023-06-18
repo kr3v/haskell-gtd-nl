@@ -1,0 +1,63 @@
+[
+    {
+      "declarationName": "putOn",
+      "declarationSrcSpan": {
+        "sourceSpanEndColumn": 86,
+        "sourceSpanEndLine": 5,
+        "sourceSpanFileName": "./test/samples/haskellGetExportedIdentifiers/in.0.hs",
+        "sourceSpanStartColumn": 81,
+        "sourceSpanStartLine": 5
+      }
+    },
+    {
+      "declarationName": "putOn'",
+      "declarationSrcSpan": {
+        "sourceSpanEndColumn": 94,
+        "sourceSpanEndLine": 5,
+        "sourceSpanFileName": "./test/samples/haskellGetExportedIdentifiers/in.0.hs",
+        "sourceSpanStartColumn": 88,
+        "sourceSpanStartLine": 5
+      }
+    },
+    {
+      "declarationName": "isWithinSurface",
+      "declarationSrcSpan": {
+        "sourceSpanEndColumn": 111,
+        "sourceSpanEndLine": 5,
+        "sourceSpanFileName": "./test/samples/haskellGetExportedIdentifiers/in.0.hs",
+        "sourceSpanStartColumn": 96,
+        "sourceSpanStartLine": 5
+      }
+    },
+    {
+      "declarationName": "maxHeight",
+      "declarationSrcSpan": {
+        "sourceSpanEndColumn": 122,
+        "sourceSpanEndLine": 5,
+        "sourceSpanFileName": "./test/samples/haskellGetExportedIdentifiers/in.0.hs",
+        "sourceSpanStartColumn": 113,
+        "sourceSpanStartLine": 5
+      }
+    },
+    {
+      "declarationName": "width",
+      "declarationSrcSpan": {
+        "sourceSpanEndColumn": 129,
+        "sourceSpanEndLine": 5,
+        "sourceSpanFileName": "./test/samples/haskellGetExportedIdentifiers/in.0.hs",
+        "sourceSpanStartColumn": 124,
+        "sourceSpanStartLine": 5
+      }
+    },
+    {
+      "declarationName": "heights",
+      "declarationSrcSpan": {
+        "sourceSpanEndColumn": 138,
+        "sourceSpanEndLine": 5,
+        "sourceSpanFileName": "./test/samples/haskellGetExportedIdentifiers/in.0.hs",
+        "sourceSpanStartColumn": 131,
+        "sourceSpanStartLine": 5
+      }
+    }
+  ]
+  

@@ -1,4 +1,9 @@
 targets:
-1. basic tests - a simple file in Haskell as an input; verify that appliyng functions produce an expected result
-2. implement function that would return a list of identifiers exported by a module
-3. implement function that would return a list of identifiers imported by a module
+1. for every implemented function that is not yet 100% complete, implement both succeeding and failing test cases
+
+2. list of exports
+- handle all other cases (except the handled most trivial one)
+- add a test case for modules without an explicit export list
+- add a test case for modules with an empty export list
+
+3. list of imports
