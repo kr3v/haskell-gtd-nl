@@ -1,0 +1,67 @@
+cabal-version:      2.4
+name:               haskell-gtd
+version:            0.1.0.0
+
+-- A short (one-line) description of the package.
+-- synopsis:
+
+-- A longer description of the package.
+-- description:
+
+-- A URL where users can report bugs.
+-- bug-reports:
+
+-- The license under which the package is released.
+-- license:
+author:             kr3v
+
+-- A copyright notice.
+-- copyright:
+-- category:
+extra-source-files: CHANGELOG.md
+
+executable haskell-gtd
+    main-is:          Main.hs
+
+    build-depends:
+        base ^>=4.16.4.0
+        , haskell-src-exts ^>= 1.23.1
+        , aeson ^>= 2.1.2.1
+        , Cabal ^>= 3.10.1.0
+        , bytestring ^>= 0.11.4.0
+        , utf8-string ^>= 1.0.2
+        , process ^>= 1.6.17.0
+        , regex ^>= 1.1.0.2
+        , regex-posix ^>= 0.96.0.1
+        , filepath ^>= 1.4.100.3
+        , ghc-lib-parser ^>= 9.6.2.20230523
+        , mtl ^>= 2.3.1
+        , cpphs ^>= 1.20.9.1
+        , hspec ^>= 2.11.1
+        , haskell-gtd-lib
+
+    hs-source-dirs:   app
+    default-language: Haskell2010
+
+library haskell-gtd-lib
+    hs-source-dirs:      src
+    default-language: Haskell2010
+    build-depends:
+        base ^>=4.16.4.0
+        , haskell-src-exts ^>= 1.23.1
+        , aeson ^>= 2.1.2.1
+        , Cabal ^>= 3.10.1.0
+        , bytestring ^>= 0.11.4.0
+        , utf8-string ^>= 1.0.2
+        , process ^>= 1.6.17.0
+        , regex ^>= 1.1.0.2
+        , regex-posix ^>= 0.96.0.1
+        , filepath ^>= 1.4.100.3
+        , ghc-lib-parser ^>= 9.6.2.20230523
+        , mtl ^>= 2.3.1
+        , cpphs ^>= 1.20.9.1
+        , hspec ^>= 2.11.1
+    
+    exposed-modules:
+        GTD.Haskell
+        GTD.Cabal
