@@ -4,12 +4,12 @@ import Control.Exception (evaluate)
 import Data.Aeson (decode, defaultOptions, encode, genericToJSON)
 import qualified Data.ByteString.Lazy as BS
 import Data.Maybe (fromJust)
-import GTD.Haskell (Declaration, haskellApplyCppHs, haskellGetExportedIdentifiers, haskellGetIdentifiers, haskellParse)
+import GTD.Haskell (Declaration, haskellApplyCppHs, haskellGetExportedIdentifiers, haskellGetIdentifiers, haskellParse, haskellGetImportedIdentifiers)
 import System.Directory (getCurrentDirectory)
 import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe)
 import Test.Hspec.Runner (Config (configPrintCpuTime), defaultConfig, hspecWith)
 import Text.Printf (printf)
-import Control.Monad.Writer (runWriterT)
+import Control.Monad.Writer (runWriterT, execWriterT)
 
 haskellApplyCppHsSpec :: Spec
 haskellApplyCppHsSpec = do
@@ -87,8 +87,35 @@ haskellGetExportedIdentifiersSpec = do
     it "parses a file with an explicit list of exported functions" $
       test 0
 
+haskellGetImportedIdentifiersSpec :: Spec
+haskellGetImportedIdentifiersSpec = do
+  let descr = "haskellGetImportedIdentifiers"
+  let test i = do
+        let iS = show i
+            srcPath = "./test/samples/" ++ descr ++ "/in." ++ iS ++ ".hs"
+            dstPath = "./test/samples/" ++ descr ++ "/out." ++ iS ++ ".json"
+            expPath = "./test/samples/" ++ descr ++ "/exp." ++ iS ++ ".json"
+
+        src <- readFile srcPath
+        expectedS <- BS.readFile expPath
+
+        let expected :: [Declaration] = fromJust $ decode expectedS
+
+        let result = haskellParse srcPath src
+        case result of
+          Left e -> expectationFailure $ printf "failed to parse %s: %s" srcPath e
+          Right m -> do
+            identifiers <- execWriterT $ haskellGetImportedIdentifiers m
+            BS.writeFile dstPath $ encode identifiers
+            identifiers `shouldBe` expected
+  describe descr $ do
+    it "extracts only function imports" $
+      test 0
+
+
 main :: IO ()
 main = hspecWith defaultConfig {configPrintCpuTime = False} $ do
   haskellApplyCppHsSpec
   haskellGetIdentifiersSpec
   haskellGetExportedIdentifiersSpec
+  haskellGetImportedIdentifiersSpec

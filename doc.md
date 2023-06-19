@@ -7,3 +7,17 @@ targets:
 - add a test case for modules with an empty export list
 
 3. list of imports
+
+
+
+---
+
+detect
+
+let p = "repo" </> p
+
+when 
+
+let p = "repo" </> p'
+
+was meant
