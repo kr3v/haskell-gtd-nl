@@ -7,8 +7,9 @@ module GTD.Haskell where
 
 import Control.Exception
 import Control.Lens (At (..), makeLenses, use, (%=), (^.))
-import Control.Monad (forM, forM_, guard, when)
+import Control.Monad (forM, forM_, guard, unless, when)
 import Control.Monad.State (StateT)
+import Control.Monad.Trans.Maybe (MaybeT (..))
 import Control.Monad.Writer (WriterT (..), execWriterT, lift, tell)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Bifunctor (first)
@@ -20,13 +21,13 @@ import Data.Maybe (fromMaybe, isJust)
 import qualified Data.Set as Set
 import GHC.Generics (Generic)
 import GTD.Cabal (CabalPackage (..), ModuleNameS, PackageNameS, cabalPackageName, haskellPath)
+import GTD.Utils (maybeToMaybeT)
 import Language.Haskell.Exts (Decl (..), ExportSpec (..), ExportSpecList (..), ImportDecl (..), ImportSpec (..), ImportSpecList (..), Module (..), ModuleHead (..), ModuleName (..), Name (..), ParseMode (..), ParseResult (..), QName (..), SrcSpan (..), SrcSpanInfo (..), defaultParseMode, parseFile, parseFileContents, parseFileContentsWithMode, parseFileWithCommentsAndPragmas, prettyPrint)
 import Language.Haskell.Exts.Extension (Language (..))
 import Language.Haskell.Exts.Pretty
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Preprocessor.Cpphs (defaultCpphsOptions, runCpphs)
 import Text.Printf (printf)
-import Control.Monad.Trans.Maybe (MaybeT(..), hoistMaybe)
 
 haskellApplyCppHs :: FilePath -> String -> IO String
 haskellApplyCppHs = runCpphs defaultCpphsOptions
@@ -109,7 +110,7 @@ data SourceSpan = SourceSpan
     sourceSpanEndLine :: Int,
     sourceSpanEndColumn :: Int
   }
-  deriving (Show, Generic, Eq)
+  deriving (Show, Generic, Eq, Ord)
 
 sourceSpan :: SrcSpan -> SourceSpan
 sourceSpan (SrcSpan {srcSpanFilename = fileName, srcSpanStartLine = startLine, srcSpanStartColumn = startColumn, srcSpanEndLine = endLine, srcSpanEndColumn = endColumn}) =
@@ -122,7 +123,7 @@ sourceSpan (SrcSpan {srcSpanFilename = fileName, srcSpanStartLine = startLine, s
     }
 
 emptySourceSpan :: SourceSpan
-emptySourceSpan = SourceSpan "" 0 0 0 0
+emptySourceSpan = SourceSpan "" 1 1 1 1
 
 data Declaration = Declaration
   { declSrcUsage :: SourceSpan,
@@ -130,7 +131,7 @@ data Declaration = Declaration
     declModule :: ModuleNameS,
     declName :: String
   }
-  deriving (Show, Eq, Generic)
+  deriving (Show, Eq, Generic, Ord)
 
 instance FromJSON SourceSpan
 
@@ -147,7 +148,8 @@ data Identifier
 
 data ContextModule = ContextModule
   { c2_module :: Module SrcSpanInfo,
-    c2_exports :: Map.Map Identifier Declaration
+    c2_exports :: Map.Map Identifier Declaration,
+    c2_identifiers :: Map.Map Identifier Declaration
   }
   deriving (Show, Eq, Generic)
 
@@ -166,38 +168,41 @@ parsePackages = do
 
 parsePackage :: CabalPackage -> StateT ContextCabalPackage IO ()
 parsePackage p = do
-  let mods = _cabalPackageExportedModules p
-  let root = _cabalPackagePath p
-  let srcDirs = _cabalPackageSrcDirs p
-  forM_ (Map.assocs mods) $ \(modS, mod) -> do
-    forM_ srcDirs $ \srcDir -> do
-      let srcP = haskellPath root srcDir mod
-      r <- parseModule False srcP
-      case r of
-        Left e -> lift $ printf "parseModule: %s\n" e
-        Right c2 -> do
-          m0 <- use modules
-          lift $ printf "parsed %s! updating the map: %d\n" srcP (length m0)
-          modules %= Map.insertWith Map.union (_cabalPackageName p) (Map.singleton modS c2)
-          m1 <- use modules
-          lift $ printf "parsed %s! updating the map: %d\n" srcP (length m1)
-          return ()
+  mods <- use modules
+  unless ((p ^. cabalPackageName) `Map.member` mods) $ do
+    let mods = _cabalPackageExportedModules p
+    let root = _cabalPackagePath p
+    let srcDirs = _cabalPackageSrcDirs p
+    forM_ (Map.assocs mods) $ \(modS, mod) -> do
+      forM_ srcDirs $ \srcDir -> do
+        let srcP = haskellPath root srcDir mod
+        r <- parseModule False srcP
+        case r of
+          Left e -> lift $ printf "parseModule: %s\n" e
+          Right c2 -> do
+            m0 <- use modules
+            lift $ printf "parsed %s! updating the map: %d\n" srcP (length m0)
+            modules %= Map.insertWith Map.union (_cabalPackageName p) (Map.singleton modS c2)
+            m1 <- use modules
+            lift $ printf "parsed %s! updating the map: %d\n" srcP (length m1)
+            return ()
 
 enrich :: Declaration -> StateT ContextCabalPackage IO Declaration
 enrich d = do
   deps <- use dependencies
   mods <- use modules
-  xs <- forM deps $ \dep -> do
+  xs' <- forM deps $ \dep -> do
     xm <- runMaybeT $ do
-          guard $ declModule d `Map.member` _cabalPackageExportedModules dep
-          dependencyModules <- hoistMaybe $ _cabalPackageName dep `Map.lookup` mods
-          mod <- hoistMaybe $ declModule d `Map.lookup` dependencyModules
-          decl <- hoistMaybe $ Map.lookup (Identifier $ declName d) (c2_exports mod)
-          lift $ lift $ printf "enrich: updating %s with %s\n" (show d) (show decl)
-          return $ d {declSrcOrig = declSrcOrig decl}
+      guard $ declModule d `Map.member` _cabalPackageExportedModules dep
+      dependencyModules <- maybeToMaybeT $ _cabalPackageName dep `Map.lookup` mods
+      mod <- maybeToMaybeT $ declModule d `Map.lookup` dependencyModules
+      decl <- maybeToMaybeT $ Map.lookup (Identifier $ declName d) (c2_exports mod)
+      lift $ lift $ printf "enrich: updating %s with %s\n" (show d) (show decl)
+      return $ d {declSrcOrig = declSrcOrig decl}
     let x = fromMaybe d xm
     when (x /= d) $ lift $ print x
     return x
+  let xs = filter (\x -> sourceSpanFileName (declSrcOrig x) /= "") xs'
   case length xs of
     0 -> return d
     1 -> return $ head xs
@@ -234,4 +239,4 @@ parseModule shouldEnrich srcP = do
               exportsM' = asDeclsMap exports
               exportsM = if isImplicitExportAll then asDeclsMap locals else Map.intersection exportsM' localsPlusImports
 
-          return $ Right (ContextModule {c2_module = mod, c2_exports = exportsM})
+          return $ Right (ContextModule {c2_module = mod, c2_exports = exportsM, c2_identifiers = localsPlusImports})

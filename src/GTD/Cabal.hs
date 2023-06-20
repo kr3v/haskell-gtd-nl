@@ -9,7 +9,7 @@ import Control.Applicative (Applicative (liftA2))
 import Control.Lens (makeLenses)
 import Control.Monad (forM)
 import Control.Monad.Trans (lift)
-import Control.Monad.Trans.Maybe (MaybeT (runMaybeT), hoistMaybe)
+import Control.Monad.Trans.Maybe (MaybeT (..))
 import Data.ByteString.UTF8 (fromString)
 import Data.List (find)
 import qualified Data.Map.Strict as Map
@@ -38,7 +38,7 @@ cabalGet pkg pkgVerPredicate = do
   let content = stdout ++ stderr
   let re = pkg ++ "-" ++ "[^\\/]*\\/"
   let packageVersion :: [String] = (=~ re) <$> lines content
-  hoistMaybe $ find (not . null) packageVersion
+  MaybeT $ return $ find (not . null) packageVersion
 
 cabalRead :: FilePath -> IO PackageDescription
 cabalRead p = do
