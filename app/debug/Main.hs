@@ -20,6 +20,6 @@ main = do
   let ctx = ContextCabalPackage {_modules = Map.empty, _dependencies = deps}
   c0 <- execStateT parsePackages ctx
   (d, c) <- runStateT (parseModule True "./src/GTD/Haskell.hs") c0
-  printf "\n\n\n\n"
+  printf "\n\n\n"
   -- print c
   -- print d

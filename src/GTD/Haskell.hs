@@ -10,10 +10,10 @@ module GTD.Haskell where
 import Control.Exception
 import Control.Lens (At (..), makeLenses, use, (%=), (^.))
 import Control.Monad (forM, forM_, guard, unless, when)
-import Control.Monad.Logger (MonadLogger, logDebugN)
+import Control.Monad.Logger (MonadLogger, logDebugN, logDebugNS, logDebugSH)
 import Control.Monad.State (MonadIO (liftIO), MonadState, StateT)
 import Control.Monad.Trans.Maybe (MaybeT (..))
-import Control.Monad.Writer (WriterT (..), execWriterT, lift, tell)
+import Control.Monad.Writer (MonadWriter, WriterT (..), execWriterT, lift, tell)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Bifunctor (first)
 import Data.ByteString.UTF8 (fromString)
@@ -25,10 +25,9 @@ import qualified Data.Set as Set
 import qualified Data.Text as T
 import GHC.Generics (Generic)
 import GTD.Cabal (CabalPackage (..), ModuleNameS, PackageNameS, cabalPackageName, haskellPath)
-import GTD.Utils (maybeToMaybeT)
+import GTD.Utils (logDebugNSS, maybeToMaybeT)
 import Language.Haskell.Exts (Decl (..), ExportSpec (..), ExportSpecList (..), ImportDecl (..), ImportSpec (..), ImportSpecList (..), Module (..), ModuleHead (..), ModuleName (..), Name (..), ParseMode (..), ParseResult (..), QName (..), SrcSpan (..), SrcSpanInfo (..), defaultParseMode, parseFile, parseFileContents, parseFileContentsWithMode, parseFileWithCommentsAndPragmas, prettyPrint)
 import Language.Haskell.Exts.Extension (Language (..))
-import Language.Haskell.Exts.Pretty
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Preprocessor.Cpphs (defaultCpphsOptions, runCpphs)
 import Text.Printf (printf)
@@ -39,24 +38,19 @@ haskellApplyCppHs = runCpphs defaultCpphsOptions
 haskellParse :: FilePath -> String -> Either String (Module SrcSpanInfo)
 haskellParse src content = case parseFileContentsWithMode defaultParseMode {parseFilename = src, baseLanguage = Haskell2010} content of
   ParseOk m -> Right m
-  ParseFailed loc e -> Left $ printf "failed to parse %s: %s @ %s\n" src e (show loc)
+  ParseFailed loc e -> Left $ printf "failed to parse %s: %s @ %s" src e (show loc)
 
-identToDecl ::
+identToDecl :: ModuleName SrcSpanInfo -> Name SrcSpanInfo -> Bool -> Declaration
+identToDecl m (Symbol l n) = identToDecl' m l n
+identToDecl m (Ident l n) = identToDecl' m l n
+
+identToDecl' ::
   ModuleName SrcSpanInfo ->
-  Name SrcSpanInfo ->
+  SrcSpanInfo ->
+  String ->
   Bool ->
   Declaration
-identToDecl (ModuleName _ mn) (Ident l n) isDeclaration =
-  Declaration
-    { declSrcUsage = if isDeclaration then emptySourceSpan else l',
-      declSrcOrig = if isDeclaration then l' else emptySourceSpan,
-      declName = n,
-      declModule = mn
-    }
-  where
-    l' = sourceSpan . srcInfoSpan $ l
--- TODO: deduplicate code
-identToDecl (ModuleName _ mn) (Symbol l n) isDeclaration =
+identToDecl' (ModuleName _ mn) l n isDeclaration =
   Declaration
     { declSrcUsage = if isDeclaration then emptySourceSpan else l',
       declSrcOrig = if isDeclaration then l' else emptySourceSpan,
@@ -66,11 +60,8 @@ identToDecl (ModuleName _ mn) (Symbol l n) isDeclaration =
   where
     l' = sourceSpan . srcInfoSpan $ l
 
-haskellGetIdentifiers :: Module SrcSpanInfo -> IO [Declaration]
-haskellGetIdentifiers m = execWriterT (haskellGetIdentifiersW m)
-
-haskellGetIdentifiersW :: Module SrcSpanInfo -> WriterT [Declaration] IO ()
-haskellGetIdentifiersW m = do
+haskellGetIdentifiers :: Module SrcSpanInfo -> (MonadWriter [Declaration] m, MonadLogger m, MonadIO m) => m ()
+haskellGetIdentifiers m = do
   let (Module src head wtf1 imports decls) = m
   forM_ head $ \h -> do
     let (ModuleHead _ mN _ _) = h
@@ -79,33 +70,34 @@ haskellGetIdentifiersW m = do
         tell $ (\n -> identToDecl mN n True) <$> names
       _ -> return ()
 
-haskellGetExportedIdentifiers :: Module SrcSpanInfo -> WriterT [Declaration] IO Bool
+haskellGetExportedIdentifiers :: Module SrcSpanInfo -> (MonadWriter [Declaration] m, MonadLogger m, MonadIO m) => m Bool
 haskellGetExportedIdentifiers m = do
+  let logTag = "get exported identifiers"
   let (Module src head wtf1 imports decls) = m
   forM_ head $ \h -> do
     let (ModuleHead _ mN _ mE) = h
-    forM_ mE $ \(ExportSpecList _ es) -> do
-      forM_ es $ \e -> do
-        case e of
-          EVar _ n -> case n of
-            UnQual _ n -> tell [identToDecl mN n False]
-            _ -> lift $ printf "haskellGetExportedIdentifiersW: not yet handled: %s -> %s\n" (show e) (show n)
-          _ -> lift $ printf "haskellGetExportedIdentifiersW: not yet handled: %s\n" (show e)
+    forM_ mE $ \(ExportSpecList _ es) ->
+      forM_ es $ \e -> case e of
+        EVar _ n -> case n of
+          UnQual _ n -> tell [identToDecl mN n False]
+          _ -> logDebugNSS logTag $ printf "not yet handled: %s -> %s" (show e) (show n)
+        _ -> logDebugNSS logTag $ printf "not yet handled: %s" (show e)
   return $ isJust head
 
-haskellGetImportedIdentifiers :: Module SrcSpanInfo -> WriterT [Declaration] IO ()
+haskellGetImportedIdentifiers :: Module SrcSpanInfo -> (MonadWriter [Declaration] m, MonadLogger m, MonadIO m) => m ()
 haskellGetImportedIdentifiers m = do
+  let logTag = "get imported identifiers"
   let (Module src head wtf1 imports decls) = m
   forM_ imports $ \(ImportDecl {importModule = im, importSpecs = ss}) -> do
-    lift $ print im
+    logDebugNSS logTag $ show im
     case ss of
       Just (ImportSpecList _ isHidden is) -> do
         forM_ is $ \i -> do
           case i of
             IVar _ (Ident l n) -> tell [identToDecl im (Ident l n) False]
-            _ -> return () -- lift $ printf "haskellGetImportedIdentifiers: not yet handled: %s\n" (show i)
-          lift $ printf "\t%s\n" (show i)
-      x -> lift $ printf ":t = %s\n" (showConstr . toConstr $ x)
+            _ -> logDebugNSS logTag $ printf "haskellGetImportedIdentifiers: not yet handled: %s" (show i)
+          logDebugNSS logTag $ printf "\t%s" (show i)
+      x -> logDebugNSS logTag $ printf ":t = %s" (showConstr . toConstr $ x)
 
 data SourceSpan = SourceSpan
   { sourceSpanFileName :: FilePath,
@@ -172,6 +164,7 @@ parsePackages = do
 
 parsePackage :: CabalPackage -> (MonadLogger m, MonadIO m, MonadState ContextCabalPackage m) => m ()
 parsePackage p = do
+  let logTag = "parse package"
   mods <- use modules
   unless ((p ^. cabalPackageName) `Map.member` mods) $ do
     let mods = _cabalPackageExportedModules p
@@ -182,17 +175,14 @@ parsePackage p = do
         let srcP = haskellPath root srcDir mod
         r <- parseModule False srcP
         case r of
-          Left e -> logDebugN $ T.pack $ printf "parseModule: %s\n" e
+          Left e -> logDebugNSS logTag $ printf "parseModule failed: %s" e
           Right c2 -> do
-            m0 <- use modules
-            logDebugN $ T.pack $ printf "parsed %s! updating the map: %d\n" srcP (length m0)
             modules %= Map.insertWith Map.union (_cabalPackageName p) (Map.singleton modS c2)
-            m1 <- use modules
-            logDebugN $ T.pack $ printf "parsed %s! updating the map: %d\n" srcP (length m1)
             return ()
 
 enrich :: Declaration -> (MonadLogger m, MonadIO m, MonadState ContextCabalPackage m) => m Declaration
 enrich d = do
+  let logTag = "enrich"
   deps <- use dependencies
   mods <- use modules
   xs' <- forM deps $ \dep -> do
@@ -201,22 +191,23 @@ enrich d = do
       dependencyModules <- maybeToMaybeT $ _cabalPackageName dep `Map.lookup` mods
       mod <- maybeToMaybeT $ declModule d `Map.lookup` dependencyModules
       decl <- maybeToMaybeT $ Map.lookup (Identifier $ declName d) (c2_exports mod)
-      logDebugN $ T.pack $ printf "enrich: updating %s with %s\n" (show d) (show decl)
+      logDebugNSS logTag $ printf "enrich: updating %s with %s" (show d) (show decl)
       return $ d {declSrcOrig = declSrcOrig decl}
     let x = fromMaybe d xm
-    when (x /= d) $ liftIO $ print x
+    when (x /= d) $ logDebugNSS logTag $ show x
     return x
   let xs = filter (\x -> sourceSpanFileName (declSrcOrig x) /= "") xs'
   case length xs of
     0 -> return d
     1 -> return $ head xs
     _ -> do
-      logDebugN $ T.pack $ printf "enrich: multiple matches for %s: %s\n" (show d) (show xs)
+      logDebugNSS logTag $ printf "multiple matches for %s: %s" (show d) (show xs)
       return $ head xs
 
 parseModule :: Bool -> FilePath -> (MonadLogger m, MonadIO m, MonadState ContextCabalPackage m) => m (Either String ContextModule)
 parseModule shouldEnrich srcP = do
-  logDebugN $ T.pack $ printf "parsing %s ...\n" srcP
+  let logTag = "parse module"
+  logDebugNSS logTag $ printf "parsing %s ..." srcP
   srcE <- liftIO (try $ readFile srcP) :: (MonadLogger m, MonadIO m, MonadState ContextCabalPackage m) => m (Either IOException String)
   case srcE of
     Left e -> return $ Left $ show e
@@ -225,18 +216,18 @@ parseModule shouldEnrich srcP = do
       case haskellParse srcP src' of
         Left e -> return $ Left e
         Right mod -> do
-          locals <- liftIO $ haskellGetIdentifiers mod
-          imports <- liftIO $ execWriterT $ haskellGetImportedIdentifiers mod
+          locals <- execWriterT $ haskellGetIdentifiers mod
+          imports <- execWriterT $ haskellGetImportedIdentifiers mod
           imports' <- if shouldEnrich then forM imports enrich else return imports
 
-          liftIO $ putStrLn "\n\n\n\n\n\n\n\n\n"
+          logDebugNSS logTag "\n\n"
 
-          logDebugN $ T.pack $ printf "imports:\n"
-          forM_ imports $ \i -> logDebugN $ T.pack $ printf "\t%s\n" (show i)
-          logDebugN $ T.pack $ printf "imports':\n"
-          forM_ imports' $ \i -> logDebugN $ T.pack $ printf "\t%s\n" (show i)
+          logDebugNSS logTag "imports:"
+          forM_ imports $ \i -> logDebugNSS logTag $ printf "\t%s" (show i)
+          logDebugNSS logTag "imports':"
+          forM_ imports' $ \i -> logDebugNSS logTag $ printf "\t%s" (show i)
 
-          (isImplicitExportAll, exports) <- liftIO $ runWriterT $ haskellGetExportedIdentifiers mod
+          (isImplicitExportAll, exports) <- runWriterT $ haskellGetExportedIdentifiers mod
 
           let asDeclsMap ds = Map.fromList $ (\d -> (Identifier $ declName d, d)) <$> ds
               localsPlusImports = asDeclsMap $ locals ++ imports'

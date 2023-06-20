@@ -78,7 +78,7 @@ haskellGetIdentifiers p = do
     case decl of
       TypeSig src ident _ -> print ident
       _ -> return ()
-  print "<<<<***>>>>\n"
+  print "<<<<***>>>>"
 
 main :: IO ()
 main = do

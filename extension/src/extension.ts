@@ -1,6 +1,6 @@
 import axios from 'axios';
-import path = require('path/posix');
 import * as vscode from 'vscode';
+import path = require('path/posix');
 
 class XDefinitionProvider implements vscode.DefinitionProvider {
 	async provideDefinition(
@@ -17,29 +17,35 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 			let workspaceFolder = vscode.workspace.workspaceFolders[0];
 			let workspacePath = workspaceFolder.uri.fsPath;
 			let docPath = document.uri.fsPath;
-			let res = await axios.post('http://localhost:8080/definition', {
+			let body = {
 				workDir: workspacePath,
 				file: docPath,
 				word: word
-			});
-			let data = res.data.srcSpan;
+			};
+			let res = await axios.
+				post('http://localhost:8080/definition', body).
+				catch(function (error) {
+					console.log("for body {body}");
+					console.log(error);
+					return { "data": {} };
+				});
+			let data = res.data;
+			if (data.srcSpan === undefined) {
+				return Promise.resolve([]);
+			}
 
-			let filePath = data.sourceSpanFileName;
+			let filePath = data.srcSpan.sourceSpanFileName;
 			let fileUri = vscode.Uri.file(path.join(workspacePath, path.normalize(filePath)));
 
-			let line = data.sourceSpanStartLine - 1; // 0-based line number
-			let character = data.sourceSpanStartColumn - 1; // 0-based character position
+			let line = data.srcSpan.sourceSpanStartLine - 1; // 0-based line number
+			let character = data.srcSpan.sourceSpanStartColumn - 1; // 0-based character position
 			let definitionPosition = new vscode.Position(line, character);
 			let definitionLocation = new vscode.Location(fileUri, definitionPosition);
 
 			console.log(filePath);
-
 			return Promise.resolve(definitionLocation);
 		}
-
-		let definitionPosition = new vscode.Position(position.line, position.character);
-		let definitionLocation = new vscode.Location(document.uri, definitionPosition);
-		return Promise.resolve(definitionLocation);
+		return Promise.resolve([]);
 	}
 }
 
