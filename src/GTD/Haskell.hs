@@ -20,7 +20,7 @@ import Data.ByteString.UTF8 (fromString)
 import Data.Data (Data (..), showConstr)
 import Data.Functor ((<&>))
 import qualified Data.Map.Strict as Map
-import Data.Maybe (fromMaybe, isJust)
+import Data.Maybe (catMaybes, fromMaybe, isJust)
 import qualified Data.Set as Set
 import qualified Data.Text as T
 import GHC.Generics (Generic)
@@ -118,8 +118,11 @@ sourceSpan (SrcSpan {srcSpanFilename = fileName, srcSpanStartLine = startLine, s
       sourceSpanEndColumn = endColumn
     }
 
+hasNonEmptyOrig :: Declaration -> Bool
+hasNonEmptyOrig = (/= emptySourceSpan) . declSrcOrig
+
 emptySourceSpan :: SourceSpan
-emptySourceSpan = SourceSpan "" 1 1 1 1
+emptySourceSpan = SourceSpan "" 0 0 0 0
 
 data Declaration = Declaration
   { declSrcUsage :: SourceSpan,
@@ -172,31 +175,48 @@ parsePackage p = do
     let srcDirs = _cabalPackageSrcDirs p
     forM_ (Map.assocs mods) $ \(modS, mod) -> do
       forM_ srcDirs $ \srcDir -> do
-        let srcP = haskellPath root srcDir mod
-        r <- parseModule False srcP
+        r <- parseModule False (haskellPath root srcDir mod)
         case r of
           Left e -> logDebugNSS logTag $ printf "parseModule failed: %s" e
-          Right c2 -> do
-            modules %= Map.insertWith Map.union (_cabalPackageName p) (Map.singleton modS c2)
-            return ()
+          Right c2 -> modules %= Map.insertWith Map.union (_cabalPackageName p) (Map.singleton modS c2)
 
-enrich :: Declaration -> (MonadLogger m, MonadIO m, MonadState ContextCabalPackage m) => m Declaration
+-- 1. even if the map has module for a package, the guard should prevent the further lookup to save the performance
+-- 2. missing module should end up in Nothing
+-- 3. an existing module with a missing declaration should end up in Nothing
+-- 4. an existing module with an existing declaration should end up in Just
+enrichTryPackage ::
+  Declaration ->
+  Map.Map PackageNameS (Map.Map ModuleNameS ContextModule) ->
+  CabalPackage ->
+  (MonadLogger m) => MaybeT m Declaration
+enrichTryPackage d mods dep = do
+  guard $ declModule d `Map.member` _cabalPackageExportedModules dep
+  dependencyModules <- maybeToMaybeT $ _cabalPackageName dep `Map.lookup` mods
+  enrichTryModule d dependencyModules
+
+-- 1. no module => Nothing
+-- 2. no declaration => Nothing
+-- 3. module & declaration => Just with only declSrcOrig copied
+enrichTryModule ::
+  Declaration ->
+  Map.Map ModuleNameS ContextModule ->
+  (MonadLogger m) => MaybeT m Declaration
+enrichTryModule d depMods = do
+  let logTag = "enrich by module"
+  mod <- maybeToMaybeT $ declModule d `Map.lookup` depMods
+  decl <- maybeToMaybeT $ Map.lookup (Identifier $ declName d) (c2_exports mod)
+  logDebugNSS logTag $ printf "enrich: updating %s with %s" (show d) (show decl)
+  return $ d {declSrcOrig = declSrcOrig decl}
+
+-- TODO: figure out whether this is actually good, because we might look into cabal packages that are not even used?
+-- we need to ensure that these declarations actually have an exact module, otherwise we can't 'enrich' them
+-- test the `length xs` case + check that not-yet-supported cases end-up in '0' instead of an expected '1'
+enrich :: Declaration -> (MonadLogger m, MonadState ContextCabalPackage m) => m Declaration
 enrich d = do
   let logTag = "enrich"
   deps <- use dependencies
   mods <- use modules
-  xs' <- forM deps $ \dep -> do
-    xm <- runMaybeT $ do
-      guard $ declModule d `Map.member` _cabalPackageExportedModules dep
-      dependencyModules <- maybeToMaybeT $ _cabalPackageName dep `Map.lookup` mods
-      mod <- maybeToMaybeT $ declModule d `Map.lookup` dependencyModules
-      decl <- maybeToMaybeT $ Map.lookup (Identifier $ declName d) (c2_exports mod)
-      logDebugNSS logTag $ printf "enrich: updating %s with %s" (show d) (show decl)
-      return $ d {declSrcOrig = declSrcOrig decl}
-    let x = fromMaybe d xm
-    when (x /= d) $ logDebugNSS logTag $ show x
-    return x
-  let xs = filter (\x -> sourceSpanFileName (declSrcOrig x) /= "") xs'
+  xs <- fmap (filter hasNonEmptyOrig . catMaybes) <$> forM deps $ runMaybeT . enrichTryPackage d mods
   case length xs of
     0 -> return d
     1 -> return $ head xs

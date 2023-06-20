@@ -1,15 +1,16 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 import Control.Exception (evaluate)
+import Control.Monad.Logger
+import Control.Monad.Writer (MonadIO (liftIO), execWriterT, runWriterT)
 import Data.Aeson (decode, defaultOptions, encode, genericToJSON)
 import qualified Data.ByteString.Lazy as BS
 import Data.Maybe (fromJust)
-import GTD.Haskell (Declaration, haskellApplyCppHs, haskellGetExportedIdentifiers, haskellGetIdentifiers, haskellParse, haskellGetImportedIdentifiers)
+import GTD.Haskell (Declaration, haskellApplyCppHs, haskellGetExportedIdentifiers, haskellGetIdentifiers, haskellGetImportedIdentifiers, haskellParse)
 import System.Directory (getCurrentDirectory)
 import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe)
 import Test.Hspec.Runner (Config (configPrintCpuTime), defaultConfig, hspecWith)
 import Text.Printf (printf)
-import Control.Monad.Writer (runWriterT, execWriterT)
 
 haskellApplyCppHsSpec :: Spec
 haskellApplyCppHsSpec = do
@@ -51,7 +52,7 @@ haskellGetIdentifiersSpec = do
         case result of
           Left e -> expectationFailure $ printf "failed to parse %s: %s" srcPath e
           Right m -> do
-            identifiers <- haskellGetIdentifiers m
+            identifiers <- liftIO $ runStderrLoggingT $ execWriterT $ haskellGetIdentifiers m
             BS.writeFile dstPath $ encode identifiers
             identifiers `shouldBe` expected
 
@@ -79,7 +80,7 @@ haskellGetExportedIdentifiersSpec = do
         case result of
           Left e -> expectationFailure $ printf "failed to parse %s: %s" srcPath e
           Right m -> do
-            (isImplicitExportAll, identifiers) <- runWriterT $ haskellGetExportedIdentifiers m
+            (isImplicitExportAll, identifiers) <- runWriterT $ runStderrLoggingT $ haskellGetExportedIdentifiers m
             BS.writeFile dstPath $ encode identifiers
             identifiers `shouldBe` expected
 
@@ -105,13 +106,12 @@ haskellGetImportedIdentifiersSpec = do
         case result of
           Left e -> expectationFailure $ printf "failed to parse %s: %s" srcPath e
           Right m -> do
-            identifiers <- execWriterT $ haskellGetImportedIdentifiers m
+            identifiers <- execWriterT $ runStderrLoggingT $ haskellGetImportedIdentifiers m
             BS.writeFile dstPath $ encode identifiers
             identifiers `shouldBe` expected
   describe descr $ do
     it "extracts only function imports" $
       test 0
-
 
 main :: IO ()
 main = hspecWith defaultConfig {configPrintCpuTime = False} $ do
