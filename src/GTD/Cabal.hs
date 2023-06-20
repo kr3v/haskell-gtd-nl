@@ -1,5 +1,6 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 
@@ -8,7 +9,8 @@ module GTD.Cabal where
 import Control.Applicative (Applicative (liftA2))
 import Control.Lens (makeLenses)
 import Control.Monad (forM)
-import Control.Monad.Trans (lift)
+import Control.Monad.Logger
+import Control.Monad.Trans (MonadIO (liftIO), lift)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Data.ByteString.UTF8 (fromString)
 import Data.List (find)
@@ -30,35 +32,35 @@ import System.Process (CreateProcess (..), StdStream (CreatePipe), createProcess
 import Text.Printf (printf)
 import Text.Regex.Posix ((=~))
 
-cabalGet :: String -> String -> MaybeT IO String
+cabalGet :: String -> String -> (MonadIO m, MonadLogger m) => MaybeT m String
 cabalGet pkg pkgVerPredicate = do
-  (_, Just hout, Just herr, _) <- lift $ createProcess (proc "cabal" ["get", pkg ++ pkgVerPredicate, "--destdir", "./repo"]) {std_out = CreatePipe, std_err = CreatePipe}
-  stdout <- lift $ hGetContents hout
-  stderr <- lift $ hGetContents herr
+  (_, Just hout, Just herr, _) <- liftIO $ createProcess (proc "cabal" ["get", pkg ++ pkgVerPredicate, "--destdir", "./repo"]) {std_out = CreatePipe, std_err = CreatePipe}
+  stdout <- liftIO $ hGetContents hout
+  stderr <- liftIO $ hGetContents herr
   let content = stdout ++ stderr
   let re = pkg ++ "-" ++ "[^\\/]*\\/"
   let packageVersion :: [String] = (=~ re) <$> lines content
   MaybeT $ return $ find (not . null) packageVersion
 
-cabalRead :: FilePath -> IO PackageDescription
+cabalRead :: FilePath -> (MonadIO m, MonadLogger m) => m PackageDescription
 cabalRead p = do
-  handle <- openFile p ReadMode
-  (warnings, epkg) <- runParseResult . parseGenericPackageDescription . fromString <$> hGetContents handle
-  either (fail . show) (return . flattenPackageDescription) epkg
+  handle <- liftIO $ openFile p ReadMode
+  (warnings, epkg) <- liftIO $ runParseResult . parseGenericPackageDescription . fromString <$> hGetContents handle
+  liftIO $ either (fail . show) (return . flattenPackageDescription) epkg
 
-cabalFetchDependencies :: PackageDescription -> IO [(String, FilePath)]
+cabalFetchDependencies :: PackageDescription -> (MonadIO m, MonadLogger m) => m [(String, FilePath)]
 cabalFetchDependencies pkg = do
   let dependencies = liftA2 (,) exeName (((\(Dependency n v _) -> (unPackageName n, prettyShow v)) <$>) . targetBuildDepends . buildInfo) <$> executables pkg
       fetchDependency n v = (,) n <$> cabalGet n v
-      fetchDependencies :: [(String, String)] -> IO [(String, FilePath)]
+      fetchDependencies :: [(String, String)] -> (MonadIO m, MonadLogger m) => m [(String, FilePath)]
       fetchDependencies deps = catMaybes <$> mapM runMaybeT (uncurry fetchDependency <$> deps)
   concat <$> mapM (\(component, deps) -> fetchDependencies deps) dependencies
 
 type CabalLibSrcDir = SymbolicPath PackageDir SourceDir
 
-cabalGetExportedModules :: PackageDescription -> IO ([SymbolicPath PackageDir SourceDir], [ModuleName])
+cabalGetExportedModules :: PackageDescription -> (MonadIO m, MonadLogger m) => m ([SymbolicPath PackageDir SourceDir], [ModuleName])
 cabalGetExportedModules pkg = do
-  lib <- maybe (fail "no library") return (library pkg)
+  lib <- liftIO $ maybe (fail "no library") return (library pkg)
   let modules = exposedModules lib
   let srcDirs = (hsSourceDirs . libBuildInfo) lib
   return (srcDirs, modules)
@@ -81,7 +83,7 @@ data CabalPackage = CabalPackage
 
 $(makeLenses ''CabalPackage)
 
-cabalDeps :: PackageDescription -> IO [CabalPackage]
+cabalDeps :: PackageDescription -> (MonadIO m, MonadLogger m) => m [CabalPackage]
 cabalDeps pkg = do
   deps <- cabalFetchDependencies pkg
   forM deps $ \(n, p') -> do

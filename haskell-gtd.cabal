@@ -73,6 +73,10 @@ executable haskell-gtd-server
         , servant-server ^>= 0.19.2
         , warp ^>= 3.3.27
         , directory ^>= 1.3.6.2
+        , random ^>= 1.2.1.1
+        , time ^>= 1.12.2
+        , monad-logger ^>= 0.3.40
+        , text ^>= 2.0.2
 
     hs-source-dirs:   app/server
     default-language: Haskell2010
@@ -98,10 +102,14 @@ library haskell-gtd-lib
         , containers ^>= 0.6.7
         , lens ^>= 5.2.2
         , transformers ^>= 0.5.6.2
+        , random ^>= 1.2.1.1
+        , monad-logger ^>= 0.3.40
+        , text ^>= 2.0.2
     
     exposed-modules:
         GTD.Haskell
         GTD.Cabal
+        GTD.Utils
 
 test-suite haskell-gtd-lib-test
   type: exitcode-stdio-1.0

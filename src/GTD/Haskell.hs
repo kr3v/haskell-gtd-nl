@@ -1,6 +1,8 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module GTD.Haskell where
@@ -8,7 +10,8 @@ module GTD.Haskell where
 import Control.Exception
 import Control.Lens (At (..), makeLenses, use, (%=), (^.))
 import Control.Monad (forM, forM_, guard, unless, when)
-import Control.Monad.State (StateT)
+import Control.Monad.Logger (MonadLogger, logDebugN)
+import Control.Monad.State (MonadIO (liftIO), MonadState, StateT)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Control.Monad.Writer (WriterT (..), execWriterT, lift, tell)
 import Data.Aeson (FromJSON, ToJSON)
@@ -19,6 +22,7 @@ import Data.Functor ((<&>))
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe, isJust)
 import qualified Data.Set as Set
+import qualified Data.Text as T
 import GHC.Generics (Generic)
 import GTD.Cabal (CabalPackage (..), ModuleNameS, PackageNameS, cabalPackageName, haskellPath)
 import GTD.Utils (maybeToMaybeT)
@@ -161,12 +165,12 @@ data ContextCabalPackage = ContextCabalPackage
 
 $(makeLenses ''ContextCabalPackage)
 
-parsePackages :: StateT ContextCabalPackage IO ()
+parsePackages :: (MonadLogger m, MonadIO m, MonadState ContextCabalPackage m) => m ()
 parsePackages = do
   deps <- use dependencies
   forM_ deps $ \dep -> parsePackage dep
 
-parsePackage :: CabalPackage -> StateT ContextCabalPackage IO ()
+parsePackage :: CabalPackage -> (MonadLogger m, MonadIO m, MonadState ContextCabalPackage m) => m ()
 parsePackage p = do
   mods <- use modules
   unless ((p ^. cabalPackageName) `Map.member` mods) $ do
@@ -178,16 +182,16 @@ parsePackage p = do
         let srcP = haskellPath root srcDir mod
         r <- parseModule False srcP
         case r of
-          Left e -> lift $ printf "parseModule: %s\n" e
+          Left e -> logDebugN $ T.pack $ printf "parseModule: %s\n" e
           Right c2 -> do
             m0 <- use modules
-            lift $ printf "parsed %s! updating the map: %d\n" srcP (length m0)
+            logDebugN $ T.pack $ printf "parsed %s! updating the map: %d\n" srcP (length m0)
             modules %= Map.insertWith Map.union (_cabalPackageName p) (Map.singleton modS c2)
             m1 <- use modules
-            lift $ printf "parsed %s! updating the map: %d\n" srcP (length m1)
+            logDebugN $ T.pack $ printf "parsed %s! updating the map: %d\n" srcP (length m1)
             return ()
 
-enrich :: Declaration -> StateT ContextCabalPackage IO Declaration
+enrich :: Declaration -> (MonadLogger m, MonadIO m, MonadState ContextCabalPackage m) => m Declaration
 enrich d = do
   deps <- use dependencies
   mods <- use modules
@@ -197,42 +201,42 @@ enrich d = do
       dependencyModules <- maybeToMaybeT $ _cabalPackageName dep `Map.lookup` mods
       mod <- maybeToMaybeT $ declModule d `Map.lookup` dependencyModules
       decl <- maybeToMaybeT $ Map.lookup (Identifier $ declName d) (c2_exports mod)
-      lift $ lift $ printf "enrich: updating %s with %s\n" (show d) (show decl)
+      logDebugN $ T.pack $ printf "enrich: updating %s with %s\n" (show d) (show decl)
       return $ d {declSrcOrig = declSrcOrig decl}
     let x = fromMaybe d xm
-    when (x /= d) $ lift $ print x
+    when (x /= d) $ liftIO $ print x
     return x
   let xs = filter (\x -> sourceSpanFileName (declSrcOrig x) /= "") xs'
   case length xs of
     0 -> return d
     1 -> return $ head xs
     _ -> do
-      lift $ printf "enrich: multiple matches for %s: %s\n" (show d) (show xs)
+      logDebugN $ T.pack $ printf "enrich: multiple matches for %s: %s\n" (show d) (show xs)
       return $ head xs
 
-parseModule :: Bool -> FilePath -> StateT ContextCabalPackage IO (Either String ContextModule)
+parseModule :: Bool -> FilePath -> (MonadLogger m, MonadIO m, MonadState ContextCabalPackage m) => m (Either String ContextModule)
 parseModule shouldEnrich srcP = do
-  lift $ printf "parsing %s ...\n" srcP
-  srcE <- lift (try $ readFile srcP) :: StateT ContextCabalPackage IO (Either IOException String)
+  logDebugN $ T.pack $ printf "parsing %s ...\n" srcP
+  srcE <- liftIO (try $ readFile srcP) :: (MonadLogger m, MonadIO m, MonadState ContextCabalPackage m) => m (Either IOException String)
   case srcE of
     Left e -> return $ Left $ show e
     Right src -> do
-      src' <- lift $ haskellApplyCppHs srcP src
+      src' <- liftIO $ haskellApplyCppHs srcP src
       case haskellParse srcP src' of
         Left e -> return $ Left e
         Right mod -> do
-          locals <- lift $ haskellGetIdentifiers mod
-          imports <- lift $ execWriterT $ haskellGetImportedIdentifiers mod
+          locals <- liftIO $ haskellGetIdentifiers mod
+          imports <- liftIO $ execWriterT $ haskellGetImportedIdentifiers mod
           imports' <- if shouldEnrich then forM imports enrich else return imports
 
-          lift $ putStrLn "\n\n\n\n\n\n\n\n\n"
+          liftIO $ putStrLn "\n\n\n\n\n\n\n\n\n"
 
-          lift $ printf "imports:\n"
-          forM_ imports $ \i -> lift $ printf "\t%s\n" (show i)
-          lift $ printf "imports':\n"
-          forM_ imports' $ \i -> lift $ printf "\t%s\n" (show i)
+          logDebugN $ T.pack $ printf "imports:\n"
+          forM_ imports $ \i -> logDebugN $ T.pack $ printf "\t%s\n" (show i)
+          logDebugN $ T.pack $ printf "imports':\n"
+          forM_ imports' $ \i -> logDebugN $ T.pack $ printf "\t%s\n" (show i)
 
-          (isImplicitExportAll, exports) <- lift $ runWriterT $ haskellGetExportedIdentifiers mod
+          (isImplicitExportAll, exports) <- liftIO $ runWriterT $ haskellGetExportedIdentifiers mod
 
           let asDeclsMap ds = Map.fromList $ (\d -> (Identifier $ declName d, d)) <$> ds
               localsPlusImports = asDeclsMap $ locals ++ imports'
