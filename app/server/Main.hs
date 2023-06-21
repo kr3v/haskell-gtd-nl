@@ -1,11 +1,9 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Main where
@@ -31,19 +29,24 @@ import Data.Time.Clock.POSIX (getPOSIXTime)
 import GHC.Generics (Generic)
 import GHC.MVar (MVar (MVar))
 import GTD.Cabal (cabalDeps, cabalPackageName, cabalPackagePath, cabalRead)
-import GTD.Configuration
+import GTD.Configuration (GTDConfiguration (_logs), prepareConstants, root)
 import GTD.Haskell (ContextCabalPackage (..), ContextModule (..), Declaration (..), Identifier (Identifier), SourceSpan (..), dependencies, parseModule, parsePackages)
 import GTD.Server (DefinitionRequest, DefinitionResponse (..), ServerState (..), definition, reqId)
 import GTD.Utils (deduplicateBy, ultraZoom)
-import Network.Wai.Handler.Warp (run)
+import Network.Socket (AddrInfo (addrAddress), Family (AF_INET), SockAddr (SockAddrInet), Socket (..), SocketType (Stream), bind, defaultProtocol, openSocket, socket, socketPort, tupleToHostAddress, withSocketsDo, listen)
+import Network.Wai.Handler.Warp (defaultSettings, run, runSettingsSocket)
 import Numeric (showHex)
 import Servant (HasServer (..), Server, ServerError (errBody), err400, throwError)
 import Servant.API (Header, Headers, JSON, Post, ReqBody, addHeader, type (:>))
 import Servant.Server (Application, Handler, hoistServer, serve)
 import System.Directory (createDirectoryIfMissing, getCurrentDirectory, getHomeDirectory, listDirectory, setCurrentDirectory)
 import System.FilePath (takeExtension, (</>))
+import System.Posix.Signals (Signal (..), addSignal, awaitSignal, emptySignalSet, getPendingSignals, inSignalSet, keyboardSignal, signalProcess)
+import System.Process.Internals (ProcessHandle (waitpidLock))
 import System.Random.Stateful (StdGen, mkStdGen, randomIO)
 import Text.Printf (printf)
+import System.Process (getPid)
+import System.Posix (getProcessID)
 
 type API =
   "definition"
@@ -78,13 +81,23 @@ server c req = do
     Right r -> return $ addHeader reqId r
 
 main :: IO ()
-main = do
-  putStrLn "Starting the server..."
+main = withSocketsDo $ do
+  let addr = SockAddrInet 0 (tupleToHostAddress (127, 0, 0, 1)) -- SockAddrUnix String
+  sock <- socket AF_INET Stream defaultProtocol
+  bind sock addr
+  listen sock 5
+  port <- socketPort sock
+  printf "port=%s\n" (show port)
 
   constants <- prepareConstants
   setCurrentDirectory (constants ^. root)
   getCurrentDirectory >>= print
   print constants
 
+  pid <- getProcessID
+
+  writeFile (constants ^. root </> "pid") (show pid)
+  writeFile (constants ^. root </> "port") (show port)
+
   s <- newMVar $ ServerState {_context = ContextCabalPackage {_modules = Map.empty, _dependencies = []}, _reqId = 0}
-  run 53465 (serve api $ hoistServer api (nt s) (server constants))
+  runSettingsSocket defaultSettings sock $ serve api $ hoistServer api (nt s) (server constants)

@@ -51,18 +51,12 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 
 export function activate(context: vscode.ExtensionContext) {
 	console.log('Congratulations, your extension "hs-gtd" is now active!');
-	let disposable = vscode.commands.registerCommand('hs-gtd.helloWorld', () => {
-		vscode.window.showInformationMessage('Hello World from hs-gtd!');
-	});
-
 	context.subscriptions.push(
 		vscode.languages.registerDefinitionProvider(
 			{ scheme: 'file', language: 'haskell' },
 			new XDefinitionProvider()
 		)
 	);
-
-	context.subscriptions.push(disposable);
 }
 
 // This method is called when your extension is deactivated

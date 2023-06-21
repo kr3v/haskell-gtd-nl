@@ -9,7 +9,7 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": ["onLanguage:haskell"],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
