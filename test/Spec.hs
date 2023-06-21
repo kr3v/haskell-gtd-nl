@@ -3,7 +3,11 @@
 
 import Control.Exception (evaluate)
 import Control.Monad.Logger (runStderrLoggingT)
+import Control.Monad.Logger.CallStack (runFileLoggingT)
+import Control.Monad.State (StateT (..))
+import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Maybe (MaybeT (runMaybeT))
+import Control.Monad.Trans.Reader (ReaderT (..))
 import Control.Monad.Writer (MonadIO (liftIO), execWriterT, forM_, join, runWriterT)
 import Data.Aeson (decode, defaultOptions, encode, genericToJSON)
 import qualified Data.ByteString.Lazy as BS
@@ -12,9 +16,13 @@ import Data.Maybe (fromJust)
 import qualified Distribution.ModuleName as ModuleName
 import Distribution.PackageDescription (emptyGenericPackageDescription, emptyPackageDescription)
 import GTD.Cabal (CabalPackage (..))
+import GTD.Configuration
 import GTD.Haskell (ContextModule (..), Declaration (..), Identifier (Identifier), SourceSpan (..), emptySourceSpan, enrichTryModule, enrichTryPackage, haskellApplyCppHs, haskellGetExportedIdentifiers, haskellGetIdentifiers, haskellGetImportedIdentifiers, haskellParse)
+import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), definition, emptyServerState)
+import GTD.Utils (logDebugNSS)
 import Language.Haskell.Exts (Module (..), SrcSpan (..), SrcSpanInfo (..))
-import System.Directory (getCurrentDirectory)
+import System.Directory (getCurrentDirectory, setCurrentDirectory)
+import System.FilePath ((</>))
 import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe, shouldNotBe)
 import Test.Hspec.Runner (Config (configPrintCpuTime), defaultConfig, hspecWith)
 import Test.QuickCheck (Testable (..), forAll, (==>))
@@ -203,6 +211,31 @@ enrichTryPackageSpec = do
               _declSrcOrig d1 `shouldBe` _declSrcOrig dE
               _declSrcUsage d1 `shouldNotBe` _declSrcUsage dE
 
+definitionsSpec :: Spec
+definitionsSpec = do
+  describe "definitions" $ do
+    it "1" $ do
+      consts <- prepareConstants
+
+      let workDir = "./test/integrationTestRepo/sc-ea-hs"
+      let file = workDir </> "app/game/Main.hs"
+      let req = DefinitionRequest {workDir = "./test/integrationTestRepo/sc-ea-hs", file = file, word = "playIO"}
+
+      let ss = emptyServerState
+      x <- runFileLoggingT (workDir </> "log1.txt") $ do
+        (r, ss') <- runReaderT (runStateT (runExceptT $ definition req) ss) consts
+        logDebugNSS "definitionsSpec" $ show r
+        return r
+
+      let expFile = _repos consts </> "gloss-1.13.2.2/./Graphics/Gloss/Interface/IO/Game.hs"
+          expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartLine = 20, sourceSpanStartColumn = 1, sourceSpanEndLine = 20, sourceSpanEndColumn = 7}
+          expected = Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+      x `shouldBe` expected
+
+integrationTestsSpec :: Spec
+integrationTestsSpec = do
+  definitionsSpec
+
 main :: IO ()
 main = hspecWith defaultConfig {configPrintCpuTime = False} $ do
   haskellApplyCppHsSpec
@@ -211,3 +244,4 @@ main = hspecWith defaultConfig {configPrintCpuTime = False} $ do
   haskellGetImportedIdentifiersSpec
   enrichTryModuleSpec
   enrichTryPackageSpec
+  integrationTestsSpec

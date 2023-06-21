@@ -23,7 +23,7 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 				word: word
 			};
 			let res = await axios.
-				post('http://localhost:8080/definition', body).
+				post('http://localhost:53465/definition', body).
 				catch(function (error) {
 					console.log("for body {body}");
 					console.log(error);

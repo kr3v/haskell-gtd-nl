@@ -1,5 +1,6 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -7,9 +8,10 @@
 module GTD.Cabal where
 
 import Control.Applicative (Applicative (liftA2))
-import Control.Lens (makeLenses)
+import Control.Lens (makeLenses, view)
 import Control.Monad (forM)
 import Control.Monad.Logger
+import Control.Monad.RWS (MonadReader (ask))
 import Control.Monad.Trans (MonadIO (liftIO), lift)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Data.ByteString.UTF8 (fromString)
@@ -26,15 +28,17 @@ import Distribution.Pretty (prettyShow)
 import Distribution.Simple (majorBoundVersion, mkVersion)
 import Distribution.Utils.Path (PackageDir, SourceDir, SymbolicPath, getSymbolicPath)
 import Distribution.Utils.ShortText (fromShortText)
+import GTD.Configuration (GTDConfiguration (..), repos)
 import System.FilePath ((</>))
 import System.IO (IOMode (ReadMode), hClose, hGetBuf, hGetContents, openFile)
 import System.Process (CreateProcess (..), StdStream (CreatePipe), createProcess, proc)
 import Text.Printf (printf)
 import Text.Regex.Posix ((=~))
 
-cabalGet :: String -> String -> (MonadIO m, MonadLogger m) => MaybeT m String
+cabalGet :: String -> String -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => MaybeT m String
 cabalGet pkg pkgVerPredicate = do
-  (_, Just hout, Just herr, _) <- liftIO $ createProcess (proc "cabal" ["get", pkg ++ pkgVerPredicate, "--destdir", "./repo"]) {std_out = CreatePipe, std_err = CreatePipe}
+  reposR <- view repos
+  (_, Just hout, Just herr, _) <- liftIO $ createProcess (proc "cabal" ["get", pkg ++ pkgVerPredicate, "--destdir", reposR]) {std_out = CreatePipe, std_err = CreatePipe}
   stdout <- liftIO $ hGetContents hout
   stderr <- liftIO $ hGetContents herr
   let content = stdout ++ stderr
@@ -42,23 +46,23 @@ cabalGet pkg pkgVerPredicate = do
   let packageVersion :: [String] = (=~ re) <$> lines content
   MaybeT $ return $ find (not . null) packageVersion
 
-cabalRead :: FilePath -> (MonadIO m, MonadLogger m) => m PackageDescription
+cabalRead :: FilePath -> (MonadLoggerIO m) => m PackageDescription
 cabalRead p = do
   handle <- liftIO $ openFile p ReadMode
   (warnings, epkg) <- liftIO $ runParseResult . parseGenericPackageDescription . fromString <$> hGetContents handle
   liftIO $ either (fail . show) (return . flattenPackageDescription) epkg
 
-cabalFetchDependencies :: PackageDescription -> (MonadIO m, MonadLogger m) => m [(String, FilePath)]
+cabalFetchDependencies :: PackageDescription -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m [(String, FilePath)]
 cabalFetchDependencies pkg = do
   let dependencies = liftA2 (,) exeName (((\(Dependency n v _) -> (unPackageName n, prettyShow v)) <$>) . targetBuildDepends . buildInfo) <$> executables pkg
       fetchDependency n v = (,) n <$> cabalGet n v
-      fetchDependencies :: [(String, String)] -> (MonadIO m, MonadLogger m) => m [(String, FilePath)]
+      fetchDependencies :: [(String, String)] -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m [(String, FilePath)]
       fetchDependencies deps = catMaybes <$> mapM runMaybeT (uncurry fetchDependency <$> deps)
   concat <$> mapM (\(component, deps) -> fetchDependencies deps) dependencies
 
 type CabalLibSrcDir = SymbolicPath PackageDir SourceDir
 
-cabalGetExportedModules :: PackageDescription -> (MonadIO m, MonadLogger m) => m ([SymbolicPath PackageDir SourceDir], [ModuleName])
+cabalGetExportedModules :: PackageDescription -> (MonadLoggerIO m) => m ([SymbolicPath PackageDir SourceDir], [ModuleName])
 cabalGetExportedModules pkg = do
   lib <- liftIO $ maybe (fail "no library") return (library pkg)
   let modules = exposedModules lib
@@ -83,11 +87,12 @@ data CabalPackage = CabalPackage
 
 $(makeLenses ''CabalPackage)
 
-cabalDeps :: PackageDescription -> (MonadIO m, MonadLogger m) => m [CabalPackage]
+cabalDeps :: PackageDescription -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m [CabalPackage]
 cabalDeps pkg = do
+  reposR <- view repos
   deps <- cabalFetchDependencies pkg
   forM deps $ \(n, p') -> do
-    let p = "repo" </> p'
+    let p = reposR </> p'
     let path = p </> (n ++ ".cabal")
     desc <- cabalRead path
     (srcs, mods) <- cabalGetExportedModules desc

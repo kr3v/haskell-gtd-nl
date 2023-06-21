@@ -3,21 +3,24 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module GTD.Haskell where
 
 import Control.Exception
-import Control.Lens (At (..), makeLenses, use, (%=), (^.))
+import Control.Lens (At (..), makeLenses, use, (%=), (&), (^.))
 import Control.Monad (forM, forM_, guard, unless, when)
 import Control.Monad.Logger (MonadLogger, logDebugN, logDebugNS, logDebugSH)
 import Control.Monad.State (MonadIO (liftIO), MonadState, StateT)
+import Control.Monad.Trans.Except (ExceptT (..), runExceptT, withExceptT)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Control.Monad.Writer (MonadWriter, WriterT (..), execWriterT, lift, tell)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Bifunctor (first)
 import Data.ByteString.UTF8 (fromString)
 import Data.Data (Data (..), showConstr)
+import Data.Either.Combinators (mapLeft)
 import Data.Functor ((<&>))
 import qualified Data.Map.Strict as Map
 import Data.Maybe (catMaybes, fromMaybe, isJust)
@@ -25,7 +28,7 @@ import qualified Data.Set as Set
 import qualified Data.Text as T
 import GHC.Generics (Generic)
 import GTD.Cabal (CabalPackage (..), ModuleNameS, PackageNameS, cabalPackageName, haskellPath)
-import GTD.Utils (logDebugNSS, maybeToMaybeT)
+import GTD.Utils (logDebugNSS, maybeToMaybeT, tryE)
 import Language.Haskell.Exts (Decl (..), ExportSpec (..), ExportSpecList (..), ImportDecl (..), ImportSpec (..), ImportSpecList (..), Module (..), ModuleHead (..), ModuleName (..), Name (..), ParseMode (..), ParseResult (..), QName (..), SrcSpan (..), SrcSpanInfo (..), defaultParseMode, parseFile, parseFileContents, parseFileContentsWithMode, parseFileWithCommentsAndPragmas, prettyPrint)
 import Language.Haskell.Exts.Extension (Language (..))
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
@@ -161,6 +164,8 @@ data ContextCabalPackage = ContextCabalPackage
 $(makeLenses ''ContextModule)
 $(makeLenses ''ContextCabalPackage)
 
+---
+
 parsePackages :: (MonadLogger m, MonadIO m, MonadState ContextCabalPackage m) => m ()
 parsePackages = do
   deps <- use dependencies
@@ -176,15 +181,41 @@ parsePackage p = do
     let srcDirs = _cabalPackageSrcDirs p
     forM_ (Map.assocs mods) $ \(modS, mod) -> do
       forM_ srcDirs $ \srcDir -> do
-        r <- parseModule False (haskellPath root srcDir mod)
+        r <- runExceptT $ parseModule False (haskellPath root srcDir mod)
         case r of
           Left e -> logDebugNSS logTag $ printf "parseModule failed: %s" e
           Right c2 -> modules %= Map.insertWith Map.union (_cabalPackageName p) (Map.singleton modS c2)
 
--- 1. even if the map has module for a package, the guard should prevent the further lookup to save the performance
--- 2. missing module should end up in Nothing
--- 3. an existing module with a missing declaration should end up in Nothing
--- 4. an existing module with an existing declaration should end up in Just
+parseModule ::
+  Bool ->
+  FilePath ->
+  (MonadLogger m, MonadIO m, MonadState ContextCabalPackage m) => ExceptT String m ContextModule
+parseModule shouldEnrich srcP = do
+  let logTag = printf "parsing module %s (enrich=%s)" srcP (show shouldEnrich)
+  logDebugNSS logTag $ printf ""
+
+  src <- ExceptT $ mapLeft show <$> (liftIO (try $ readFile srcP) :: (MonadIO m) => m (Either IOException String))
+  srcPostCpp <- liftIO $ haskellApplyCppHs srcP src
+  mod <- ExceptT $ return $ haskellParse srcP srcPostCpp
+
+  locals <- execWriterT $ haskellGetIdentifiers mod
+  importsE <- execWriterT (haskellGetImportedIdentifiers mod) >>= mapM (if shouldEnrich then enrich else return)
+  (isImplicitExportAll, exports) <- runWriterT $ haskellGetExportedIdentifiers mod
+
+  logDebugNSS logTag "locals:"
+  forM_ locals $ \i -> logDebugNSS logTag $ printf "\t%s" (show i)
+  logDebugNSS logTag "importsE:"
+  forM_ importsE $ \i -> logDebugNSS logTag $ printf "\t%s" (show i)
+  logDebugNSS logTag "exports:"
+  forM_ exports $ \i -> logDebugNSS logTag $ printf "\t%s" (show i)
+
+  let asDeclsMap ds = Map.fromList $ (\d -> (Identifier $ _declName d, d)) <$> ds
+      localsPlusImports = asDeclsMap $ locals ++ importsE
+      exportsM = if isImplicitExportAll then asDeclsMap locals else Map.intersection (asDeclsMap exports) localsPlusImports
+  return ContextModule {_cmodule = mod, _exports = exportsM, _identifiers = localsPlusImports}
+
+---
+
 enrichTryPackage ::
   Declaration ->
   Map.Map PackageNameS (Map.Map ModuleNameS ContextModule) ->
@@ -195,9 +226,6 @@ enrichTryPackage d mods dep = do
   dependencyModules <- maybeToMaybeT $ _cabalPackageName dep `Map.lookup` mods
   enrichTryModule d dependencyModules
 
--- 1. no module => Nothing
--- 2. no declaration => Nothing
--- 3. module & declaration => Just with only declSrcOrig copied
 enrichTryModule ::
   Declaration ->
   Map.Map ModuleNameS ContextModule ->
@@ -209,9 +237,6 @@ enrichTryModule orig moduleDecls = do
   logDebugNSS logTag $ printf "enrich: updating %s with %s" (show orig) (show mDecl)
   return $ orig {_declSrcOrig = _declSrcOrig mDecl}
 
--- TODO: figure out whether this is actually good, because we might look into cabal packages that are not even used?
--- we need to ensure that these declarations actually have an exact module, otherwise we can't 'enrich' them
--- test the `length xs` case + check that not-yet-supported cases end-up in '0' instead of an expected '1'
 enrich :: Declaration -> (MonadLogger m, MonadState ContextCabalPackage m) => m Declaration
 enrich d = do
   let logTag = "enrich"
@@ -225,34 +250,4 @@ enrich d = do
       logDebugNSS logTag $ printf "multiple matches for %s: %s" (show d) (show xs)
       return $ head xs
 
-parseModule :: Bool -> FilePath -> (MonadLogger m, MonadIO m, MonadState ContextCabalPackage m) => m (Either String ContextModule)
-parseModule shouldEnrich srcP = do
-  let logTag = "parse module"
-  logDebugNSS logTag $ printf "parsing %s ..." srcP
-  srcE <- liftIO (try $ readFile srcP) :: (MonadLogger m, MonadIO m, MonadState ContextCabalPackage m) => m (Either IOException String)
-  case srcE of
-    Left e -> return $ Left $ show e
-    Right src -> do
-      src' <- liftIO $ haskellApplyCppHs srcP src
-      case haskellParse srcP src' of
-        Left e -> return $ Left e
-        Right mod -> do
-          locals <- execWriterT $ haskellGetIdentifiers mod
-          imports <- execWriterT $ haskellGetImportedIdentifiers mod
-          imports' <- if shouldEnrich then forM imports enrich else return imports
-
-          logDebugNSS logTag "\n\n"
-
-          logDebugNSS logTag "imports:"
-          forM_ imports $ \i -> logDebugNSS logTag $ printf "\t%s" (show i)
-          logDebugNSS logTag "imports':"
-          forM_ imports' $ \i -> logDebugNSS logTag $ printf "\t%s" (show i)
-
-          (isImplicitExportAll, exports) <- runWriterT $ haskellGetExportedIdentifiers mod
-
-          let asDeclsMap ds = Map.fromList $ (\d -> (Identifier $ _declName d, d)) <$> ds
-              localsPlusImports = asDeclsMap $ locals ++ imports'
-              exportsM' = asDeclsMap exports
-              exportsM = if isImplicitExportAll then asDeclsMap locals else Map.intersection exportsM' localsPlusImports
-
-          return $ Right (ContextModule {_cmodule = mod, _exports = exportsM, _identifiers = localsPlusImports})
+---
