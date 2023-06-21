@@ -4,7 +4,7 @@
 import Control.Exception (evaluate)
 import Control.Monad.Logger (runStderrLoggingT)
 import Control.Monad.Logger.CallStack (runFileLoggingT)
-import Control.Monad.State (StateT (..))
+import Control.Monad.State (StateT (..), evalStateT, MonadTrans (lift))
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Maybe (MaybeT (runMaybeT))
 import Control.Monad.Trans.Reader (ReaderT (..))
@@ -23,10 +23,12 @@ import GTD.Utils (logDebugNSS)
 import Language.Haskell.Exts (Module (..), SrcSpan (..), SrcSpanInfo (..))
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.FilePath ((</>))
-import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe, shouldNotBe)
+import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe, shouldNotBe, shouldSatisfy)
 import Test.Hspec.Runner (Config (configPrintCpuTime), defaultConfig, hspecWith)
 import Test.QuickCheck (Testable (..), forAll, (==>))
 import Text.Printf (printf)
+import Data.Time.Clock.POSIX (getCurrentTime)
+import Data.Time.Clock (diffUTCTime)
 
 haskellApplyCppHsSpec :: Spec
 haskellApplyCppHsSpec = do
@@ -221,16 +223,33 @@ definitionsSpec = do
       let file = workDir </> "app/game/Main.hs"
       let req = DefinitionRequest {workDir = "./test/integrationTestRepo/sc-ea-hs", file = file, word = "playIO"}
 
-      let ss = emptyServerState
-      x <- runFileLoggingT (workDir </> "log1.txt") $ do
-        (r, ss') <- runReaderT (runStateT (runExceptT $ definition req) ss) consts
-        logDebugNSS "definitionsSpec" $ show r
-        return r
-
       let expFile = _repos consts </> "gloss-1.13.2.2/./Graphics/Gloss/Interface/IO/Game.hs"
           expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartLine = 20, sourceSpanStartColumn = 1, sourceSpanEndLine = 20, sourceSpanEndColumn = 7}
           expected = Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
-      x `shouldBe` expected
+
+      flip evalStateT emptyServerState $ runFileLoggingT (workDir </> "log1.txt") $ do
+        t11 <- liftIO getCurrentTime
+        x1 <- runReaderT (runExceptT $ definition req) consts
+        t12 <- liftIO getCurrentTime
+
+        t21 <- liftIO getCurrentTime
+        x2 <- runReaderT (runExceptT $ definition req) consts
+        t22 <- liftIO getCurrentTime
+
+        logDebugNSS "definitionsSpec" $ show x1
+        logDebugNSS "definitionsSpec" $ show x2
+
+        let d1 = diffUTCTime t12 t11
+        let d2 = diffUTCTime t22 t21
+        logDebugNSS "definitionsSpec" $ show (d1, d2)
+
+        lift $ lift $ do
+          x1 `shouldBe` x2
+          -- more than one second
+          d1 `shouldSatisfy` (> 1)
+          d2 `shouldSatisfy` (> 1)
+          -- second time should be at least 1.5 times faster (not a proper way of testing this, but anyway)
+          d1 / d2 `shouldSatisfy` (> 1.5)
 
 integrationTestsSpec :: Spec
 integrationTestsSpec = do
