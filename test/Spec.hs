@@ -9,7 +9,10 @@ import Data.Aeson (decode, defaultOptions, encode, genericToJSON)
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
-import GTD.Haskell (ContextModule (..), Declaration (..), Identifier (Identifier), SourceSpan (..), emptySourceSpan, enrichTryModule, haskellApplyCppHs, haskellGetExportedIdentifiers, haskellGetIdentifiers, haskellGetImportedIdentifiers, haskellParse)
+import qualified Distribution.ModuleName as ModuleName
+import Distribution.PackageDescription (emptyGenericPackageDescription, emptyPackageDescription)
+import GTD.Cabal (CabalPackage (..))
+import GTD.Haskell (ContextModule (..), Declaration (..), Identifier (Identifier), SourceSpan (..), emptySourceSpan, enrichTryModule, enrichTryPackage, haskellApplyCppHs, haskellGetExportedIdentifiers, haskellGetIdentifiers, haskellGetImportedIdentifiers, haskellParse)
 import Language.Haskell.Exts (Module (..), SrcSpan (..), SrcSpanInfo (..))
 import System.Directory (getCurrentDirectory)
 import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe, shouldNotBe)
@@ -130,16 +133,20 @@ emptyHaskellModule = Module emptySrcSpanInfo Nothing [] [] []
 emptyContextModule :: ContextModule
 emptyContextModule = ContextModule {_cmodule = emptyHaskellModule, _exports = Map.empty, _identifiers = Map.empty}
 
+emptyCabalPackage :: CabalPackage
+emptyCabalPackage = CabalPackage "" "" emptyPackageDescription [] Map.empty
+
+cmGen mn0 dn0 mnE dnE fnE =
+  let d0 = Declaration emptySourceSpan emptySourceSpan mn0 dn0
+      lE = emptySourceSpan {sourceSpanFileName = fnE}
+      dE = d0 {_declSrcOrig = lE, _declSrcUsage = lE, _declName = dnE}
+      cmE = Map.fromList [(mnE, emptyContextModule {_exports = Map.fromList [(Identifier dnE, dE)]})]
+   in (d0, dE, cmE)
+
+nothingWasExpected d0 d1 = expectationFailure $ printf "expected Nothing, got %s (== (%s) => %s)" (show d0) (show d1) (show (d0 == d1))
+
 enrichTryModuleSpec :: Spec
 enrichTryModuleSpec = do
-  let nothingWasExpected d0 d1 = expectationFailure $ printf "expected Nothing, got %s (== (%s) => %s)" (show d0) (show d1) (show (d0 == d1))
-  let cmGen mn0 dn0 mnE dnE fnE =
-        let d0 = Declaration emptySourceSpan emptySourceSpan mn0 dn0
-            lE = emptySourceSpan {sourceSpanFileName = fnE}
-            dE = d0 {_declSrcOrig = lE, _declSrcUsage = lE, _declName = dnE}
-            cmE = Map.fromList [(mnE, emptyContextModule {_exports = Map.fromList [(Identifier dnE, dE)]})]
-         in (d0, dE, cmE)
-
   describe "enrichTryModule" do
     it "returns nothing in case of a missing module name" $
       property $ \moduleName1 moduleName2 declName fileName ->
@@ -164,6 +171,38 @@ enrichTryModuleSpec = do
               _declSrcOrig d1 `shouldBe` _declSrcOrig dE
               _declSrcUsage d1 `shouldNotBe` _declSrcUsage dE
 
+enrichTryPackageSpec :: Spec
+enrichTryPackageSpec = do
+  describe "enrichTryPackage" do
+    it "returns nothing in case of an exported module from a missing package" $
+      property \moduleName declName fileName packageName1 packageName2 ->
+        fileName /= "" && packageName1 /= packageName2 ==> do
+          let (d0, dE, cmE) = cmGen moduleName declName moduleName declName fileName
+              pmE = Map.fromList [(packageName1, cmE)]
+              cp = emptyCabalPackage {_cabalPackageName = packageName2, _cabalPackageExportedModules = Map.singleton moduleName ModuleName.main}
+          result <- liftIO $ runStderrLoggingT $ runMaybeT $ enrichTryPackage d0 pmE cp
+          forM_ result (nothingWasExpected d0)
+    it "returns nothing in case of a non-exported module name" $
+      property \moduleName1 moduleName2 declName fileName packageName ->
+        fileName /= "" && moduleName1 /= moduleName2 ==> do
+          let (d0, dE, cmE) = cmGen moduleName1 declName moduleName1 declName fileName
+              pmE = Map.fromList [(packageName, cmE)]
+              cp = emptyCabalPackage {_cabalPackageName = packageName, _cabalPackageExportedModules = Map.singleton moduleName2 ModuleName.main}
+          result <- liftIO $ runStderrLoggingT $ runMaybeT $ enrichTryPackage d0 pmE cp
+          forM_ result (nothingWasExpected d0)
+    it "actually enriches in case of an exported module and matching package name" $
+      property \moduleName declName fileName packageName ->
+        fileName /= "" ==> do
+          let (d0, dE, cmE) = cmGen moduleName declName moduleName declName fileName
+              pmE = Map.fromList [(packageName, cmE)]
+              cp = emptyCabalPackage {_cabalPackageName = packageName, _cabalPackageExportedModules = Map.singleton moduleName ModuleName.main}
+          result <- liftIO $ runStderrLoggingT $ runMaybeT $ enrichTryPackage d0 pmE cp
+          case result of
+            Nothing -> expectationFailure $ printf "expected Just %s, got Nothing" (show d0)
+            Just d1 -> do
+              _declSrcOrig d1 `shouldBe` _declSrcOrig dE
+              _declSrcUsage d1 `shouldNotBe` _declSrcUsage dE
+
 main :: IO ()
 main = hspecWith defaultConfig {configPrintCpuTime = False} $ do
   haskellApplyCppHsSpec
@@ -171,3 +210,4 @@ main = hspecWith defaultConfig {configPrintCpuTime = False} $ do
   haskellGetExportedIdentifiersSpec
   haskellGetImportedIdentifiersSpec
   enrichTryModuleSpec
+  enrichTryPackageSpec
