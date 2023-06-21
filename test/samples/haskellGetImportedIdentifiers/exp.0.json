@@ -1,15 +1,15 @@
 [
   {
-    "declModule": "Control.Lens",
-    "declName": "makeLenses",
-    "declSrcOrig": {
+    "_declModule": "Control.Lens",
+    "_declName": "makeLenses",
+    "_declSrcOrig": {
       "sourceSpanEndColumn": 0,
       "sourceSpanEndLine": 0,
       "sourceSpanFileName": "",
       "sourceSpanStartColumn": 0,
       "sourceSpanStartLine": 0
     },
-    "declSrcUsage": {
+    "_declSrcUsage": {
       "sourceSpanEndColumn": 32,
       "sourceSpanEndLine": 6,
       "sourceSpanFileName": "./test/samples/haskellGetImportedIdentifiers/in.0.hs",

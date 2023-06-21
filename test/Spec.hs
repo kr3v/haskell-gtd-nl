@@ -1,15 +1,20 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 import Control.Exception (evaluate)
-import Control.Monad.Logger
-import Control.Monad.Writer (MonadIO (liftIO), execWriterT, runWriterT)
+import Control.Monad.Logger (runStderrLoggingT)
+import Control.Monad.Trans.Maybe (MaybeT (runMaybeT))
+import Control.Monad.Writer (MonadIO (liftIO), execWriterT, forM_, join, runWriterT)
 import Data.Aeson (decode, defaultOptions, encode, genericToJSON)
 import qualified Data.ByteString.Lazy as BS
+import qualified Data.Map as Map
 import Data.Maybe (fromJust)
-import GTD.Haskell (Declaration, haskellApplyCppHs, haskellGetExportedIdentifiers, haskellGetIdentifiers, haskellGetImportedIdentifiers, haskellParse)
+import GTD.Haskell (ContextModule (..), Declaration (..), Identifier (Identifier), SourceSpan (..), emptySourceSpan, enrichTryModule, haskellApplyCppHs, haskellGetExportedIdentifiers, haskellGetIdentifiers, haskellGetImportedIdentifiers, haskellParse)
+import Language.Haskell.Exts (Module (..), SrcSpan (..), SrcSpanInfo (..))
 import System.Directory (getCurrentDirectory)
-import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe)
+import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe, shouldNotBe)
 import Test.Hspec.Runner (Config (configPrintCpuTime), defaultConfig, hspecWith)
+import Test.QuickCheck (Testable (..), forAll, (==>))
 import Text.Printf (printf)
 
 haskellApplyCppHsSpec :: Spec
@@ -113,9 +118,56 @@ haskellGetImportedIdentifiersSpec = do
     it "extracts only function imports" $
       test 0
 
+emptySrcSpan :: SrcSpan
+emptySrcSpan = SrcSpan {srcSpanFilename = "", srcSpanStartLine = 0, srcSpanStartColumn = 0, srcSpanEndLine = 0, srcSpanEndColumn = 0}
+
+emptySrcSpanInfo :: SrcSpanInfo
+emptySrcSpanInfo = SrcSpanInfo {srcInfoSpan = emptySrcSpan, srcInfoPoints = []}
+
+emptyHaskellModule :: Module SrcSpanInfo
+emptyHaskellModule = Module emptySrcSpanInfo Nothing [] [] []
+
+emptyContextModule :: ContextModule
+emptyContextModule = ContextModule {_cmodule = emptyHaskellModule, _exports = Map.empty, _identifiers = Map.empty}
+
+enrichTryModuleSpec :: Spec
+enrichTryModuleSpec = do
+  let nothingWasExpected d0 d1 = expectationFailure $ printf "expected Nothing, got %s (== (%s) => %s)" (show d0) (show d1) (show (d0 == d1))
+  let cmGen mn0 dn0 mnE dnE fnE =
+        let d0 = Declaration emptySourceSpan emptySourceSpan mn0 dn0
+            lE = emptySourceSpan {sourceSpanFileName = fnE}
+            dE = d0 {_declSrcOrig = lE, _declSrcUsage = lE, _declName = dnE}
+            cmE = Map.fromList [(mnE, emptyContextModule {_exports = Map.fromList [(Identifier dnE, dE)]})]
+         in (d0, dE, cmE)
+
+  describe "enrichTryModule" do
+    it "returns nothing in case of a missing module name" $
+      property $ \moduleName1 moduleName2 declName fileName ->
+        moduleName1 /= moduleName2 && fileName /= "" ==> do
+          let (d0, dE, cmE) = cmGen moduleName1 declName moduleName2 declName fileName
+          result <- liftIO $ runStderrLoggingT $ runMaybeT $ enrichTryModule d0 cmE
+          forM_ result (nothingWasExpected d0)
+    it "returns nothing if there's a matching module without a matching declaration" $
+      property $ \moduleName declName1 declName2 fileName ->
+        declName1 /= declName2 && fileName /= "" ==> do
+          let (d0, dE, cmE) = cmGen moduleName declName1 moduleName declName2 fileName
+          result <- liftIO $ runStderrLoggingT $ runMaybeT $ enrichTryModule d0 cmE
+          forM_ result (nothingWasExpected d0)
+    it "actually enriches in case of matched module and declaration" $
+      property $ \moduleName declName fileName ->
+        fileName /= "" ==> do
+          let (d0, dE, cmE) = cmGen moduleName declName moduleName declName fileName
+          result <- liftIO $ runStderrLoggingT $ runMaybeT $ enrichTryModule d0 cmE
+          case result of
+            Nothing -> expectationFailure $ printf "expected Just %s, got Nothing" (show d0)
+            Just d1 -> do
+              _declSrcOrig d1 `shouldBe` _declSrcOrig dE
+              _declSrcUsage d1 `shouldNotBe` _declSrcUsage dE
+
 main :: IO ()
 main = hspecWith defaultConfig {configPrintCpuTime = False} $ do
   haskellApplyCppHsSpec
   haskellGetIdentifiersSpec
   haskellGetExportedIdentifiersSpec
   haskellGetImportedIdentifiersSpec
+  enrichTryModuleSpec

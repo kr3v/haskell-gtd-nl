@@ -30,7 +30,7 @@ import Data.Time.Clock.POSIX (getPOSIXTime)
 import GHC.Generics (Generic)
 import GHC.MVar (MVar (MVar))
 import GTD.Cabal (cabalDeps, cabalPackageName, cabalPackagePath, cabalRead)
-import GTD.Haskell (ContextCabalPackage (..), ContextModule (c2_identifiers), Declaration (declName, declSrcOrig), Identifier (Identifier), SourceSpan (..), dependencies, parseModule, parsePackages)
+import GTD.Haskell (ContextCabalPackage (..), ContextModule (..), Declaration (..), Identifier (Identifier), SourceSpan (..), dependencies, parseModule, parsePackages)
 import GTD.Utils (ultraZoom)
 import Network.Wai.Handler.Warp (run)
 import Numeric (showHex)
@@ -109,9 +109,9 @@ definition req@(DefinitionRequest {workDir = workDir, file = file, word = word})
       defs <- ultraZoom context (parseModule True file)
       case defs of
         Left e -> return $ Left $ "No definition found" ++ show e
-        Right m -> case Identifier word `Map.lookup` c2_identifiers m of
+        Right m -> case Identifier word `Map.lookup` _identifiers m of
           Nothing -> return $ Left "No definition found"
-          Just d -> return $ Right $ DefinitionResponse {srcSpan = Just $ declSrcOrig d, err = Nothing}
+          Just d -> return $ Right $ DefinitionResponse {srcSpan = Just $ _declSrcOrig d, err = Nothing}
     _ -> return $ Left "Multiple cabal files found"
 
 flipTuple :: (a, b) -> (b, a)

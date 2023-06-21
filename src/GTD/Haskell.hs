@@ -52,10 +52,10 @@ identToDecl' ::
   Declaration
 identToDecl' (ModuleName _ mn) l n isDeclaration =
   Declaration
-    { declSrcUsage = if isDeclaration then emptySourceSpan else l',
-      declSrcOrig = if isDeclaration then l' else emptySourceSpan,
-      declName = n,
-      declModule = mn
+    { _declSrcUsage = if isDeclaration then emptySourceSpan else l',
+      _declSrcOrig = if isDeclaration then l' else emptySourceSpan,
+      _declName = n,
+      _declModule = mn
     }
   where
     l' = sourceSpan . srcInfoSpan $ l
@@ -119,16 +119,16 @@ sourceSpan (SrcSpan {srcSpanFilename = fileName, srcSpanStartLine = startLine, s
     }
 
 hasNonEmptyOrig :: Declaration -> Bool
-hasNonEmptyOrig = (/= emptySourceSpan) . declSrcOrig
+hasNonEmptyOrig = (/= emptySourceSpan) . _declSrcOrig
 
 emptySourceSpan :: SourceSpan
 emptySourceSpan = SourceSpan "" 0 0 0 0
 
 data Declaration = Declaration
-  { declSrcUsage :: SourceSpan,
-    declSrcOrig :: SourceSpan,
-    declModule :: ModuleNameS,
-    declName :: String
+  { _declSrcUsage :: SourceSpan,
+    _declSrcOrig :: SourceSpan,
+    _declModule :: ModuleNameS,
+    _declName :: String
   }
   deriving (Show, Eq, Generic, Ord)
 
@@ -146,9 +146,9 @@ data Identifier
   deriving (Show, Eq, Ord)
 
 data ContextModule = ContextModule
-  { c2_module :: Module SrcSpanInfo,
-    c2_exports :: Map.Map Identifier Declaration,
-    c2_identifiers :: Map.Map Identifier Declaration
+  { _cmodule :: Module SrcSpanInfo,
+    _exports :: Map.Map Identifier Declaration,
+    _identifiers :: Map.Map Identifier Declaration
   }
   deriving (Show, Eq, Generic)
 
@@ -158,6 +158,7 @@ data ContextCabalPackage = ContextCabalPackage
   }
   deriving (Show, Generic)
 
+$(makeLenses ''ContextModule)
 $(makeLenses ''ContextCabalPackage)
 
 parsePackages :: (MonadLogger m, MonadIO m, MonadState ContextCabalPackage m) => m ()
@@ -190,7 +191,7 @@ enrichTryPackage ::
   CabalPackage ->
   (MonadLogger m) => MaybeT m Declaration
 enrichTryPackage d mods dep = do
-  guard $ declModule d `Map.member` _cabalPackageExportedModules dep
+  guard $ _declModule d `Map.member` _cabalPackageExportedModules dep
   dependencyModules <- maybeToMaybeT $ _cabalPackageName dep `Map.lookup` mods
   enrichTryModule d dependencyModules
 
@@ -201,12 +202,12 @@ enrichTryModule ::
   Declaration ->
   Map.Map ModuleNameS ContextModule ->
   (MonadLogger m) => MaybeT m Declaration
-enrichTryModule d depMods = do
+enrichTryModule orig moduleDecls = do
   let logTag = "enrich by module"
-  mod <- maybeToMaybeT $ declModule d `Map.lookup` depMods
-  decl <- maybeToMaybeT $ Map.lookup (Identifier $ declName d) (c2_exports mod)
-  logDebugNSS logTag $ printf "enrich: updating %s with %s" (show d) (show decl)
-  return $ d {declSrcOrig = declSrcOrig decl}
+  mod <- maybeToMaybeT $ _declModule orig `Map.lookup` moduleDecls
+  mDecl <- maybeToMaybeT $ Map.lookup (Identifier $ _declName orig) (_exports mod)
+  logDebugNSS logTag $ printf "enrich: updating %s with %s" (show orig) (show mDecl)
+  return $ orig {_declSrcOrig = _declSrcOrig mDecl}
 
 -- TODO: figure out whether this is actually good, because we might look into cabal packages that are not even used?
 -- we need to ensure that these declarations actually have an exact module, otherwise we can't 'enrich' them
@@ -249,9 +250,9 @@ parseModule shouldEnrich srcP = do
 
           (isImplicitExportAll, exports) <- runWriterT $ haskellGetExportedIdentifiers mod
 
-          let asDeclsMap ds = Map.fromList $ (\d -> (Identifier $ declName d, d)) <$> ds
+          let asDeclsMap ds = Map.fromList $ (\d -> (Identifier $ _declName d, d)) <$> ds
               localsPlusImports = asDeclsMap $ locals ++ imports'
               exportsM' = asDeclsMap exports
               exportsM = if isImplicitExportAll then asDeclsMap locals else Map.intersection exportsM' localsPlusImports
 
-          return $ Right (ContextModule {c2_module = mod, c2_exports = exportsM, c2_identifiers = localsPlusImports})
+          return $ Right (ContextModule {_cmodule = mod, _exports = exportsM, _identifiers = localsPlusImports})
