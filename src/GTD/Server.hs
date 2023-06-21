@@ -16,13 +16,12 @@ import Data.Time.Clock.POSIX (getPOSIXTime)
 import Distribution.Compat.Directory (listDirectory)
 import GHC.Generics (Generic)
 import GTD.Cabal (cabalDeps, cabalPackageName, cabalPackagePath, cabalRead)
-import GTD.Haskell (ContextCabalPackage (..), ContextModule (_identifiers), Declaration (_declSrcOrig), Identifier (Identifier), SourceSpan, dependencies, parseModule, parsePackages)
+import GTD.Configuration (GTDConfiguration)
+import GTD.Haskell (ContextCabalPackage (..), ContextModule (_identifiers), Declaration (_declSrcOrig), Identifier (Identifier), SourceSpan, dependencies, hasNonEmptyOrig, parseModule, parsePackages)
 import GTD.Utils (deduplicateBy, ultraZoom)
 import System.Directory (createDirectoryIfMissing, getHomeDirectory, setCurrentDirectory)
 import System.FilePath (takeExtension, (</>))
 import Text.Printf (printf)
-import GTD.Configuration (GTDConfiguration)
-
 
 ---
 
@@ -57,6 +56,12 @@ instance ToJSON DefinitionResponse
 
 instance FromJSON DefinitionResponse
 
+noDefintionFoundError :: Monad m => ExceptT String m a
+noDefintionFoundError = throwE "No definition found"
+
+noDefintionFoundErrorE :: (Monad m) => m (Either String a)
+noDefintionFoundErrorE = runExceptT noDefintionFoundError
+
 definition ::
   DefinitionRequest ->
   (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState ServerState m) => ExceptT String m DefinitionResponse
@@ -77,5 +82,8 @@ definition req@(DefinitionRequest {workDir = workDir, file = file, word = word})
 
   m <- ExceptT $ ultraZoom context (runExceptT $ parseModule True file)
   case Identifier word `Map.lookup` _identifiers m of
-    Nothing -> throwE "No definition found"
-    Just d -> return $ DefinitionResponse {srcSpan = Just $ _declSrcOrig d, err = Nothing}
+    Nothing -> noDefintionFoundError
+    Just d ->
+      if hasNonEmptyOrig d
+        then return $ DefinitionResponse {srcSpan = Just $ _declSrcOrig d, err = Nothing}
+        else noDefintionFoundError

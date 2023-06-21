@@ -1,10 +1,11 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
+import Control.Applicative (Applicative (liftA2))
 import Control.Exception (evaluate)
 import Control.Monad.Logger (runStderrLoggingT)
 import Control.Monad.Logger.CallStack (runFileLoggingT)
-import Control.Monad.State (StateT (..), evalStateT, MonadTrans (lift))
+import Control.Monad.State (MonadTrans (lift), StateT (..), evalStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Maybe (MaybeT (runMaybeT))
 import Control.Monad.Trans.Reader (ReaderT (..))
@@ -13,12 +14,14 @@ import Data.Aeson (decode, defaultOptions, encode, genericToJSON)
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
+import Data.Time.Clock (diffUTCTime)
+import Data.Time.Clock.POSIX (getCurrentTime)
 import qualified Distribution.ModuleName as ModuleName
 import Distribution.PackageDescription (emptyGenericPackageDescription, emptyPackageDescription)
 import GTD.Cabal (CabalPackage (..))
 import GTD.Configuration
 import GTD.Haskell (ContextModule (..), Declaration (..), Identifier (Identifier), SourceSpan (..), emptySourceSpan, enrichTryModule, enrichTryPackage, haskellApplyCppHs, haskellGetExportedIdentifiers, haskellGetIdentifiers, haskellGetImportedIdentifiers, haskellParse)
-import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), definition, emptyServerState)
+import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), definition, emptyServerState, noDefintionFoundError, noDefintionFoundErrorE)
 import GTD.Utils (logDebugNSS)
 import Language.Haskell.Exts (Module (..), SrcSpan (..), SrcSpanInfo (..))
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
@@ -27,8 +30,6 @@ import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe, shouldNotBe
 import Test.Hspec.Runner (Config (configPrintCpuTime), defaultConfig, hspecWith)
 import Test.QuickCheck (Testable (..), forAll, (==>))
 import Text.Printf (printf)
-import Data.Time.Clock.POSIX (getCurrentTime)
-import Data.Time.Clock (diffUTCTime)
 
 haskellApplyCppHsSpec :: Spec
 haskellApplyCppHsSpec = do
@@ -221,35 +222,66 @@ definitionsSpec = do
 
       let workDir = "./test/integrationTestRepo/sc-ea-hs"
       let file = workDir </> "app/game/Main.hs"
-      let req = DefinitionRequest {workDir = "./test/integrationTestRepo/sc-ea-hs", file = file, word = "playIO"}
+      let req = DefinitionRequest {workDir = "./test/integrationTestRepo/sc-ea-hs", file = file, word = ""}
 
-      let expFile = _repos consts </> "gloss-1.13.2.2/./Graphics/Gloss/Interface/IO/Game.hs"
-          expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartLine = 20, sourceSpanStartColumn = 1, sourceSpanEndLine = 20, sourceSpanEndColumn = 7}
-          expected = Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+      let expectedPlayIO =
+            let expFile = _repos consts </> "gloss-1.13.2.2/./Graphics/Gloss/Interface/IO/Game.hs"
+                expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartLine = 20, sourceSpanStartColumn = 1, sourceSpanEndLine = 20, sourceSpanEndColumn = 7}
+             in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
 
-      flip evalStateT emptyServerState $ runFileLoggingT (workDir </> "log1.txt") $ do
+      flip evalStateT emptyServerState $ runFileLoggingT (workDir </> "log1.txt") $ flip runReaderT consts $ do
+        noDefErr <- noDefintionFoundErrorE
+
         t11 <- liftIO getCurrentTime
-        x1 <- runReaderT (runExceptT $ definition req) consts
+        x1 <- runExceptT $ definition req {word = "playIO"}
         t12 <- liftIO getCurrentTime
 
         t21 <- liftIO getCurrentTime
-        x2 <- runReaderT (runExceptT $ definition req) consts
+        x2 <- runExceptT $ definition req {word = "playIO"}
         t22 <- liftIO getCurrentTime
+
+        t31 <- liftIO getCurrentTime
+        x3 <- runExceptT $ definition req {word = "playIO"}
+        t32 <- liftIO getCurrentTime
 
         logDebugNSS "definitionsSpec" $ show x1
         logDebugNSS "definitionsSpec" $ show x2
+        logDebugNSS "definitionsSpec" $ show x3
 
         let d1 = diffUTCTime t12 t11
         let d2 = diffUTCTime t22 t21
-        logDebugNSS "definitionsSpec" $ show (d1, d2)
+        let d3 = diffUTCTime t32 t31
+        logDebugNSS "definitionsSpec" $ show (d1, d2, d3)
 
-        lift $ lift $ do
-          x1 `shouldBe` x2
+        lift $ lift $ lift $ do
+          x1 `shouldBe` expectedPlayIO
+          x2 `shouldBe` expectedPlayIO
+          x3 `shouldBe` expectedPlayIO
           -- more than one second
           d1 `shouldSatisfy` (> 1)
           d2 `shouldSatisfy` (> 1)
-          -- second time should be at least 1.5 times faster (not a proper way of testing this, but anyway)
-          d1 / d2 `shouldSatisfy` (> 1.5)
+          d3 `shouldSatisfy` (> 1)
+          -- second time should be noticeably faster (not a proper way of testing this, but anyway)
+          d1 / d2 `shouldSatisfy` (> 1.4)
+          -- should not differ much
+          d2 / d3 `shouldSatisfy` liftA2 (&&) (< 1.1) (> (1 / 1.1))
+
+        -- re-exported regular function
+        x4 <- runExceptT $ definition req {word = "mkStdGen"}
+        logDebugNSS "definitionsSpec" $ show x4
+        lift $ lift $ lift $ x4 `shouldBe` noDefErr
+
+        -- class name
+        x5 <- runExceptT $ definition req {word = "State"}
+        logDebugNSS "definitionsSpec" $ show x5
+        lift $ lift $ lift $ x5 `shouldBe` noDefErr
+
+        -- data member
+        x6 <- runExceptT $ definition req {word = "runExceptT"}
+        logDebugNSS "definitionsSpec" $ show x6
+        lift $ lift $ lift $ x6 `shouldBe` noDefErr
+
+---
 
 integrationTestsSpec :: Spec
 integrationTestsSpec = do
