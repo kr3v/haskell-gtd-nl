@@ -117,4 +117,4 @@ main = withSocketsDo $ do
   writeFile (constants ^. root </> "port") (show port)
 
   s <- newMVar $ ServerState {_context = ContextCabalPackage {_modules = Map.empty, _dependencies = []}, _reqId = 0}
-  runSettingsSocket defaultSettings sock $ serve api $ (definitionH constants s :<|> pingH)
+  runSettingsSocket defaultSettings sock $ serve api (definitionH constants s :<|> pingH)

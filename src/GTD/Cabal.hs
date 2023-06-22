@@ -31,19 +31,20 @@ import Distribution.Utils.ShortText (fromShortText)
 import GTD.Configuration (GTDConfiguration (..), repos)
 import System.FilePath ((</>))
 import System.IO (IOMode (ReadMode), hClose, hGetBuf, hGetContents, openFile)
-import System.Process (CreateProcess (..), StdStream (CreatePipe), createProcess, proc)
+import System.Process (CreateProcess (..), StdStream (CreatePipe), createProcess, proc, waitForProcess)
 import Text.Printf (printf)
 import Text.Regex.Posix ((=~))
 
 cabalGet :: String -> String -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => MaybeT m String
 cabalGet pkg pkgVerPredicate = do
   reposR <- view repos
-  (_, Just hout, Just herr, _) <- liftIO $ createProcess (proc "cabal" ["get", pkg ++ pkgVerPredicate, "--destdir", reposR]) {std_out = CreatePipe, std_err = CreatePipe}
+  (_, Just hout, Just herr, h) <- liftIO $ createProcess (proc "cabal" ["get", pkg ++ pkgVerPredicate, "--destdir", reposR]) {std_out = CreatePipe, std_err = CreatePipe}
   stdout <- liftIO $ hGetContents hout
   stderr <- liftIO $ hGetContents herr
   let content = stdout ++ stderr
   let re = pkg ++ "-" ++ "[^\\/]*\\/"
   let packageVersion :: [String] = (=~ re) <$> lines content
+  liftIO $ waitForProcess h
   MaybeT $ return $ find (not . null) packageVersion
 
 cabalRead :: FilePath -> (MonadLoggerIO m) => m PackageDescription
