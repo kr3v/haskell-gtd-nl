@@ -1,6 +1,17 @@
 import axios from 'axios';
 import * as vscode from 'vscode';
 import path = require('path/posix');
+import fs = require('node:fs');
+import { exec, spawn } from 'child_process';
+import { homedir } from 'os'
+
+
+const userHomeDir = homedir();
+const serverRoot = path.join(userHomeDir, "/.local/share/haskell-gtd-extension-server-root");
+const serverExe = "haskell-gtd-server";
+const serverPidF = path.join(serverRoot, 'pid');
+const serverPortF = path.join(serverRoot, 'port');
+let port = 0;
 
 class XDefinitionProvider implements vscode.DefinitionProvider {
 	async provideDefinition(
@@ -13,7 +24,14 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 
 		console.log(word);
 
-		if (vscode.workspace.workspaceFolders) {
+		fs.readFile(serverPortF, "utf8", (err, data) => {
+			let pid = parseInt(data, 10);
+			port = pid;
+		});
+
+		console.log(port);
+
+		if (port > 0 && vscode.workspace.workspaceFolders) {
 			let workspaceFolder = vscode.workspace.workspaceFolders[0];
 			let workspacePath = workspaceFolder.uri.fsPath;
 			let docPath = document.uri.fsPath;
@@ -23,19 +41,20 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 				word: word
 			};
 			let res = await axios.
-				post('http://localhost:53465/definition', body).
+				post(`http://localhost:${port}/definition`, body).
 				catch(function (error) {
 					console.log("for body {body}");
 					console.log(error);
 					return { "data": {} };
 				});
 			let data = res.data;
-			if (data.srcSpan === undefined) {
+			if (data.err != "") {
+				console.log("%s -> err:%s", word, data.err);
 				return Promise.resolve([]);
 			}
 
 			let filePath = data.srcSpan.sourceSpanFileName;
-			let fileUri = vscode.Uri.file(path.join(workspacePath, path.normalize(filePath)));
+			let fileUri = vscode.Uri.file(path.normalize(filePath));
 
 			let line = data.srcSpan.sourceSpanStartLine - 1; // 0-based line number
 			let character = data.srcSpan.sourceSpanStartColumn - 1; // 0-based character position
@@ -51,6 +70,15 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 
 export function activate(context: vscode.ExtensionContext) {
 	console.log('Congratulations, your extension "hs-gtd" is now active!');
+	console.log(userHomeDir);
+
+	const stdout = fs.openSync(path.join(serverRoot, 'stdout.log'), 'a');
+	const stderr = fs.openSync(path.join(serverRoot, 'stderr.log'), 'a');
+	let server = spawn(path.join(serverRoot, serverExe), {
+		detached: true,
+		stdio: ['ignore', stdout, stderr],
+	});
+
 	context.subscriptions.push(
 		vscode.languages.registerDefinitionProvider(
 			{ scheme: 'file', language: 'haskell' },
@@ -60,4 +88,11 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 // This method is called when your extension is deactivated
-export function deactivate() { }
+export async function deactivate() {
+	console.log("deactivating...");
+	fs.readFile(serverPidF, "utf8", (err, data) => {
+		let pid = parseInt(data, 10);
+		console.log(`killing ${pid}`);
+		exec(`kill -9 ${pid}`);
+	});
+}

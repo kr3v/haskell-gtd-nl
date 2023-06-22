@@ -28,30 +28,37 @@ import qualified Data.Text as T
 import Data.Time.Clock.POSIX (getPOSIXTime)
 import GHC.Generics (Generic)
 import GHC.MVar (MVar (MVar))
+import GHC.TypeLits
+import qualified GHC.TypeLits
 import GTD.Cabal (cabalDeps, cabalPackageName, cabalPackagePath, cabalRead)
 import GTD.Configuration (GTDConfiguration (_logs), prepareConstants, root)
 import GTD.Haskell (ContextCabalPackage (..), ContextModule (..), Declaration (..), Identifier (Identifier), SourceSpan (..), dependencies, parseModule, parsePackages)
 import GTD.Server (DefinitionRequest, DefinitionResponse (..), ServerState (..), definition, reqId)
 import GTD.Utils (deduplicateBy, ultraZoom)
-import Network.Socket (AddrInfo (addrAddress), Family (AF_INET), SockAddr (SockAddrInet), Socket (..), SocketType (Stream), bind, defaultProtocol, openSocket, socket, socketPort, tupleToHostAddress, withSocketsDo, listen)
+import Network.Socket (AddrInfo (addrAddress), Family (AF_INET), SockAddr (SockAddrInet), Socket (..), SocketType (Stream), bind, defaultProtocol, listen, openSocket, socket, socketPort, tupleToHostAddress, withSocketsDo)
 import Network.Wai.Handler.Warp (defaultSettings, run, runSettingsSocket)
 import Numeric (showHex)
-import Servant (HasServer (..), Server, ServerError (errBody), err400, throwError)
-import Servant.API (Header, Headers, JSON, Post, ReqBody, addHeader, type (:>))
-import Servant.Server (Application, Handler, hoistServer, serve)
+import Servant (Get, Handler, Header, Headers, JSON, Post, Proxy (..), ReqBody, addHeader, serve, type (:<|>) (..), type (:>))
+import Servant.Server
 import System.Directory (createDirectoryIfMissing, getCurrentDirectory, getHomeDirectory, listDirectory, setCurrentDirectory)
 import System.FilePath (takeExtension, (</>))
+import System.Posix (getProcessID)
 import System.Posix.Signals (Signal (..), addSignal, awaitSignal, emptySignalSet, getPendingSignals, inSignalSet, keyboardSignal, signalProcess)
+import System.Process (getPid)
 import System.Process.Internals (ProcessHandle (waitpidLock))
 import System.Random.Stateful (StdGen, mkStdGen, randomIO)
 import Text.Printf (printf)
-import System.Process (getPid)
-import System.Posix (getProcessID)
+
+-- two methods:
+-- definition - to obtain a source span for a given word
+-- ping - to check if the server is alive
 
 type API =
   "definition"
     :> ReqBody '[JSON] DefinitionRequest
     :> Post '[JSON] (Headers '[Header "X-Request-ID" String] DefinitionResponse)
+    :<|> "ping"
+      :> Get '[JSON] String
 
 api :: Proxy API
 api = Proxy
@@ -66,19 +73,29 @@ nt s x = liftIO (evalStateT x s)
 flipTuple :: (a, b) -> (b, a)
 flipTuple (a, b) = (b, a)
 
-server :: GTDConfiguration -> ServerT API AppM
-server c req = do
-  m <- get
+definitionH ::
+  KnownSymbol h =>
+  GTDConfiguration ->
+  MVar ServerState ->
+  DefinitionRequest ->
+  Handler (Headers '[Header h String] DefinitionResponse)
+definitionH c m req = do
+  s <- liftIO $ takeMVar m
+  (r, s') <- flip runStateT s $ do
+    rq <- reqId <+= 1
+    let reqId = printf "%06d" rq
+    let log = _logs c </> (reqId ++ ".log")
+    liftIO $ putStrLn $ "Got request with ID:" ++ show reqId
 
-  rq <- liftIO $ modifyMVar m (fmap flipTuple . runStateT (reqId <+= 1))
-  let reqId = printf "%06d" rq
-  let log = _logs c </> (reqId ++ ".log")
-  liftIO $ putStrLn $ "Got request with ID:" ++ show reqId
+    r' <- runReaderT (runFileLoggingT log (runExceptT $ definition req)) c
+    case r' of
+      Left e -> return $ addHeader reqId DefinitionResponse {srcSpan = Nothing, err = Just e}
+      Right r -> return $ addHeader reqId r
+  liftIO $ putMVar m s'
+  return r
 
-  r' <- liftIO $ modifyMVar m (\x -> flipTuple <$> runReaderT (runFileLoggingT log (runStateT (runExceptT $ definition req) x)) c)
-  case r' of
-    Left e -> return $ addHeader reqId DefinitionResponse {srcSpan = Nothing, err = Just e}
-    Right r -> return $ addHeader reqId r
+pingH :: Handler String
+pingH = return "pong"
 
 main :: IO ()
 main = withSocketsDo $ do
@@ -100,4 +117,4 @@ main = withSocketsDo $ do
   writeFile (constants ^. root </> "port") (show port)
 
   s <- newMVar $ ServerState {_context = ContextCabalPackage {_modules = Map.empty, _dependencies = []}, _reqId = 0}
-  runSettingsSocket defaultSettings sock $ serve api $ hoistServer api (nt s) (server constants)
+  runSettingsSocket defaultSettings sock $ serve api $ (definitionH constants s :<|> pingH)
