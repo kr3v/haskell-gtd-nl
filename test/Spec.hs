@@ -1,8 +1,9 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-import Control.Applicative (Applicative (liftA2))
+import Control.Applicative (Alternative (empty), Applicative (liftA2))
 import Control.Exception (evaluate)
+import Control.Lens
 import Control.Monad.Logger (runStderrLoggingT)
 import Control.Monad.Logger.CallStack (runFileLoggingT)
 import Control.Monad.State (MonadTrans (lift), StateT (..), evalStateT)
@@ -18,11 +19,12 @@ import Data.Time.Clock (diffUTCTime)
 import Data.Time.Clock.POSIX (getCurrentTime)
 import qualified Distribution.ModuleName as ModuleName
 import Distribution.PackageDescription (emptyGenericPackageDescription, emptyPackageDescription)
+import GHC.RTS.Flags (ProfFlags (descrSelector))
 import GTD.Cabal (CabalPackage (..))
 import GTD.Configuration
-import GTD.Haskell (ContextModule (..), Declaration (..), Identifier (Identifier), SourceSpan (..), emptySourceSpan, enrichTryModule, enrichTryPackage, haskellApplyCppHs, haskellGetExportedIdentifiers, haskellGetIdentifiers, haskellGetImportedIdentifiers, haskellParse)
-import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), definition, emptyServerState, noDefintionFoundError, noDefintionFoundErrorE)
-import GTD.Utils (logDebugNSS)
+import GTD.Haskell (ContextModule (..), Declaration (..), Identifier (Identifier), SourceSpan (..), dependencies, emptyContextModule, emptySourceSpan, enrichTryModule, enrichTryPackage, haskellApplyCppHs, haskellGetExportedIdentifiers, haskellGetIdentifiers, haskellGetImportedIdentifiers, haskellParse, parsePackage, parsePackages)
+import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), context, definition, emptyServerState, noDefintionFoundError, noDefintionFoundErrorE)
+import GTD.Utils (logDebugNSS, ultraZoom)
 import Language.Haskell.Exts (Module (..), SrcSpan (..), SrcSpanInfo (..))
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.FilePath ((</>))
@@ -30,6 +32,8 @@ import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe, shouldNotBe
 import Test.Hspec.Runner (Config (configPrintCpuTime), defaultConfig, hspecWith)
 import Test.QuickCheck (Testable (..), forAll, (==>))
 import Text.Printf (printf)
+import qualified Distribution.ModuleName as Cabal
+import qualified Data.Set as Set
 
 haskellApplyCppHsSpec :: Spec
 haskellApplyCppHsSpec = do
@@ -42,14 +46,26 @@ haskellApplyCppHsSpec = do
       src <- readFile srcPath
       expected <- readFile expPath
 
-      result <- haskellApplyCppHs srcPath src
+      result <- liftIO $ runExceptT $ haskellApplyCppHs srcPath src
+      case result of
+        Left err -> expectationFailure $ show err
+        Right result -> do
+          writeFile dstPath result
+          result `shouldBe` expected
+    it "fails on #error directive" $ do
+      let srcPath = "./test/samples/haskellApplyCppHs/in.1.hs"
+      let dstPath = "./test/samples/haskellApplyCppHs/out.1.hs"
+      let expPath = "./test/samples/haskellApplyCppHs/exp.1.hs"
 
-      writeFile dstPath result
+      src <- readFile srcPath
+      expected <- readFile expPath
 
-      printf "src:\n```\n%s\n```\n\n" src
-      printf "result:\n```\n%s\n```\n\n" result
-      printf "expected:\n```\n%s\n```\n\n" expected
-      result `shouldBe` expected
+      result <- liftIO $ runExceptT $ haskellApplyCppHs srcPath src
+      case result of
+        Left err -> expectationFailure $ show err
+        Right result -> do
+          writeFile dstPath result
+          result `shouldBe` expected
 
 -- TODO: `shouldBe` invocation should not rely on the order of declarations, as the fact that
 --       declarations are ordered would not be required later
@@ -131,18 +147,6 @@ haskellGetImportedIdentifiersSpec = do
   describe descr $ do
     it "extracts only function imports" $
       test 0
-
-emptySrcSpan :: SrcSpan
-emptySrcSpan = SrcSpan {srcSpanFilename = "", srcSpanStartLine = 0, srcSpanStartColumn = 0, srcSpanEndLine = 0, srcSpanEndColumn = 0}
-
-emptySrcSpanInfo :: SrcSpanInfo
-emptySrcSpanInfo = SrcSpanInfo {srcInfoSpan = emptySrcSpan, srcInfoPoints = []}
-
-emptyHaskellModule :: Module SrcSpanInfo
-emptyHaskellModule = Module emptySrcSpanInfo Nothing [] [] []
-
-emptyContextModule :: ContextModule
-emptyContextModule = ContextModule {_cmodule = emptyHaskellModule, _exports = Map.empty, _identifiers = Map.empty}
 
 emptyCabalPackage :: CabalPackage
 emptyCabalPackage = CabalPackage "" "" emptyPackageDescription [] Map.empty
@@ -281,6 +285,24 @@ definitionsSpec = do
         logDebugNSS "definitionsSpec" $ show x6
         lift $ lift $ lift $ x6 `shouldBe` noDefErr
 
+parsePackageSpec :: Spec
+parsePackageSpec = do
+  describe "parse package" $
+    it "does the thing" $ do
+      let workDir = "./test/integrationTestRepo/sc-ea-hs"
+      let file = workDir </> "app/game/Main.hs"
+
+      consts <- prepareConstants
+      let req = DefinitionRequest {workDir = "./test/integrationTestRepo/sc-ea-hs", file = file, word = ""}
+      flip evalStateT emptyServerState $ runFileLoggingT (workDir </> "log1.txt") $ flip runReaderT consts $ do
+        x1 <- runExceptT $ definition req {word = "playIO"}
+        deps <- use (context . dependencies)
+        let pkg = head deps
+        modules1 <- ultraZoom context (parsePackage pkg)
+        liftIO $ print (_cmoduleName <$> modules1)
+
+      True `shouldBe` True
+
 ---
 
 integrationTestsSpec :: Spec
@@ -289,10 +311,11 @@ integrationTestsSpec = do
 
 main :: IO ()
 main = hspecWith defaultConfig {configPrintCpuTime = False} $ do
+  -- parsePackageSpec
   haskellApplyCppHsSpec
-  haskellGetIdentifiersSpec
-  haskellGetExportedIdentifiersSpec
-  haskellGetImportedIdentifiersSpec
-  enrichTryModuleSpec
-  enrichTryPackageSpec
-  integrationTestsSpec
+  -- haskellGetIdentifiersSpec
+  -- haskellGetExportedIdentifiersSpec
+  -- haskellGetImportedIdentifiersSpec
+  -- enrichTryModuleSpec
+  -- enrichTryPackageSpec
+  -- integrationTestsSpec

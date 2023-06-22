@@ -116,6 +116,7 @@ library haskell-gtd-lib
         , directory ^>= 1.3.8.1
         , network ^>= 3.1.4.0
         , unix ^>= 2.8.1.1
+        , safe-exceptions ^>= 0.1.7.3
     
     exposed-modules:
         GTD.Haskell
@@ -160,5 +161,3 @@ test-suite haskell-gtd-lib-test
         , unix ^>= 2.8.1.1
   build-tool-depends: hspec-discover:hspec-discover
   default-language: Haskell2010
-  other-modules:
-      GTD.HaskellTest

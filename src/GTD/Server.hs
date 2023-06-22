@@ -17,7 +17,7 @@ import Distribution.Compat.Directory (listDirectory)
 import GHC.Generics (Generic)
 import GTD.Cabal (cabalDeps, cabalPackageName, cabalPackagePath, cabalRead)
 import GTD.Configuration (GTDConfiguration)
-import GTD.Haskell (ContextCabalPackage (..), ContextModule (_identifiers), Declaration (_declSrcOrig), Identifier (Identifier), SourceSpan, dependencies, hasNonEmptyOrig, parseModule, parsePackages)
+import GTD.Haskell (ContextCabalPackage (..), ContextModule (..), Declaration (_declSrcOrig), Identifier (Identifier), SourceSpan, dependencies, hasNonEmptyOrig, parseModule, parsePackages, emptyContextModule, parseModulePhase1)
 import GTD.Utils (deduplicateBy, ultraZoom)
 import System.Directory (createDirectoryIfMissing, getHomeDirectory, setCurrentDirectory)
 import System.FilePath (takeExtension, (</>))
@@ -80,7 +80,7 @@ definition req@(DefinitionRequest {workDir = workDir, file = file, word = word})
   context . dependencies .= deps
   ultraZoom context parsePackages
 
-  m <- ExceptT $ ultraZoom context (runExceptT $ parseModule True file)
+  m <- ExceptT $ ultraZoom context (runExceptT $ parseModulePhase1 emptyContextModule{_cmodulePath = file})
   case Identifier word `Map.lookup` _identifiers m of
     Nothing -> noDefintionFoundError
     Just d ->
