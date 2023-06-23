@@ -32,7 +32,7 @@ import GHC.TypeLits
 import qualified GHC.TypeLits
 import GTD.Cabal (cabalDeps, cabalPackageName, cabalPackagePath, cabalRead)
 import GTD.Configuration (GTDConfiguration (_logs), prepareConstants, root)
-import GTD.Haskell (ContextCabalPackage (..), ContextModule (..), Declaration (..), Identifier (Identifier), SourceSpan (..), dependencies, parseModule, parsePackages)
+import GTD.Haskell (ContextCabalPackage (..), HsModule (..), Declaration (..), Identifier (Identifier), SourceSpan (..), dependencies, parseModule, parsePackages)
 import GTD.Server (DefinitionRequest, DefinitionResponse (..), ServerState (..), definition, reqId)
 import GTD.Utils (deduplicateBy, ultraZoom)
 import Network.Socket (AddrInfo (addrAddress), Family (AF_INET), SockAddr (SockAddrInet), Socket (..), SocketType (Stream), bind, defaultProtocol, listen, openSocket, socket, socketPort, tupleToHostAddress, withSocketsDo)

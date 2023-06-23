@@ -10,17 +10,17 @@ module GTD.Cabal where
 import Control.Applicative (Applicative (liftA2))
 import Control.Lens (makeLenses, view)
 import Control.Monad (forM)
-import Control.Monad.Logger
+import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (MonadReader (ask))
 import Control.Monad.Trans (MonadIO (liftIO), lift)
 import Control.Monad.Trans.Maybe (MaybeT (..))
-import Data.ByteString.UTF8 (fromString)
+import qualified Data.ByteString.UTF8 as BS
 import Data.List (find)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (catMaybes)
 import qualified Data.Set as Set
 import Distribution.Compat.Prelude (Generic)
-import Distribution.ModuleName (ModuleName, toFilePath)
+import Distribution.ModuleName (ModuleName, fromString, toFilePath)
 import Distribution.PackageDescription (BuildInfo (..), Dependency (Dependency), Executable (buildInfo, exeName), Library (..), PackageDescription (..), unPackageName)
 import Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import Distribution.PackageDescription.Parsec (parseGenericPackageDescription, runParseResult)
@@ -50,7 +50,7 @@ cabalGet pkg pkgVerPredicate = do
 cabalRead :: FilePath -> (MonadLoggerIO m) => m PackageDescription
 cabalRead p = do
   handle <- liftIO $ openFile p ReadMode
-  (warnings, epkg) <- liftIO $ runParseResult . parseGenericPackageDescription . fromString <$> hGetContents handle
+  (warnings, epkg) <- liftIO $ runParseResult . parseGenericPackageDescription . BS.fromString <$> hGetContents handle
   liftIO $ either (fail . show) (return . flattenPackageDescription) epkg
 
 cabalFetchDependencies :: PackageDescription -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m [(String, FilePath)]
@@ -70,8 +70,8 @@ cabalGetExportedModules pkg = do
   let srcDirs = (hsSourceDirs . libBuildInfo) lib
   return (srcDirs, modules)
 
-haskellPath :: FilePath -> CabalLibSrcDir -> ModuleName -> FilePath
-haskellPath dir src mod = dir </> getSymbolicPath src </> (toFilePath mod ++ ".hs")
+haskellPath :: FilePath -> CabalLibSrcDir -> ModuleNameS -> FilePath
+haskellPath dir src mod = dir </> getSymbolicPath src </> ((toFilePath . fromString $ mod) ++ ".hs")
 
 type PackageNameS = String
 

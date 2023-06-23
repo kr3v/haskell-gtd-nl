@@ -17,7 +17,18 @@ import Distribution.Compat.Directory (listDirectory)
 import GHC.Generics (Generic)
 import GTD.Cabal (cabalDeps, cabalPackageName, cabalPackagePath, cabalRead)
 import GTD.Configuration (GTDConfiguration)
-import GTD.Haskell (ContextCabalPackage (..), ContextModule (..), Declaration (_declSrcOrig), Identifier (Identifier), SourceSpan, dependencies, hasNonEmptyOrig, parseModule, parsePackages, emptyContextModule, parseModulePhase1)
+import GTD.Haskell
+  ( ContextCabalPackage (..),
+    dependencies,
+    parsePackages,
+  )
+import GTD.Haskell.Declaration
+  ( Declaration (_declSrcOrig),
+    Identifier (Identifier),
+    SourceSpan,
+    hasNonEmptyOrig,
+  )
+import GTD.Haskell.Module (HsModule (_decls, _path), decls, emptyHsModule, parseModule)
 import GTD.Utils (deduplicateBy, ultraZoom)
 import System.Directory (createDirectoryIfMissing, getHomeDirectory, setCurrentDirectory)
 import System.FilePath (takeExtension, (</>))
@@ -80,8 +91,8 @@ definition req@(DefinitionRequest {workDir = workDir, file = file, word = word})
   context . dependencies .= deps
   ultraZoom context parsePackages
 
-  m <- ExceptT $ ultraZoom context (runExceptT $ parseModulePhase1 emptyContextModule{_cmodulePath = file})
-  case Identifier word `Map.lookup` _identifiers m of
+  m <- ExceptT $ ultraZoom context (runExceptT $ parseModule emptyHsModule {_path = file})
+  case Identifier word `Map.lookup` _decls m of
     Nothing -> noDefintionFoundError
     Just d ->
       if hasNonEmptyOrig d

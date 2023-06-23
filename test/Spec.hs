@@ -15,14 +15,23 @@ import Data.Aeson (decode, defaultOptions, encode, genericToJSON)
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
+import qualified Data.Set as Set
 import Data.Time.Clock (diffUTCTime)
 import Data.Time.Clock.POSIX (getCurrentTime)
+import qualified Distribution.ModuleName as Cabal
 import qualified Distribution.ModuleName as ModuleName
 import Distribution.PackageDescription (emptyGenericPackageDescription, emptyPackageDescription)
 import GHC.RTS.Flags (ProfFlags (descrSelector))
 import GTD.Cabal (CabalPackage (..))
 import GTD.Configuration
-import GTD.Haskell (ContextModule (..), Declaration (..), Identifier (Identifier), SourceSpan (..), dependencies, emptyContextModule, emptySourceSpan, enrichTryModule, enrichTryPackage, haskellApplyCppHs, haskellGetExportedIdentifiers, haskellGetIdentifiers, haskellGetImportedIdentifiers, haskellParse, parsePackage, parsePackages)
+import GTD.Haskell
+import GTD.Haskell.AST
+import GTD.Haskell.Cpphs
+import GTD.Haskell.Declaration
+import GTD.Haskell.Enrich
+import GTD.Haskell.Module
+import GTD.Haskell.Utils
+import GTD.Haskell.Walk
 import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), context, definition, emptyServerState, noDefintionFoundError, noDefintionFoundErrorE)
 import GTD.Utils (logDebugNSS, ultraZoom)
 import Language.Haskell.Exts (Module (..), SrcSpan (..), SrcSpanInfo (..))
@@ -32,8 +41,6 @@ import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe, shouldNotBe
 import Test.Hspec.Runner (Config (configPrintCpuTime), defaultConfig, hspecWith)
 import Test.QuickCheck (Testable (..), forAll, (==>))
 import Text.Printf (printf)
-import qualified Distribution.ModuleName as Cabal
-import qualified Data.Set as Set
 
 haskellApplyCppHsSpec :: Spec
 haskellApplyCppHsSpec = do
@@ -52,7 +59,7 @@ haskellApplyCppHsSpec = do
         Right result -> do
           writeFile dstPath result
           result `shouldBe` expected
-    it "fails on #error directive" $ do
+    it "ignores #error directive" $ do
       let srcPath = "./test/samples/haskellApplyCppHs/in.1.hs"
       let dstPath = "./test/samples/haskellApplyCppHs/out.1.hs"
       let expPath = "./test/samples/haskellApplyCppHs/exp.1.hs"
@@ -155,7 +162,7 @@ cmGen mn0 dn0 mnE dnE fnE =
   let d0 = Declaration emptySourceSpan emptySourceSpan mn0 dn0
       lE = emptySourceSpan {sourceSpanFileName = fnE}
       dE = d0 {_declSrcOrig = lE, _declSrcUsage = lE, _declName = dnE}
-      cmE = Map.fromList [(mnE, emptyContextModule {_exports = Map.fromList [(Identifier dnE, dE)]})]
+      cmE = Map.fromList [(mnE, emptyHsModule {_exports = Map.fromList [(Identifier dnE, dE)]})]
    in (d0, dE, cmE)
 
 nothingWasExpected d0 d1 = expectationFailure $ printf "expected Nothing, got %s (== (%s) => %s)" (show d0) (show d1) (show (d0 == d1))
@@ -299,7 +306,7 @@ parsePackageSpec = do
         deps <- use (context . dependencies)
         let pkg = head deps
         modules1 <- ultraZoom context (parsePackage pkg)
-        liftIO $ print (_cmoduleName <$> modules1)
+        liftIO $ print (_name <$> modules1)
 
       True `shouldBe` True
 
@@ -308,14 +315,14 @@ parsePackageSpec = do
 integrationTestsSpec :: Spec
 integrationTestsSpec = do
   definitionsSpec
+  parsePackageSpec
 
 main :: IO ()
 main = hspecWith defaultConfig {configPrintCpuTime = False} $ do
-  -- parsePackageSpec
   haskellApplyCppHsSpec
-  -- haskellGetIdentifiersSpec
-  -- haskellGetExportedIdentifiersSpec
-  -- haskellGetImportedIdentifiersSpec
-  -- enrichTryModuleSpec
-  -- enrichTryPackageSpec
-  -- integrationTestsSpec
+  haskellGetIdentifiersSpec
+  haskellGetExportedIdentifiersSpec
+  haskellGetImportedIdentifiersSpec
+  enrichTryModuleSpec
+  enrichTryPackageSpec
+  integrationTestsSpec

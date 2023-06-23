@@ -120,6 +120,13 @@ library haskell-gtd-lib
     
     exposed-modules:
         GTD.Haskell
+        GTD.Haskell.AST
+        GTD.Haskell.Cpphs
+        GTD.Haskell.Declaration
+        GTD.Haskell.Enrich
+        GTD.Haskell.Module
+        GTD.Haskell.Utils
+        GTD.Haskell.Walk
         GTD.Cabal
         GTD.Utils
         GTD.Server

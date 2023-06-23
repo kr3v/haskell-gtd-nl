@@ -7,3 +7,5 @@
   - additional things here:
     - Prelude support (an implicit import of certain functions)
   - module re-export
+
+3. research Haskell formatters to avoid lines longer than 80/120 characters (wrap the imports, wrap the exports, wrap function declarations, ...)
