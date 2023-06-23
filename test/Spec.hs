@@ -6,7 +6,7 @@ import Control.Exception (evaluate)
 import Control.Lens
 import Control.Monad.Logger (runStderrLoggingT)
 import Control.Monad.Logger.CallStack (runFileLoggingT)
-import Control.Monad.State (MonadTrans (lift), StateT (..), evalStateT)
+import Control.Monad.State (MonadTrans (lift), StateT (..), evalStateT, forM)
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Maybe (MaybeT (runMaybeT))
 import Control.Monad.Trans.Reader (ReaderT (..))
@@ -22,7 +22,7 @@ import qualified Distribution.ModuleName as Cabal
 import qualified Distribution.ModuleName as ModuleName
 import Distribution.PackageDescription (emptyGenericPackageDescription, emptyPackageDescription)
 import GHC.RTS.Flags (ProfFlags (descrSelector))
-import GTD.Cabal (CabalPackage (..))
+import GTD.Cabal (CabalPackage (..), PackageNameS, ModuleNameS)
 import GTD.Configuration
 import GTD.Haskell
 import GTD.Haskell.AST
@@ -87,7 +87,6 @@ haskellGetIdentifiersSpec = do
 
         src <- readFile srcPath
         expectedS <- BS.readFile expPath
-
         let expected :: [Declaration] = fromJust $ decode expectedS
 
         let result = haskellParse srcPath src
@@ -294,21 +293,35 @@ definitionsSpec = do
 
 parsePackageSpec :: Spec
 parsePackageSpec = do
-  describe "parse package" $
-    it "does the thing" $ do
+  let descr = "parsePackage"
+  describe descr $
+    it "for each dependency in the integration repo, it parses all its modules" $ do
+      let expPath = "./test/samples/" ++ descr ++ "/exp.0.json"
+      let dstPath = "./test/samples/" ++ descr ++ "/out.0.json"
+
       let workDir = "./test/integrationTestRepo/sc-ea-hs"
       let file = workDir </> "app/game/Main.hs"
 
       consts <- prepareConstants
-      let req = DefinitionRequest {workDir = "./test/integrationTestRepo/sc-ea-hs", file = file, word = ""}
-      flip evalStateT emptyServerState $ runFileLoggingT (workDir </> "log1.txt") $ flip runReaderT consts $ do
+      result <- flip evalStateT emptyServerState $ runFileLoggingT (workDir </> "log1.txt") $ flip runReaderT consts $ do
+        let req = DefinitionRequest {workDir = "./test/integrationTestRepo/sc-ea-hs", file = file, word = ""}
         x1 <- runExceptT $ definition req {word = "playIO"}
         deps <- use (context . dependencies)
-        let pkg = head deps
-        modules1 <- ultraZoom context (parsePackage pkg)
-        liftIO $ print (_name <$> modules1)
 
-      True `shouldBe` True
+        r <- forM deps $ \pkg -> do
+          modules <- Map.elems <$> ultraZoom context (parsePackage pkg)
+          liftIO $ print (_cabalPackageName pkg)
+          liftIO $ printf "\tmods=%s\n" (show $ _name <$> modules)
+          return (_cabalPackageName pkg, _name <$> modules)
+        return $ Map.fromList r
+
+      expectedS <- BS.readFile expPath
+      let expected :: Map.Map PackageNameS [ModuleNameS] = fromJust $ decode expectedS
+      BS.writeFile dstPath $ encode result
+
+      -- explicitly verify that there are non-exported modules that were parsed
+      -- yet be aware of 'failed' modules, as some Cabal-exported modules might be missing from the returned value
+      result `shouldBe` expected
 
 ---
 

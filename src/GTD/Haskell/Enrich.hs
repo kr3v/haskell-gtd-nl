@@ -32,3 +32,6 @@ enrichTryModule orig moduleDecls = do
   mDecl <- maybeToMaybeT $ Map.lookup (Identifier $ _declName orig) (_exports mod)
   logDebugNSS logTag $ printf "enrich: updating %s with %s" (show orig) (show mDecl)
   return $ orig {_declSrcOrig = _declSrcOrig mDecl}
+
+---
+

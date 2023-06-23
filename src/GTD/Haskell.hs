@@ -14,7 +14,7 @@ import qualified Control.Exception as Exc
 import Control.Exception.Safe (tryAny)
 import Control.Lens (At (..), makeLenses, use, (%=), (&), (.=), (^.))
 import Control.Monad (forM, forM_, guard, unless, when)
-import Control.Monad.Logger (MonadLogger, logDebugN, logDebugNS, logDebugSH, MonadLoggerIO)
+import Control.Monad.Logger (MonadLogger, MonadLoggerIO, logDebugN, logDebugNS, logDebugSH)
 import Control.Monad.State (MonadIO (liftIO), MonadState, StateT (..), evalStateT, execStateT)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Control.Monad.Trans.Maybe (MaybeT (..))
@@ -53,6 +53,21 @@ data ContextCabalPackage = ContextCabalPackage
   deriving (Show, Generic)
 
 $(makeLenses ''ContextCabalPackage)
+
+---
+
+enrich :: Declaration -> (MonadLogger m, MonadState ContextCabalPackage m) => m Declaration
+enrich d = do
+  let logTag = "enrich"
+  deps <- use dependencies
+  mods <- use modules
+  xs <- fmap (filter hasNonEmptyOrig . catMaybes) <$> forM deps $ runMaybeT . enrichTryPackage d mods
+  case length xs of
+    0 -> return d
+    1 -> return $ head xs
+    _ -> do
+      logDebugNSS logTag $ printf "multiple matches for %s: %s" (show d) (show xs)
+      return $ head xs
 
 ---
 
@@ -102,16 +117,3 @@ parsePackage p = do
 --   return $ cm {_exports = if isImplicitExportAll then _locals cm else Map.intersection (asDeclsMap exports) (_identifiers cm)}
 
 ---
-
-enrich :: Declaration -> (MonadLogger m, MonadState ContextCabalPackage m) => m Declaration
-enrich d = do
-  let logTag = "enrich"
-  deps <- use dependencies
-  mods <- use modules
-  xs <- fmap (filter hasNonEmptyOrig . catMaybes) <$> forM deps $ runMaybeT . enrichTryPackage d mods
-  case length xs of
-    0 -> return d
-    1 -> return $ head xs
-    _ -> do
-      logDebugNSS logTag $ printf "multiple matches for %s: %s" (show d) (show xs)
-      return $ head xs
