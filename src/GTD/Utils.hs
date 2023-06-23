@@ -36,3 +36,6 @@ deduplicateBy f xs = Map.elems $ Map.fromList $ (\x -> (f x, x)) <$> xs
 
 withExceptT :: (Functor m) => (e -> e') -> ExceptT e m a -> ExceptT e' m a
 withExceptT f = mapExceptT $ fmap $ either (Left . f) Right
+
+flipTuple :: (a, b) -> (b, a)
+flipTuple (a, b) = (b, a)

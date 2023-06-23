@@ -3,7 +3,7 @@
 module GTD.Haskell.Enrich where
 
 import Control.Monad.Logger (MonadLogger)
-import Control.Monad.RWS (guard)
+import Control.Monad.RWS (guard, MonadState)
 import Control.Monad.Trans.Maybe (MaybeT)
 import qualified Data.Map as Map
 import GTD.Cabal (CabalPackage (_cabalPackageExportedModules, _cabalPackageName), ModuleNameS, PackageNameS)
@@ -16,22 +16,18 @@ enrichTryPackage ::
   Declaration ->
   Map.Map PackageNameS (Map.Map ModuleNameS HsModule) ->
   CabalPackage ->
-  (MonadLogger m) => MaybeT m Declaration
+  Maybe Declaration
 enrichTryPackage d mods dep = do
   guard $ _declModule d `Map.member` _cabalPackageExportedModules dep
-  dependencyModules <- maybeToMaybeT $ _cabalPackageName dep `Map.lookup` mods
-  enrichTryModule d dependencyModules
+  dependencyModules <- _cabalPackageName dep `Map.lookup` mods
+  enrichTryModule dependencyModules d
 
 enrichTryModule ::
-  Declaration ->
   Map.Map ModuleNameS HsModule ->
-  (MonadLogger m) => MaybeT m Declaration
-enrichTryModule orig moduleDecls = do
-  let logTag = "enrich by module"
-  mod <- maybeToMaybeT $ _declModule orig `Map.lookup` moduleDecls
-  mDecl <- maybeToMaybeT $ Map.lookup (Identifier $ _declName orig) (_exports mod)
-  logDebugNSS logTag $ printf "enrich: updating %s with %s" (show orig) (show mDecl)
+  Declaration ->
+  Maybe Declaration
+enrichTryModule moduleDecls orig = do
+  mod <- _declModule orig `Map.lookup` moduleDecls
+  mDecl <- Identifier (_declName orig) `Map.lookup` _exports mod
   return $ orig {_declSrcOrig = _declSrcOrig mDecl}
-
----
 

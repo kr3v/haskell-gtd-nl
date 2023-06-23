@@ -104,8 +104,9 @@ cpp p syms path options (Keep ps) (l@('#':x):xs) =
                                                   p path
                                                   (warnings options)
                        cpp p syms path options (Keep ps)
-                             (("#line 1 "++show inc): linesCpp content
-                                                    ++ cppline (newline p): xs)
+                            --  (("#line 1 "++show inc): linesCpp content
+                            --                         ++ cppline (newline p): xs)
+                            ("":xs)
         "warning"-> if warnings options then
                       do hPutStrLn stderr (l++"\nin "++show p)
                          skipn syms False (Keep ps) xs

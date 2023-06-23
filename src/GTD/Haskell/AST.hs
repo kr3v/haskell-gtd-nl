@@ -15,15 +15,17 @@ import Language.Haskell.Exts
   ( Decl (TypeSig),
     ExportSpec (EModuleContents, EVar),
     ExportSpecList (ExportSpecList),
+    Extension (EnableExtension),
     ImportDecl (ImportDecl, importModule, importSpecs),
     ImportSpec (IVar),
     ImportSpecList (ImportSpecList),
+    KnownExtension (CPP),
     Language (Haskell2010),
     Module (Module),
     ModuleHead (ModuleHead),
     ModuleName (ModuleName),
     Name (Ident),
-    ParseMode (baseLanguage, parseFilename),
+    ParseMode (..),
     ParseResult (ParseFailed, ParseOk),
     QName (UnQual),
     SrcSpanInfo,
@@ -32,6 +34,7 @@ import Language.Haskell.Exts
   )
 import Text.Printf (printf)
 
+-- TODO: figure out #line pragmas
 haskellParse :: FilePath -> String -> Either String (Module SrcSpanInfo)
 haskellParse src content = case parseFileContentsWithMode defaultParseMode {parseFilename = src, baseLanguage = Haskell2010} content of
   ParseOk m -> Right m

@@ -20,6 +20,7 @@ import GTD.Configuration (GTDConfiguration)
 import GTD.Haskell
   ( ContextCabalPackage (..),
     dependencies,
+    enrich,
     parsePackages,
   )
 import GTD.Haskell.Declaration
@@ -44,7 +45,7 @@ data ServerState = ServerState
 $(makeLenses ''ServerState)
 
 emptyServerState :: ServerState
-emptyServerState = ServerState {_context = ContextCabalPackage {_modules = Map.empty, _dependencies = []}, _reqId = 0}
+emptyServerState = ServerState {_context = ContextCabalPackage {_ccpmodules = Map.empty, _dependencies = []}, _reqId = 0}
 
 data DefinitionRequest = DefinitionRequest
   { workDir :: FilePath,
@@ -92,7 +93,9 @@ definition req@(DefinitionRequest {workDir = workDir, file = file, word = word})
   ultraZoom context parsePackages
 
   m <- ExceptT $ ultraZoom context (runExceptT $ parseModule emptyHsModule {_path = file})
-  case Identifier word `Map.lookup` _decls m of
+  m' <- ultraZoom context (enrich m)
+
+  case Identifier word `Map.lookup` _decls m' of
     Nothing -> noDefintionFoundError
     Just d ->
       if hasNonEmptyOrig d

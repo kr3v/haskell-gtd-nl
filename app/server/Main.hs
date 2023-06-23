@@ -32,9 +32,8 @@ import GHC.TypeLits
 import qualified GHC.TypeLits
 import GTD.Cabal (cabalDeps, cabalPackageName, cabalPackagePath, cabalRead)
 import GTD.Configuration (GTDConfiguration (_logs), prepareConstants, root)
-import GTD.Haskell (ContextCabalPackage (..), HsModule (..), Declaration (..), Identifier (Identifier), SourceSpan (..), dependencies, parseModule, parsePackages)
 import GTD.Server (DefinitionRequest, DefinitionResponse (..), ServerState (..), definition, reqId)
-import GTD.Utils (deduplicateBy, ultraZoom)
+import GTD.Utils (deduplicateBy, ultraZoom, flipTuple)
 import Network.Socket (AddrInfo (addrAddress), Family (AF_INET), SockAddr (SockAddrInet), Socket (..), SocketType (Stream), bind, defaultProtocol, listen, openSocket, socket, socketPort, tupleToHostAddress, withSocketsDo)
 import Network.Wai.Handler.Warp (defaultSettings, run, runSettingsSocket)
 import Numeric (showHex)
@@ -48,6 +47,7 @@ import System.Process (getPid)
 import System.Process.Internals (ProcessHandle (waitpidLock))
 import System.Random.Stateful (StdGen, mkStdGen, randomIO)
 import Text.Printf (printf)
+import GTD.Haskell (ContextCabalPackage(..))
 
 -- two methods:
 -- definition - to obtain a source span for a given word
@@ -69,9 +69,6 @@ type ServerStateC = MVar ServerState
 
 nt :: ServerStateC -> AppM a -> Handler a
 nt s x = liftIO (evalStateT x s)
-
-flipTuple :: (a, b) -> (b, a)
-flipTuple (a, b) = (b, a)
 
 definitionH ::
   KnownSymbol h =>
@@ -116,5 +113,5 @@ main = withSocketsDo $ do
   writeFile (constants ^. root </> "pid") (show pid)
   writeFile (constants ^. root </> "port") (show port)
 
-  s <- newMVar $ ServerState {_context = ContextCabalPackage {_modules = Map.empty, _dependencies = []}, _reqId = 0}
+  s <- newMVar $ ServerState {_context = ContextCabalPackage {_ccpmodules = Map.empty, _dependencies = []}, _reqId = 0}
   runSettingsSocket defaultSettings sock $ serve api (definitionH constants s :<|> pingH)
