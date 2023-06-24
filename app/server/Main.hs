@@ -19,7 +19,8 @@ import Control.Monad.State.Lazy (evalStateT)
 import Data.Data (Proxy (..))
 import GHC.TypeLits (KnownSymbol)
 import GTD.Configuration (GTDConfiguration (_logs), prepareConstants, root)
-import GTD.Server (DefinitionRequest, DefinitionResponse (..), ServerState (..), definition, emptyServerState, reqId)
+import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), ServerState (..), definition, emptyServerState, reqId)
+import GTD.Utils (logDebugNSS, peekM)
 import Network.Socket (Family (AF_INET), SockAddr (SockAddrInet), SocketType (Stream), bind, defaultProtocol, listen, socket, socketPort, tupleToHostAddress, withSocketsDo)
 import Network.Wai.Handler.Warp (defaultSettings, runSettingsSocket)
 import Servant (Get, Header, Headers, JSON, Post, ReqBody, addHeader, type (:<|>) (..), type (:>))
@@ -64,7 +65,8 @@ definitionH c m req = do
     let log = _logs c </> (reqId ++ ".log")
     liftIO $ putStrLn $ "Got request with ID:" ++ show reqId
 
-    r' <- runReaderT (runFileLoggingT log (runExceptT $ definition req)) c
+    let peekF r = logDebugNSS "definition" $ printf "%s@%s -> %s" (word req) (file req) (show r)
+    r' <- runFileLoggingT log $ peekM peekF $ runReaderT (runExceptT $ definition req) c
     case r' of
       Left e -> return $ addHeader reqId DefinitionResponse {srcSpan = Nothing, err = Just e}
       Right r -> return $ addHeader reqId r

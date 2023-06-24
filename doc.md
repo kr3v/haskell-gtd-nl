@@ -11,6 +11,7 @@
 3. research Haskell formatters to avoid lines longer than 80/120 characters (wrap the imports, wrap the exports, wrap function declarations, ...)
 
 4. https://github.com/ennocramer/floskell/issues/9 - haskell-gtd/src/GTD/Server.hs: Ambiguous infix expression @ SrcLoc "" (-1) (-1)
+TODO: fix properly with imports-exports parse only and 'full' topological sort
 
 5. Headers -> err:failed to parse haskell-gtd/app/server/Main.hs: Parse error: :<|> @ SrcLoc "haskell-gtd/app/server/Main.hs" 25 77
 
@@ -19,3 +20,5 @@
 7. qualified imports
 
 8. go to module definition in import
+
+9. cross package re-exports

@@ -7,21 +7,51 @@
 module GTD.Haskell.AST where
 
 import Control.Monad.Logger (MonadLoggerIO)
-import Control.Monad.Writer (MonadWriter (tell), forM_, unless)
+import Control.Monad.Writer (MonadWriter (tell), Writer, execWriter, forM_, unless)
 import Data.Data (Data (toConstr), showConstr)
 import Data.Maybe (isJust, isNothing)
 import GHC.Generics (Generic)
 import GTD.Cabal (ModuleNameS)
 import GTD.Haskell.Declaration (Declaration, identToDecl)
 import GTD.Utils (logDebugNSS)
-import Language.Haskell.Exts (Decl (TypeSig), ExportSpec (EModuleContents, EVar), ExportSpecList (ExportSpecList), ImportDecl (..), ImportSpec (IVar), ImportSpecList (ImportSpecList), Language (Haskell2010), Module (Module), ModuleHead (ModuleHead), ModuleName (ModuleName), Name (..), ParseMode (..), ParseResult (ParseFailed, ParseOk), QName (UnQual), SrcSpanInfo, defaultParseMode, parseFileContentsWithMode)
+import Language.Haskell.Exts (Decl (TypeSig), ExportSpec (EModuleContents, EVar), ExportSpecList (ExportSpecList), ImportDecl (..), ImportSpec (IVar), ImportSpecList (ImportSpecList), Language (Haskell2010), Module (Module), ModuleHead (ModuleHead), ModuleHeadAndImports (..), ModuleName (ModuleName), Name (..), NonGreedy (..), ParseMode (..), ParseResult (ParseFailed, ParseOk), Parseable (..), QName (UnQual), SrcSpanInfo, defaultParseMode, infix_, parseFileContentsWithMode)
 import Text.Printf (printf)
+
+haskellGetImportedSymbols :: [ImportDecl SrcSpanInfo] -> Writer [String] ()
+haskellGetImportedSymbols imports =
+  forM_ imports $ \(ImportDecl {importQualified = iq, importSrc = isr, importSafe = isa, importPkg = ip, importAs = ia, importSpecs = ss}) -> do
+    unless (iq || isr || isa || isJust ia || isJust ip) $ do
+      case ss of
+        Just (ImportSpecList _ False is) -> forM_ is $ \s -> do
+          case s of
+            IVar _ (Symbol _ n) -> tell [n]
+            _ -> return ()
+        _ -> return ()
+
+haskellDropPragmas :: String -> String
+haskellDropPragmas c = unlines ((\l -> if not (null l) && head l == '#' then "" else l) <$> lines c)
+
+-- in this case, the proposal is to get all the imported operators and explicitly set a fixity for them
+-- though this is the wrong place to do it, since imports might be unspecified
+haskellParseAmbigousInfixOperators :: FilePath -> String -> Either String (Module SrcSpanInfo)
+haskellParseAmbigousInfixOperators src content = do
+  let ei = parse (haskellDropPragmas content) :: ParseResult (NonGreedy (ModuleHeadAndImports SrcSpanInfo))
+  case ei of
+    ParseFailed loc e -> Left $ printf "failed to parse %s: %s @ %s" src e (show loc)
+    ParseOk (NonGreedy (ModuleHeadAndImports _ _ _ is)) -> do
+      let operators = execWriter $ haskellGetImportedSymbols is
+      let fixs = infix_ 0 operators
+      case parseFileContentsWithMode defaultParseMode {parseFilename = src, baseLanguage = Haskell2010, fixities = Just fixs} content of
+        ParseOk m -> Right m
+        ParseFailed loc e -> Left $ printf "failed to parse %s: %s @ %s" src e (show loc)
 
 -- TODO: figure out #line pragmas
 haskellParse :: FilePath -> String -> Either String (Module SrcSpanInfo)
 haskellParse src content = case parseFileContentsWithMode defaultParseMode {parseFilename = src, baseLanguage = Haskell2010} content of
   ParseOk m -> Right m
-  ParseFailed loc e -> Left $ printf "failed to parse %s: %s @ %s" src e (show loc)
+  ParseFailed loc e -> case e of
+    "Ambiguous infix expression" -> haskellParseAmbigousInfixOperators src content
+    _ -> Left $ printf "failed to parse %s: %s @ %s" src e (show loc)
 
 haskellGetIdentifiers :: Module SrcSpanInfo -> (MonadWriter [Declaration] m, MonadLoggerIO m) => m ()
 haskellGetIdentifiers (Module _ mhead _ _ decls) =

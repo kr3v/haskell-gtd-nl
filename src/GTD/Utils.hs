@@ -44,3 +44,9 @@ withExceptT f = mapExceptT $ fmap $ either (Left . f) Right
 
 flipTuple :: (a, b) -> (b, a)
 flipTuple (a, b) = (b, a)
+
+peekM :: Monad m => (a -> m b) -> m a -> m a
+peekM a m = do
+  r <- m
+  _ <- a r
+  return r

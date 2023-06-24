@@ -25,7 +25,7 @@ executable haskell-gtd
         , mtl ^>= 2.2.2
         , cpphs ^>= 1.20.9.1
         , hspec ^>= 2.11.1
-        , haskell-gtd-lib ^>= 0.1.0.0
+        , haskell-gtd-lib ^>= 0.0.1.0
         , lens ^>= 5.2.2
         , containers ^>= 0.6.7
         , transformers ^>= 0.5.6.2
@@ -55,7 +55,7 @@ executable haskell-gtd-server
         , mtl ^>= 2.2.2
         , cpphs ^>= 1.20.9.1
         , hspec ^>= 2.11.1
-        , haskell-gtd-lib ^>= 0.1.0.0
+        , haskell-gtd-lib ^>= 0.0.1.0
         , lens ^>= 5.2.2
         , containers ^>= 0.6.7
         , transformers ^>= 0.5.6.2
