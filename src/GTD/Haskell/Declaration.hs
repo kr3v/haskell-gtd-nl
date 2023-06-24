@@ -2,10 +2,10 @@
 
 module GTD.Haskell.Declaration where
 
-import Data.Aeson
+import Data.Aeson (FromJSON, ToJSON)
 import GHC.Generics (Generic)
-import GTD.Cabal
-import Language.Haskell.Exts
+import GTD.Cabal (ModuleNameS)
+import Language.Haskell.Exts (ModuleName (..), Name (..), SrcSpan (..), SrcSpanInfo (srcInfoSpan))
 
 data SourceSpan = SourceSpan
   { sourceSpanFileName :: FilePath,

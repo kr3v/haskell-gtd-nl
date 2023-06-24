@@ -12,7 +12,7 @@ module GTD.Haskell where
 import Control.Exception (ErrorCall, Exception (displayException), IOException, try)
 import qualified Control.Exception as Exc
 import Control.Exception.Safe (tryAny)
-import Control.Lens (At (..), Ixed (..), makeLenses, use, (%=), (&), (.=), (^.))
+import Control.Lens (At (..), Ixed (..), makeLenses, use, view, (%=), (&), (.=), (^.))
 import Control.Monad (forM, forM_, guard, unless, when)
 import Control.Monad.Logger (MonadLogger, MonadLoggerIO, logDebugN, logDebugNS, logDebugSH)
 import Control.Monad.State (MonadIO (liftIO), MonadState, StateT (..), evalStateT, execStateT, get, modify)
@@ -37,12 +37,12 @@ import qualified Distribution.ModuleName as Cabal
 import GHC.Generics (Generic)
 import GHC.IO.Unsafe (unsafePerformIO)
 import GTD.Cabal (CabalLibSrcDir, CabalPackage (..), ModuleNameS, PackageNameS, cabalPackageExportedModules, cabalPackageName, haskellPath)
-import GTD.Haskell.AST (haskellGetExportedIdentifiers, haskellGetImportedIdentifiers)
+import GTD.Haskell.AST (Imports (..), haskellGetExports, haskellGetImports)
 import GTD.Haskell.Declaration (Declaration (..), Identifier (Identifier), hasNonEmptyOrig)
 import GTD.Haskell.Enrich (enrichTryModule, enrichTryPackage)
 import GTD.Haskell.Module (HsModule (..))
 import qualified GTD.Haskell.Module as HSM
-import GTD.Haskell.Utils
+import GTD.Haskell.Utils (asDeclsMap)
 import GTD.Haskell.Walk (MS (MS), parseChosenModules)
 import qualified GTD.Haskell.Walk as MS
 import GTD.Utils (flipTuple, logDebugNSS, logErrorNSS, maybeToMaybeT, tryE, withExceptT)
@@ -101,6 +101,31 @@ parsePackage p = do
 
 ---
 
+getExportedModule ::
+  ContextCabalPackage ->
+  ModuleNameS ->
+  Either String HsModule
+getExportedModule ContextCabalPackage {_ccpmodules = mods, _dependencies = deps} modN = do
+  let modules = flip mapMaybe deps $ \pkg -> do
+        guard $ modN `Map.member` _cabalPackageExportedModules pkg
+        dependencyModules <- _cabalPackageName pkg `Map.lookup` mods
+        modN `Map.lookup` dependencyModules
+  case length modules of
+    0 -> Left $ printf "no package seem to export" (show modN)
+    1 -> Right $ head modules
+    _ -> Left $ printf "multiple matches for %s: %s" (show modN) (show $ _name <$> modules)
+
+getAllImports :: HsModule -> (MonadLoggerIO m, MonadState ContextCabalPackage m) => m [Declaration]
+getAllImports mod = do
+  let logTag = "get all imports for " <> show (_name mod)
+  Imports importsS importedModules <- execWriterT $ haskellGetImports (_ast mod)
+  ctx <- get
+  let (errorsM, importsM) = partitionEithers $ getExportedModule ctx <$> importedModules
+  forM_ errorsM $ \err -> logErrorNSS logTag err
+  return $ importsS ++ concatMap (Map.elems . _exports) importsM
+
+---
+
 enrich0 :: Declaration -> (MonadLogger m, MonadState ContextCabalPackage m) => m Declaration
 enrich0 d = do
   let logTag = "enrich"
@@ -116,9 +141,9 @@ enrich0 d = do
 
 enrich :: HsModule -> (MonadLoggerIO m, MonadState ContextCabalPackage m) => m HsModule
 enrich mod = do
-  (isImplicitExportAll, exports) <- runWriterT $ haskellGetExportedIdentifiers (_ast mod)
-  imports <- execWriterT $ haskellGetImportedIdentifiers (_ast mod)
-  importsE <- mapM enrich0 imports
+  let logTag = "module enrich for " ++ _name mod
+  (isImplicitExportAll, exports) <- runWriterT $ haskellGetExports (_ast mod)
+  importsE <- getAllImports mod >>= mapM enrich0
   return $ mod {_decls = _decls mod <> asDeclsMap importsE}
 
 ---
@@ -129,11 +154,12 @@ moduleEvalExports mod = do
   logDebugNSS logTag $ _name mod
   let locals = _decls mod
 
-  (isImplicitExportAll, exports) <- runWriterT $ haskellGetExportedIdentifiers (_ast mod)
+  (isImplicitExportAll, exports) <- runWriterT $ haskellGetExports (_ast mod)
 
-  imports <- execWriterT $ haskellGetImportedIdentifiers (_ast mod)
+  Imports importsS importsM <- execWriterT $ haskellGetImports (_ast mod)
   st <- get
-  let importsE = (\d -> fromMaybe d (enrichTryModule st d)) <$> imports
+  let imports = importsS ++ concatMap (Map.elems . _exports) (mapMaybe (\n -> view (at n) st) importsM)
+  let importsE = fmap (\d -> fromMaybe d (enrichTryModule st d)) imports
 
   -- drop `isImplicitExportAll then locals` cases from `topSort` invocation to avoid circular dependencies (cycles)
   let m = mod {_exports = if isImplicitExportAll then locals else Map.intersection (locals <> asDeclsMap importsE) (asDeclsMap exports)}

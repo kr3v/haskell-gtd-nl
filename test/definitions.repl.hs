@@ -35,6 +35,7 @@ import GTD.Haskell.Module
 import GTD.Haskell
 import GTD.Haskell.Declaration
 import GTD.Haskell.Utils
+import Data.List
 
 :set -XRankNTypes
 :set -XFlexibleContexts

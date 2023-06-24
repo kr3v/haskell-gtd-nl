@@ -11,7 +11,7 @@ import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Maybe (MaybeT (runMaybeT))
 import Control.Monad.Trans.Reader (ReaderT (..))
 import Control.Monad.Writer (MonadIO (liftIO), execWriterT, forM_, join, runWriterT)
-import Data.Aeson (decode, defaultOptions, encode, genericToJSON)
+import Data.Aeson (FromJSON, ToJSON, decode, defaultOptions, encode, genericToJSON)
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.Map as Map
 import Data.Maybe (fromJust)
@@ -25,7 +25,7 @@ import GHC.RTS.Flags (ProfFlags (descrSelector))
 import GTD.Cabal (CabalPackage (..), ModuleNameS, PackageNameS)
 import GTD.Configuration (GTDConfiguration (_repos), prepareConstants)
 import GTD.Haskell (dependencies, parsePackage)
-import GTD.Haskell.AST (haskellGetExportedIdentifiers, haskellGetIdentifiers, haskellGetImportedIdentifiers, haskellParse)
+import GTD.Haskell.AST (Imports, haskellGetExports, haskellGetIdentifiers, haskellGetImports, haskellParse, Exports)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (Declaration (Declaration, _declName, _declSrcOrig, _declSrcUsage), Identifier (Identifier), SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine), emptySourceSpan)
 import GTD.Haskell.Module (HsModule (_exports, _name), emptyHsModule)
@@ -100,8 +100,13 @@ haskellGetIdentifiersSpec = do
     it "parses declarations of multiple functions with shared type signature" $
       test 1
 
-haskellGetExportedIdentifiersSpec :: Spec
-haskellGetExportedIdentifiersSpec = do
+
+instance FromJSON Exports
+
+instance ToJSON Exports
+
+haskellGetExportsSpec :: Spec
+haskellGetExportsSpec = do
   let descr = "haskellGetExportedIdentifiers"
   let test i = do
         let iS = show i
@@ -118,7 +123,7 @@ haskellGetExportedIdentifiersSpec = do
         case result of
           Left e -> expectationFailure $ printf "failed to parse %s: %s" srcPath e
           Right m -> do
-            (isImplicitExportAll, identifiers) <- runWriterT $ runStderrLoggingT $ haskellGetExportedIdentifiers m
+            (isImplicitExportAll, identifiers) <- runWriterT $ runStderrLoggingT $ haskellGetExports m
             BS.writeFile dstPath $ encode identifiers
             identifiers `shouldBe` expected
 
@@ -126,8 +131,12 @@ haskellGetExportedIdentifiersSpec = do
     it "parses a file with an explicit list of exported functions" $
       test 0
 
-haskellGetImportedIdentifiersSpec :: Spec
-haskellGetImportedIdentifiersSpec = do
+instance FromJSON Imports
+
+instance ToJSON Imports
+
+haskellGetImportsSpec :: Spec
+haskellGetImportsSpec = do
   let descr = "haskellGetImportedIdentifiers"
   let test i = do
         let iS = show i
@@ -138,13 +147,13 @@ haskellGetImportedIdentifiersSpec = do
         src <- readFile srcPath
         expectedS <- BS.readFile expPath
 
-        let expected :: [Declaration] = fromJust $ decode expectedS
+        let expected :: Imports = fromJust $ decode expectedS
 
         let result = haskellParse srcPath src
         case result of
           Left e -> expectationFailure $ printf "failed to parse %s: %s" srcPath e
           Right m -> do
-            identifiers <- execWriterT $ runStderrLoggingT $ haskellGetImportedIdentifiers m
+            identifiers <- execWriterT $ runStderrLoggingT $ haskellGetImports m
             BS.writeFile dstPath $ encode identifiers
             identifiers `shouldBe` expected
   describe descr $ do
@@ -235,6 +244,10 @@ definitionsSpec = do
             let expFile = _repos consts </> "gloss-1.13.2.2/./Graphics/Gloss/Interface/IO/Game.hs"
                 expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartLine = 20, sourceSpanStartColumn = 1, sourceSpanEndLine = 20, sourceSpanEndColumn = 7}
              in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+      let expectedMkStdGen =
+            let expFile = _repos consts </> "random-1.2.1.1/src/System/Random/Internal.hs"
+                expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartLine = 582, sourceSpanStartColumn = 1, sourceSpanEndLine = 582, sourceSpanEndColumn = 9}
+             in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
 
       flip evalStateT emptyServerState $ runFileLoggingT (workDir </> "log1.txt") $ flip runReaderT consts $ do
         noDefErr <- noDefintionFoundErrorE
@@ -264,19 +277,19 @@ definitionsSpec = do
           x1 `shouldBe` expectedPlayIO
           x2 `shouldBe` expectedPlayIO
           x3 `shouldBe` expectedPlayIO
-          -- more than one second
-          -- d1 `shouldSatisfy` (> 1)
-          -- d2 `shouldSatisfy` (> 1)
-          -- d3 `shouldSatisfy` (> 1)
-          -- -- second time should be noticeably faster (not a proper way of testing this, but anyway)
-          -- d1 / d2 `shouldSatisfy` (> 1.4)
-          -- -- should not differ much
-          -- d2 / d3 `shouldSatisfy` liftA2 (&&) (< 1.1) (> (1 / 1.1))
+        -- more than one second
+        -- d1 `shouldSatisfy` (> 1)
+        -- d2 `shouldSatisfy` (> 1)
+        -- d3 `shouldSatisfy` (> 1)
+        -- -- second time should be noticeably faster (not a proper way of testing this, but anyway)
+        -- d1 / d2 `shouldSatisfy` (> 1.4)
+        -- -- should not differ much
+        -- d2 / d3 `shouldSatisfy` liftA2 (&&) (< 1.1) (> (1 / 1.1))
 
         -- re-exported regular function
         x4 <- runExceptT $ definition req {word = "mkStdGen"}
         logDebugNSS "definitionsSpec" $ show x4
-        lift $ lift $ lift $ x4 `shouldBe` noDefErr
+        lift $ lift $ lift $ x4 `shouldBe` expectedMkStdGen
 
         -- class name
         x5 <- runExceptT $ definition req {word = "State"}
@@ -288,24 +301,6 @@ definitionsSpec = do
         logDebugNSS "definitionsSpec" $ show x6
         lift $ lift $ lift $ x6 `shouldBe` noDefErr
 
-{-
-import GTD.Haskell.Module (HsModule (..))
-
-let tWorkDir = "./test/integrationTestRepo/sc-ea-hs"
-let mFile = tWorkDir </> "app/game/Main.hs"
-
-consts <- prepareConstants
-
-oS f1 f2 = flip f1 emptyServerState $ runFileLoggingT (tWorkDir </> "log1.txt") $ flip runReaderT consts $ runExceptT $ f2
-rS f = oS runStateT f
-eaS f = oS evalStateT f
-esS f = oS execStateT f
-
-(a, b) <- rS $ definition DefinitionRequest {workDir = tWorkDir, file = mFile, word = "playIO"}
-let modules = a ^. context . ccpmodules
-(Right tM) <- evS $ parseModule emptyHsModule {_path = mFile}
-(Right tM') <- eaS $ enrich tM
--}
 parsePackageSpec :: Spec
 parsePackageSpec = do
   let descr = "parsePackage"
@@ -349,8 +344,8 @@ main :: IO ()
 main = hspecWith defaultConfig {configPrintCpuTime = False} $ do
   haskellApplyCppHsSpec
   haskellGetIdentifiersSpec
-  haskellGetExportedIdentifiersSpec
-  haskellGetImportedIdentifiersSpec
+  haskellGetExportsSpec
+  haskellGetImportsSpec
   -- enrichTryModuleSpec
   -- enrichTryPackageSpec
   integrationTestsSpec

@@ -8,6 +8,7 @@ import qualified Data.Map.Strict as Map
 import Data.Map.Lazy as Map
 import Graphics.Gloss (Point)
 import System.Random.Stateful (StdGen)
+import ScEaHs.Game.Renderable
 
 data Surface = Surface
   { _maxHeight :: Int,
