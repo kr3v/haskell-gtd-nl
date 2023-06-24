@@ -6,29 +6,17 @@ Supports only `*.cabal`-based projects.
 
 Extension server stores its info at `~/.local/share/haskell-gtd-extension-server-root` directory. Logs are not rotated (yet). Cabal packages are cloned into `repos` directory at the extension root via `cabal get`.
 
-Only most basic cases are supported, like:
+[!(example)](https://github.com/kr3v/gtd-nl-hs/assets/14293293/a5dc1f20-d343-4761-ad65-5af7d6cefe91)
 
-```haskell
+Video notes:
+1. `data`, `class`, `instance` are not supported (to be implemented, back-end).
+2. Qualified imports are not supported (to be implemented, back-end).
+3. Operators are not supported (to be implemented, extension).
+4. The extension only works in the workspace directory (bug, back-end).
 
--- cabal-based library L
-module A where -- both implicit and explicit export lists are supported
-
-f :: Int
-f = 1
-```
-
-```haskell
--- cabal-based (executable?) E in a different cabal file
--- library L should be 'obtainable' via `cabal get` command
-module B where
-
-import A (f) -- `go to definition` command should work for `f` here
-
-g :: Int
-g = f        -- and here
-```
-
-Any other cases (re-exported modules and functions, classes and data types, instances, etc) are not supported at the moment.
+General notes:
+1. Certain files are not yet supported (for example, in certain cases of using non-default infix operators).
+2. TBD
 
 ## How to run
 1. `cabal run haskell-gtd-server`
