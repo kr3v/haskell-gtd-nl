@@ -9,10 +9,11 @@ Extension server stores its info at `~/.local/share/haskell-gtd-extension-server
 [!(example)](https://github.com/kr3v/gtd-nl-hs/assets/14293293/a5dc1f20-d343-4761-ad65-5af7d6cefe91)
 
 Video notes:
-1. `data`, `class`, `instance` are not supported (to be implemented, back-end).
-2. Qualified imports are not supported (to be implemented, back-end).
-3. Operators are not supported (to be implemented, extension).
-4. The extension only works in the workspace directory (bug, back-end).
+1. When `go to definition` is supported, the definition is underlined. Otherwise, the command is not supported.
+2. `data`, `class`, `instance` are not supported (to be implemented, back-end).
+3. Qualified imports are not supported (to be implemented, back-end).
+4. Operators are not supported (to be implemented, extension).
+5. The extension only works in the workspace directory (bug, back-end).
 
 General notes:
 1. Certain files are not yet supported (for example, in certain cases of using non-default infix operators).
