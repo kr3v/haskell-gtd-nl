@@ -63,9 +63,11 @@ $(makeLenses ''ContextCabalPackage)
 parsePackages :: (MonadLoggerIO m, MonadState ContextCabalPackage m) => m ()
 parsePackages = do
   deps <- use dependencies
+  mods <- use ccpmodules
   forM_ deps $ \dep -> do
-    mods <- parsePackage dep
-    ccpmodules %= Map.insert (_cabalPackageName dep) mods
+    unless (Map.member (_cabalPackageName dep) mods) $ do
+      mods <- parsePackage dep
+      ccpmodules %= Map.insert (_cabalPackageName dep) mods
 
 parsePackage0 ::
   CabalPackage ->
@@ -95,19 +97,7 @@ parsePackage p = do
 
   let oModules = (\i -> fromJust $ Map.lookup i iModules) <$> graphS
 
-  flip execStateT Map.empty $ forM_ oModules $ \mod -> do
-    logDebugNSS logTag $ _name mod
-
-    (isImplicitExportAll, exports) <- runWriterT $ haskellGetExportedIdentifiers (_ast mod)
-    imports <- execWriterT $ haskellGetImportedIdentifiers (_ast mod)
-    let locals = _decls mod
-
-    st <- get
-    let importsE = (\d -> fromMaybe d (enrichTryModule st d)) <$> imports
-
-    -- drop `isImplicitExportAll then locals` cases from `topSort` invocation to avoid circular dependencies (cycles)
-    let m = mod {_exports = if isImplicitExportAll then locals else Map.intersection (asDeclsMap exports) (locals <> asDeclsMap importsE)}
-    modify $ Map.insert (_name mod) m
+  execStateT (forM_ oModules moduleEvalExports) Map.empty
 
 ---
 
@@ -128,6 +118,23 @@ enrich :: HsModule -> (MonadLoggerIO m, MonadState ContextCabalPackage m) => m H
 enrich mod = do
   (isImplicitExportAll, exports) <- runWriterT $ haskellGetExportedIdentifiers (_ast mod)
   imports <- execWriterT $ haskellGetImportedIdentifiers (_ast mod)
-  let locals = _decls mod
   importsE <- mapM enrich0 imports
-  return $ mod {_decls = locals <> asDeclsMap importsE}
+  return $ mod {_decls = _decls mod <> asDeclsMap importsE}
+
+---
+
+moduleEvalExports :: HsModule -> (MonadLoggerIO m, MonadState (Map.Map ModuleNameS HsModule) m) => m ()
+moduleEvalExports mod = do
+  let logTag = "module prepare exports for " ++ _name mod
+  logDebugNSS logTag $ _name mod
+  let locals = _decls mod
+
+  (isImplicitExportAll, exports) <- runWriterT $ haskellGetExportedIdentifiers (_ast mod)
+
+  imports <- execWriterT $ haskellGetImportedIdentifiers (_ast mod)
+  st <- get
+  let importsE = (\d -> fromMaybe d (enrichTryModule st d)) <$> imports
+
+  -- drop `isImplicitExportAll then locals` cases from `topSort` invocation to avoid circular dependencies (cycles)
+  let m = mod {_exports = if isImplicitExportAll then locals else Map.intersection (locals <> asDeclsMap importsE) (asDeclsMap exports)}
+  modify $ Map.insert (_name mod) m

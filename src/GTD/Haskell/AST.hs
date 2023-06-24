@@ -7,7 +7,7 @@ module GTD.Haskell.AST where
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.Writer (MonadWriter (tell), forM_)
 import Data.Data (Data (toConstr), showConstr)
-import Data.Maybe (isJust)
+import Data.Maybe (isJust, isNothing)
 import GTD.Cabal (ModuleNameS)
 import GTD.Haskell.Declaration (Declaration, identToDecl)
 import GTD.Utils (logDebugNSS)
@@ -62,7 +62,7 @@ haskellGetExportedIdentifiers m = do
           UnQual _ n -> tell [identToDecl mN n False]
           _ -> logDebugNSS logTag $ printf "not yet handled: %s -> %s" (show e) (show n)
         _ -> logDebugNSS logTag $ printf "not yet handled: %s" (show e)
-  return $ isJust head
+  return $ isNothing head
 
 haskellGetImportedIdentifiers :: Module SrcSpanInfo -> (MonadWriter [Declaration] m, MonadLoggerIO m) => m ()
 haskellGetImportedIdentifiers m = do

@@ -1,4 +1,4 @@
-import Control.Applicative (Alternative (empty), Applicative (liftA2))
+import Control.Applicative
 import Control.Exception (evaluate)
 import Control.Lens
 import Control.Monad.Logger (runStderrLoggingT)
@@ -34,6 +34,7 @@ import System.FilePath ((</>))
 import GTD.Haskell.Module
 import GTD.Haskell
 import GTD.Haskell.Declaration
+import GTD.Haskell.Utils
 
 :set -XRankNTypes
 :set -XFlexibleContexts
@@ -51,8 +52,33 @@ esS s f = oS s execStateT f
 (a, b) <- rS emptyServerState $ definition DefinitionRequest {workDir = tWorkDir, file = mFile, word = "playIO"}
 
 let modules = _ccpmodules $ _context b
+let cabalDeps = _dependencies $ _context b
+
 (Right tM) <- eaS b $ parseModule emptyHsModule {_path = mFile}
 (Right tM') <- eaS b $ ultraZoom context $ enrich tM
 enrichedDeclsA = filter hasNonEmptyOrig $ Map.elems $ _decls tM'
 enrichedDeclsI = filter (\d -> _declSrcUsage d /= emptySourceSpan) $ filter (\d -> _declSrcUsage d /= _declSrcOrig d) $ filter hasNonEmptyOrig $ Map.elems $ _decls tM'
 forM_ enrichedDeclsI print
+
+let modulesGloss = fromJust $ "gloss" `Map.lookup` modules
+let moduleGlossIoGame = fromJust $ "Graphics.Gloss.Interface.IO.Game" `Map.lookup` modulesGloss
+
+let modulesRandom = fromJust $ "random" `Map.lookup` modules
+let modulesRandomI = fromJust $ "System.Random.Internal" `Map.lookup` modulesRandom
+let modulesRandomM = fromJust $ "System.Random" `Map.lookup` modulesRandom
+
+Right (_, exportsRI) <- eaS b $ runWriterT $ haskellGetExportedIdentifiers (_ast modulesRandomI)
+Right importsRI <- eaS b $ execWriterT $ haskellGetImportedIdentifiers (_ast modulesRandomI)
+_declName <$> (Map.elems $ Map.intersection (asDeclsMap exportsRI) (_decls modulesRandomI <> asDeclsMap importsRI))
+
+Right (_, exportsRM) <- eaS b $ runWriterT $ haskellGetExportedIdentifiers (_ast modulesRandomM)
+Right importsRM <- eaS b $ execWriterT $ haskellGetImportedIdentifiers (_ast modulesRandomM)
+_declName <$> (Map.elems $ Map.intersection (_decls modulesRandomM <> asDeclsMap importsRM) (asDeclsMap exportsRM))
+Map.lookup (Identifier "mkStdGen") (Map.intersection (_decls modulesRandomM <> asDeclsMap importsRM) (asDeclsMap exportsRM))
+
+(a, _) <- rS b $ definition DefinitionRequest {workDir = tWorkDir, file = mFile, word = "mkStdGen"}
+
+let cabalPackageRandom = fromJust $ find (\v -> _cabalPackageName v == "random") cabalDeps
+Right ppr <- eaS b $ parsePackage cabalPackageRandom
+Map.lookup (Identifier "mkStdGen") (_exports $ fromJust $ Map.lookup "System.Random" ppr)
+Map.lookup (Identifier "newStdGen") (_exports $ fromJust $ Map.lookup "System.Random" ppr)

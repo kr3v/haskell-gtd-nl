@@ -33,7 +33,6 @@ data HsModule = HsModule
     _ast :: Module SrcSpanInfo,
     _deps :: [ModuleNameS],
     _exports :: Map.Map Identifier Declaration,
-    _imports :: Map.Map Identifier Declaration,
     _decls :: Map.Map Identifier Declaration
   }
   deriving (Show, Eq, Generic)
@@ -58,7 +57,6 @@ emptyHsModule =
       _ast = emptyHaskellModule,
       _deps = [],
       _exports = Map.empty,
-      _imports = Map.empty,
       _decls = Map.empty
     }
 
