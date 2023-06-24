@@ -13,6 +13,11 @@ const serverPidF = path.join(serverRoot, 'pid');
 const serverPortF = path.join(serverRoot, 'port');
 let port = 0;
 
+function isParentOf(p1: string, p2: string) {
+	const relative = path.relative(p1, p2);
+	return relative && !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
 class XDefinitionProvider implements vscode.DefinitionProvider {
 	async provideDefinition(
 		document: vscode.TextDocument,
@@ -22,19 +27,23 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 		let range = document.getWordRangeAtPosition(position);
 		let word = document.getText(range);
 
-		console.log(word);
+		console.log("%s", word);
 
 		fs.readFile(serverPortF, "utf8", (err, data) => {
 			let pid = parseInt(data, 10);
 			port = pid;
 		});
 
-		console.log(port);
-
 		if (port > 0 && vscode.workspace.workspaceFolders) {
 			let workspaceFolder = vscode.workspace.workspaceFolders[0];
 			let workspacePath = workspaceFolder.uri.fsPath;
 			let docPath = document.uri.fsPath;
+			
+			if (!isParentOf(workspacePath, docPath)) {
+				console.log("workspacePath is not parent of docPath, this case is broken right now");
+				return Promise.resolve([]);
+			}
+
 			let body = {
 				workDir: workspacePath,
 				file: docPath,
@@ -48,7 +57,7 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 					return { "data": {} };
 				});
 			let data = res.data;
-			if (data.err != "") {
+			if (data.err != "" && data.err != undefined) {
 				console.log("%s -> err:%s", word, data.err);
 				return Promise.resolve([]);
 			}
