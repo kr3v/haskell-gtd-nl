@@ -18,4 +18,4 @@
 
 7. qualified imports
 
-8. go-to operator definition
+8. go to module definition in import
