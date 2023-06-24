@@ -14,7 +14,7 @@ import GHC.Generics (Generic)
 import GTD.Cabal (ModuleNameS)
 import GTD.Haskell.Declaration (Declaration, identToDecl)
 import GTD.Utils (logDebugNSS)
-import Language.Haskell.Exts (Decl (TypeSig), ExportSpec (EModuleContents, EVar), ExportSpecList (ExportSpecList), Extension (EnableExtension), ImportDecl (..), ImportSpec (IVar), ImportSpecList (ImportSpecList), KnownExtension (CPP), Language (Haskell2010), Module (Module), ModuleHead (ModuleHead), ModuleName (ModuleName), Name (Ident), ParseMode (..), ParseResult (ParseFailed, ParseOk), QName (UnQual), SrcSpanInfo, defaultParseMode, parseFileContentsWithMode)
+import Language.Haskell.Exts (Decl (TypeSig), ExportSpec (EModuleContents, EVar), ExportSpecList (ExportSpecList), Extension (EnableExtension), ImportDecl (..), ImportSpec (IVar), ImportSpecList (ImportSpecList), KnownExtension (CPP), Language (Haskell2010), Module (Module), ModuleHead (ModuleHead), ModuleName (ModuleName), Name (..), ParseMode (..), ParseResult (ParseFailed, ParseOk), QName (UnQual), SrcSpanInfo, defaultParseMode, parseFileContentsWithMode)
 import Text.Printf (printf)
 
 -- TODO: figure out #line pragmas
@@ -39,7 +39,15 @@ data Exports = Exports
   }
   deriving (Show, Generic, Eq)
 
-haskellGetExports :: Module SrcSpanInfo -> (MonadWriter [Declaration] m, MonadLoggerIO m) => m Bool
+instance Semigroup Exports where
+  (<>) :: Exports -> Exports -> Exports
+  (<>) (Exports es1 rs1) (Exports es2 rs2) = Exports (es1 <> es2) (rs1 <> rs2)
+
+instance Monoid Exports where
+  mempty :: Exports
+  mempty = Exports [] []
+
+haskellGetExports :: Module SrcSpanInfo -> (MonadWriter Exports m, MonadLoggerIO m) => m Bool
 haskellGetExports m = do
   let logTag = "get exports"
   let (Module src head wtf1 imports decls) = m
@@ -48,8 +56,9 @@ haskellGetExports m = do
     forM_ mE $ \(ExportSpecList _ es) ->
       forM_ es $ \e -> case e of
         EVar _ n -> case n of
-          UnQual _ n -> tell [identToDecl mN n False]
+          UnQual _ n -> tell mempty {exports = [identToDecl mN n False]}
           _ -> logDebugNSS logTag $ printf "not yet handled: %s -> %s" (show e) (show n)
+        EModuleContents _ (ModuleName _ mn) -> tell mempty {reexports = [mn]}
         _ -> logDebugNSS logTag $ printf "not yet handled: %s" (show e)
   return $ isNothing head
 
@@ -73,12 +82,13 @@ haskellGetImports m = do
   let (Module src head wtf1 imports decls) = m
   forM_ imports $ \(ImportDecl {importModule = im@(ModuleName _ imn), importQualified = iq, importSrc = isr, importSafe = isa, importPkg = ip, importAs = ia, importSpecs = ss}) -> do
     unless (iq || isr || isa || isJust ia || isJust ip) $ do
-      logDebugNSS logTag $ show im
+      logDebugNSS logTag $ printf "handling module=%s (:t(ss) == %s)" (show im) (showConstr $ toConstr ss)
       case ss of
         Just (ImportSpecList _ isHidden is) -> do
           forM_ is $ \i -> do
             case i of
               IVar _ (Ident l n) -> tell mempty {imports = [identToDecl im (Ident l n) False]}
+              IVar _ (Symbol l n) -> tell mempty {imports = [identToDecl im (Ident l n) False]}
               _ -> logDebugNSS logTag $ printf "haskellGetImports: not yet handled: %s" (show i)
             logDebugNSS logTag $ printf "\t%s" (show i)
         Nothing -> tell mempty {importedModules = [imn]}

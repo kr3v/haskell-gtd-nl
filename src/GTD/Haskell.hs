@@ -37,7 +37,7 @@ import qualified Distribution.ModuleName as Cabal
 import GHC.Generics (Generic)
 import GHC.IO.Unsafe (unsafePerformIO)
 import GTD.Cabal (CabalLibSrcDir, CabalPackage (..), ModuleNameS, PackageNameS, cabalPackageExportedModules, cabalPackageName, haskellPath)
-import GTD.Haskell.AST (Imports (..), haskellGetExports, haskellGetImports)
+import GTD.Haskell.AST (Exports (..), Imports (..), haskellGetExports, haskellGetImports)
 import GTD.Haskell.Declaration (Declaration (..), Identifier (Identifier), hasNonEmptyOrig)
 import GTD.Haskell.Enrich (enrichTryModule, enrichTryPackage)
 import GTD.Haskell.Module (HsModule (..))
@@ -154,10 +154,11 @@ moduleEvalExports mod = do
   logDebugNSS logTag $ _name mod
   let locals = _decls mod
 
-  (isImplicitExportAll, exports) <- runWriterT $ haskellGetExports (_ast mod)
+  st <- get
+  (isImplicitExportAll, Exports exportsS exportsM) <- runWriterT $ haskellGetExports (_ast mod)
+  let exports = exportsS ++ concatMap (Map.elems . _exports) (mapMaybe (\n -> view (at n) st) exportsM)
 
   Imports importsS importsM <- execWriterT $ haskellGetImports (_ast mod)
-  st <- get
   let imports = importsS ++ concatMap (Map.elems . _exports) (mapMaybe (\n -> view (at n) st) importsM)
   let importsE = fmap (\d -> fromMaybe d (enrichTryModule st d)) imports
 

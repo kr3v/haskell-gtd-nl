@@ -6,7 +6,7 @@
 module GTD.Server where
 
 import Control.Lens (makeLenses, view, (.=), (^.))
-import Control.Monad.Logger (MonadLoggerIO, logDebugN)
+import Control.Monad.Logger (MonadLoggerIO, logDebugN, MonadLogger)
 import Control.Monad.RWS (MonadIO (..), MonadReader, MonadState)
 import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
 import Data.Aeson (FromJSON, ToJSON)

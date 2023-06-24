@@ -1,4 +1,5 @@
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 import Control.Applicative (Alternative (empty), Applicative (liftA2))
@@ -6,7 +7,7 @@ import Control.Exception (evaluate)
 import Control.Lens
 import Control.Monad.Logger (runStderrLoggingT)
 import Control.Monad.Logger.CallStack (runFileLoggingT)
-import Control.Monad.State (MonadTrans (lift), StateT (..), evalStateT, forM)
+import Control.Monad.State (MonadTrans (lift), StateT (..), evalStateT, execStateT, forM)
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Maybe (MaybeT (runMaybeT))
 import Control.Monad.Trans.Reader (ReaderT (..))
@@ -25,7 +26,7 @@ import GHC.RTS.Flags (ProfFlags (descrSelector))
 import GTD.Cabal (CabalPackage (..), ModuleNameS, PackageNameS)
 import GTD.Configuration (GTDConfiguration (_repos), prepareConstants)
 import GTD.Haskell (dependencies, parsePackage)
-import GTD.Haskell.AST (Imports, haskellGetExports, haskellGetIdentifiers, haskellGetImports, haskellParse, Exports)
+import GTD.Haskell.AST (Exports, Imports, haskellGetExports, haskellGetIdentifiers, haskellGetImports, haskellParse)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (Declaration (Declaration, _declName, _declSrcOrig, _declSrcUsage), Identifier (Identifier), SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine), emptySourceSpan)
 import GTD.Haskell.Module (HsModule (_exports, _name), emptyHsModule)
@@ -34,7 +35,8 @@ import GTD.Utils (logDebugNSS, ultraZoom)
 import Language.Haskell.Exts (Module (..), SrcSpan (..), SrcSpanInfo (..))
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.FilePath ((</>))
-import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe, shouldNotBe, shouldSatisfy)
+import Test.Hspec (Spec, describe, expectationFailure, it, runIO, shouldBe, shouldNotBe, shouldSatisfy)
+-- import Test.Hspec.Core.Spec (SpecM)
 import Test.Hspec.Runner (Config (configPrintCpuTime), defaultConfig, hspecWith)
 import Test.QuickCheck (Testable (..), forAll, (==>))
 import Text.Printf (printf)
@@ -100,7 +102,6 @@ haskellGetIdentifiersSpec = do
     it "parses declarations of multiple functions with shared type signature" $
       test 1
 
-
 instance FromJSON Exports
 
 instance ToJSON Exports
@@ -117,7 +118,7 @@ haskellGetExportsSpec = do
         src <- readFile srcPath
         expectedS <- BS.readFile expPath
 
-        let expected :: [Declaration] = fromJust $ decode expectedS
+        let expected :: Exports = fromJust $ decode expectedS
 
         let result = haskellParse srcPath src
         case result of
@@ -232,74 +233,71 @@ nothingWasExpected d0 d1 = expectationFailure $ printf "expected Nothing, got %s
 
 definitionsSpec :: Spec
 definitionsSpec = do
+  consts <- runIO prepareConstants
+
+  let workDir = "./test/integrationTestRepo/sc-ea-hs"
+  let file = workDir </> "app/game/Main.hs"
+  let req = DefinitionRequest {workDir = "./test/integrationTestRepo/sc-ea-hs", file = file, word = ""}
+
+  let eval0 w = runExceptT (definition req {word = w})
+  let eval w r = eval0 w >>= (\x -> return $ x `shouldBe` r)
+  let mstack f s a = runFileLoggingT (workDir </> "log1.txt") $ flip f s $ runReaderT a consts
+
+  let expectedPlayIO =
+        let expFile = _repos consts </> "gloss-1.13.2.2/./Graphics/Gloss/Interface/IO/Game.hs"
+            expLineNo = 20
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 7, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+  let expectedMkStdGen =
+        let expFile = _repos consts </> "random-1.2.1.1/src/System/Random/Internal.hs"
+            expLineNo = 582
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 9, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+  let expectedLensView =
+        let expFile = _repos consts </> "lens-5.2.2/src/Control/Lens/Getter.hs"
+            expLineNo = 244
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+  let expectedLensOverOperator =
+        let expFile = _repos consts </> "lens-5.2.2/src/Control/Lens/Setter.hs"
+            expLineNo = 792
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+  let noDefErr = Left "No definition found"
+
+  serverState <- runIO $ mstack execStateT emptyServerState $ eval0 "playIO"
+
   describe "definitions" $ do
-    it "1" $ do
-      consts <- prepareConstants
-
-      let workDir = "./test/integrationTestRepo/sc-ea-hs"
-      let file = workDir </> "app/game/Main.hs"
-      let req = DefinitionRequest {workDir = "./test/integrationTestRepo/sc-ea-hs", file = file, word = ""}
-
-      let expectedPlayIO =
-            let expFile = _repos consts </> "gloss-1.13.2.2/./Graphics/Gloss/Interface/IO/Game.hs"
-                expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartLine = 20, sourceSpanStartColumn = 1, sourceSpanEndLine = 20, sourceSpanEndColumn = 7}
-             in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
-      let expectedMkStdGen =
-            let expFile = _repos consts </> "random-1.2.1.1/src/System/Random/Internal.hs"
-                expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartLine = 582, sourceSpanStartColumn = 1, sourceSpanEndLine = 582, sourceSpanEndColumn = 9}
-             in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
-
-      flip evalStateT emptyServerState $ runFileLoggingT (workDir </> "log1.txt") $ flip runReaderT consts $ do
-        noDefErr <- noDefintionFoundErrorE
-
-        t11 <- liftIO getCurrentTime
-        x1 <- runExceptT $ definition req {word = "playIO"}
-        t12 <- liftIO getCurrentTime
-
-        t21 <- liftIO getCurrentTime
-        x2 <- runExceptT $ definition req {word = "playIO"}
-        t22 <- liftIO getCurrentTime
-
-        t31 <- liftIO getCurrentTime
-        x3 <- runExceptT $ definition req {word = "playIO"}
-        t32 <- liftIO getCurrentTime
-
-        logDebugNSS "definitionsSpec" $ show x1
-        logDebugNSS "definitionsSpec" $ show x2
-        logDebugNSS "definitionsSpec" $ show x3
-
-        let d1 = diffUTCTime t12 t11
-        let d2 = diffUTCTime t22 t21
-        let d3 = diffUTCTime t32 t31
-        logDebugNSS "definitionsSpec" $ show (d1, d2, d3)
-
-        lift $ lift $ lift $ do
-          x1 `shouldBe` expectedPlayIO
-          x2 `shouldBe` expectedPlayIO
-          x3 `shouldBe` expectedPlayIO
-        -- more than one second
-        -- d1 `shouldSatisfy` (> 1)
-        -- d2 `shouldSatisfy` (> 1)
-        -- d3 `shouldSatisfy` (> 1)
-        -- -- second time should be noticeably faster (not a proper way of testing this, but anyway)
-        -- d1 / d2 `shouldSatisfy` (> 1.4)
-        -- -- should not differ much
-        -- d2 / d3 `shouldSatisfy` liftA2 (&&) (< 1.1) (> (1 / 1.1))
-
-        -- re-exported regular function
-        x4 <- runExceptT $ definition req {word = "mkStdGen"}
-        logDebugNSS "definitionsSpec" $ show x4
-        lift $ lift $ lift $ x4 `shouldBe` expectedMkStdGen
-
-        -- class name
-        x5 <- runExceptT $ definition req {word = "State"}
-        logDebugNSS "definitionsSpec" $ show x5
-        lift $ lift $ lift $ x5 `shouldBe` noDefErr
-
-        -- data member
-        x6 <- runExceptT $ definition req {word = "runExceptT"}
-        logDebugNSS "definitionsSpec" $ show x6
-        lift $ lift $ lift $ x6 `shouldBe` noDefErr
+    it "directly exported regular function" $ do
+      join $ mstack evalStateT serverState $ eval "playIO" expectedPlayIO
+    it "sequential execution does not fail" $ do
+      join $ mstack evalStateT serverState $ do
+        eval "playIO" expectedPlayIO
+        eval "playIO" expectedPlayIO
+        eval "playIO" expectedPlayIO
+    it "re-exported regular function" $ do
+      join $ mstack evalStateT serverState $ do
+        eval "mkStdGen" expectedMkStdGen
+    it "class name" $ do
+      join $ mstack evalStateT serverState $ do
+        eval "State" noDefErr
+    it "data member" $ do
+      join $ mstack evalStateT serverState $ do
+        eval "runExceptT" noDefErr
+    it "cross-package module re-export" $ do
+      join $ mstack evalStateT serverState $ do
+        eval "runState" noDefErr
+    it "in-package module re-export + operator form 1" $ do
+      join $ mstack evalStateT serverState $ do
+        eval "^." noDefErr
+        eval "%=" expectedLensOverOperator
+    it "in-package module re-export + operator form 2" $ do
+      join $ mstack evalStateT serverState $ do
+        eval "(^.)" noDefErr
+        eval "(%=)" noDefErr
+    it "in-package module re-export + function" $ do
+      join $ mstack evalStateT serverState $ do
+        eval "view" expectedLensView
 
 parsePackageSpec :: Spec
 parsePackageSpec = do
@@ -346,6 +344,4 @@ main = hspecWith defaultConfig {configPrintCpuTime = False} $ do
   haskellGetIdentifiersSpec
   haskellGetExportsSpec
   haskellGetImportsSpec
-  -- enrichTryModuleSpec
-  -- enrichTryPackageSpec
   integrationTestsSpec
