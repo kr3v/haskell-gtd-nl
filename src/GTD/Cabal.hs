@@ -9,28 +9,27 @@ module GTD.Cabal where
 
 import Control.Applicative (Applicative (liftA2))
 import Control.Lens (makeLenses, view)
-import Control.Monad (forM)
+import Control.Monad (forM, forM_)
 import Control.Monad.Logger (MonadLoggerIO)
-import Control.Monad.RWS (MonadReader (ask))
-import Control.Monad.Trans (MonadIO (liftIO), lift)
+import Control.Monad.RWS (MonadReader (..), MonadState)
+import Control.Monad.Trans (MonadIO (liftIO))
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import qualified Data.ByteString.UTF8 as BS
 import Data.List (find)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (catMaybes)
-import qualified Data.Set as Set
 import Distribution.Compat.Prelude (Generic)
 import Distribution.ModuleName (ModuleName, fromString, toFilePath)
+import Distribution.Package (packageName)
 import Distribution.PackageDescription (BuildInfo (..), Dependency (Dependency), Executable (buildInfo, exeName), Library (..), PackageDescription (..), unPackageName)
 import Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import Distribution.PackageDescription.Parsec (parseGenericPackageDescription, runParseResult)
 import Distribution.Pretty (prettyShow)
-import Distribution.Simple (majorBoundVersion, mkVersion)
 import Distribution.Utils.Path (PackageDir, SourceDir, SymbolicPath, getSymbolicPath)
-import Distribution.Utils.ShortText (fromShortText)
 import GTD.Configuration (GTDConfiguration (..), repos)
+import GTD.Utils (logDebugNSS)
 import System.FilePath ((</>))
-import System.IO (IOMode (ReadMode), hClose, hGetBuf, hGetContents, openFile)
+import System.IO (IOMode (ReadMode), hGetContents, openFile)
 import System.Process (CreateProcess (..), StdStream (CreatePipe), createProcess, proc, waitForProcess)
 import Text.Printf (printf)
 import Text.Regex.Posix ((=~))
@@ -44,22 +43,25 @@ cabalGet pkg pkgVerPredicate = do
   let content = stdout ++ stderr
   let re = pkg ++ "-" ++ "[^\\/]*\\/"
   let packageVersion :: [String] = (=~ re) <$> lines content
-  liftIO $ waitForProcess h
+  ec <- liftIO $ waitForProcess h
+  logDebugNSS "cabal get" $ printf "cabal get %s %s: exit code %s" pkg pkgVerPredicate (show ec)
   MaybeT $ return $ find (not . null) packageVersion
 
 cabalRead :: FilePath -> (MonadLoggerIO m) => m PackageDescription
 cabalRead p = do
   handle <- liftIO $ openFile p ReadMode
   (warnings, epkg) <- liftIO $ runParseResult . parseGenericPackageDescription . BS.fromString <$> hGetContents handle
+  forM_ warnings (\w -> logDebugNSS "cabal read" $ "Warning while parsing cabal file: " ++ show w)
   liftIO $ either (fail . show) (return . flattenPackageDescription) epkg
 
 cabalFetchDependencies :: PackageDescription -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m [(String, FilePath)]
 cabalFetchDependencies pkg = do
+  logDebugNSS "cabal fetch" (prettyShow $ packageName pkg)
   let dependencies = liftA2 (,) exeName (((\(Dependency n v _) -> (unPackageName n, prettyShow v)) <$>) . targetBuildDepends . buildInfo) <$> executables pkg
       fetchDependency n v = (,) n <$> cabalGet n v
       fetchDependencies :: [(String, String)] -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m [(String, FilePath)]
       fetchDependencies deps = catMaybes <$> mapM runMaybeT (uncurry fetchDependency <$> deps)
-  concat <$> mapM (\(component, deps) -> fetchDependencies deps) dependencies
+  concat <$> mapM (\(_, deps) -> fetchDependencies deps) dependencies
 
 type CabalLibSrcDir = SymbolicPath PackageDir SourceDir
 

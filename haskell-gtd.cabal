@@ -20,6 +20,8 @@ author:             kr3v
 -- category:
 extra-source-files: CHANGELOG.md
 
+-- -rtsopts "-with-rtsopts=-N -p -s -h -i0.1" 
+
 executable haskell-gtd
     main-is:          Main.hs
 
@@ -87,6 +89,8 @@ executable haskell-gtd-server
     hs-source-dirs:   app/server
     default-language: Haskell2010
 
+    ghc-options: -O2 -Wall -threaded -eventlog -fprof-auto
+
 library haskell-gtd-lib
     hs-source-dirs:      src
     default-language: Haskell2010
@@ -132,39 +136,42 @@ library haskell-gtd-lib
         GTD.Server
         GTD.Configuration
 
+    ghc-options: -O2 -Wall -threaded -eventlog -fprof-auto
+
 test-suite haskell-gtd-lib-test
-  type: exitcode-stdio-1.0
-  hs-source-dirs: test
-  main-is: Spec.hs
-  build-depends:
-        base ^>=4.16.4.0
-        , haskell-gtd-lib
-        , haskell-src-exts ^>= 1.23.1
-        , aeson ^>= 2.1.2.1
-        , Cabal ^>= 3.10.1.0
-        , bytestring ^>= 0.11.4.0
-        , utf8-string ^>= 1.0.2
-        , process ^>= 1.6.17.0
-        , regex ^>= 1.1.0.2
-        , regex-posix ^>= 0.96.0.1
-        , filepath ^>= 1.4.100.3
-        -- , ghc-lib-parser ^>= 9.6.2.20230523
-        , mtl ^>= 2.2.2
-        , cpphs ^>= 1.20.9.1
-        , hspec ^>= 2.11.1
-        , QuickCheck ^>= 2.14.3
-        , aeson ^>= 2.1.2.1
-        , bytestring ^>= 0.11.4.0
-        , lens ^>= 5.2.2
-        , containers ^>= 0.6.7
-        , random ^>= 1.2.1.1
-        , time ^>= 1.12.2
-        , directory ^>= 1.3.8.1
-        , transformers ^>= 0.5.6.2
-        , monad-logger ^>= 0.3.40
-        , either ^>= 5.0.2
-        , time ^>= 1.12.2
-        , network ^>= 3.1.4.0
-        , unix ^>= 2.8.1.1
-  build-tool-depends: hspec-discover:hspec-discover
-  default-language: Haskell2010
+    type: exitcode-stdio-1.0
+    hs-source-dirs: test
+    main-is: Spec.hs
+    build-depends:
+            base ^>=4.16.4.0
+            , haskell-gtd-lib
+            , haskell-src-exts ^>= 1.23.1
+            , aeson ^>= 2.1.2.1
+            , Cabal ^>= 3.10.1.0
+            , bytestring ^>= 0.11.4.0
+            , utf8-string ^>= 1.0.2
+            , process ^>= 1.6.17.0
+            , regex ^>= 1.1.0.2
+            , regex-posix ^>= 0.96.0.1
+            , filepath ^>= 1.4.100.3
+            -- , ghc-lib-parser ^>= 9.6.2.20230523
+            , mtl ^>= 2.2.2
+            , cpphs ^>= 1.20.9.1
+            , hspec ^>= 2.11.1
+            , QuickCheck ^>= 2.14.3
+            , aeson ^>= 2.1.2.1
+            , bytestring ^>= 0.11.4.0
+            , lens ^>= 5.2.2
+            , containers ^>= 0.6.7
+            , random ^>= 1.2.1.1
+            , time ^>= 1.12.2
+            , directory ^>= 1.3.8.1
+            , transformers ^>= 0.5.6.2
+            , monad-logger ^>= 0.3.40
+            , either ^>= 5.0.2
+            , time ^>= 1.12.2
+            , network ^>= 3.1.4.0
+            , unix ^>= 2.8.1.1
+    build-tool-depends: hspec-discover:hspec-discover
+    default-language: Haskell2010
+    ghc-options: -O2 -threaded -eventlog -fprof-auto

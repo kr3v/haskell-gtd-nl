@@ -9,13 +9,13 @@ module GTD.Haskell.Module where
 import Control.Exception (IOException, try)
 import Control.Lens (makeLenses)
 import Control.Monad.Cont (MonadIO)
+import Control.Monad.Except (MonadError, liftEither)
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.State (MonadIO (..), forM_)
 import Control.Monad.Trans.Except (ExceptT (..))
 import Control.Monad.Trans.Writer (execWriterT)
 import Data.Either.Combinators (mapLeft)
 import qualified Data.Map.Strict as Map
-import qualified Data.Set as Set
 import GHC.Generics (Generic)
 import GTD.Cabal (ModuleNameS, PackageNameS)
 import GTD.Haskell.AST (haskellGetIdentifiers, haskellParse)
@@ -60,15 +60,15 @@ emptyHsModule =
       _decls = Map.empty
     }
 
-parseModule :: HsModule -> (MonadLoggerIO m) => ExceptT String m HsModule
+parseModule :: HsModule -> (MonadLoggerIO m, MonadError String m) => m HsModule
 parseModule cm = do
   let srcP = _path cm
   let logTag = printf "parsing module %s" srcP
   logDebugNSS logTag $ printf ""
 
-  src <- ExceptT $ mapLeft show <$> (liftIO (try $ readFile srcP) :: (MonadIO m) => m (Either IOException String))
+  src <- liftEither . mapLeft show =<< (liftIO (try $ readFile srcP) :: (MonadIO m) => m (Either IOException String))
   srcPostCpp <- haskellApplyCppHs srcP src
-  mod <- ExceptT $ return $ haskellParse srcP srcPostCpp
+  mod <- liftEither $ haskellParse srcP srcPostCpp
 
   locals <- execWriterT $ haskellGetIdentifiers mod
   logDebugNSS logTag "locals:"

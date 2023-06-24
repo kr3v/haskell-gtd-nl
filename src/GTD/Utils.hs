@@ -3,14 +3,15 @@
 module GTD.Utils where
 
 import Control.Lens (Lens', use, (.=))
-import Control.Monad.Except (ExceptT)
-import Control.Monad.Logger (MonadLogger, logDebugNS, logErrorNS)
+import Control.Monad.Except (ExceptT, MonadIO (liftIO))
+import Control.Monad.Logger (MonadLoggerIO, logDebugNS, logErrorNS)
 import Control.Monad.RWS (MonadState)
-import Control.Monad.State (MonadState, StateT (runStateT))
+import Control.Monad.State (StateT (runStateT))
 import Control.Monad.Trans.Except (catchE, mapExceptT)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
+import Data.Time.Clock.POSIX (getPOSIXTime)
 
 maybeToMaybeT :: Monad m => Maybe a -> MaybeT m a
 maybeToMaybeT = MaybeT . return
@@ -22,11 +23,15 @@ ultraZoom l sa = do
   l .= a'
   return b
 
-logDebugNSS :: MonadLogger m => String -> String -> m ()
-logDebugNSS a b = logDebugNS (T.pack a) (T.pack b)
+logDebugNSS :: MonadLoggerIO m => String -> String -> m ()
+logDebugNSS a b = do
+  now <- liftIO getPOSIXTime
+  logDebugNS (T.pack a) (T.pack $ show now ++ ": " ++ b)
 
-logErrorNSS :: MonadLogger m => String -> String -> m ()
-logErrorNSS a b = logErrorNS (T.pack a) (T.pack b)
+logErrorNSS :: MonadLoggerIO m => String -> String -> m ()
+logErrorNSS a b = do
+  now <- liftIO getPOSIXTime
+  logErrorNS (T.pack a) (T.pack $ show now ++ ": " ++ b)
 
 tryE :: Monad m => ExceptT e m a -> ExceptT e m (Either e a)
 tryE m = catchE (fmap Right m) (return . Left)

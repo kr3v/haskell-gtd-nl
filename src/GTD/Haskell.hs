@@ -9,52 +9,32 @@
 
 module GTD.Haskell where
 
-import Control.Exception (ErrorCall, Exception (displayException), IOException, try)
-import qualified Control.Exception as Exc
-import Control.Exception.Safe (tryAny)
-import Control.Lens (At (..), Ixed (..), makeLenses, use, view, (%=), (&), (.=), (^.))
-import Control.Monad (forM, forM_, guard, unless, when)
-import Control.Monad.Logger (MonadLogger, MonadLoggerIO, logDebugN, logDebugNS, logDebugSH)
-import Control.Monad.State (MonadIO (liftIO), MonadState, StateT (..), evalStateT, execStateT, get, modify)
-import Control.Monad.Trans.Except (ExceptT (..), runExceptT, throwE)
-import Control.Monad.Trans.Maybe (MaybeT (..))
-import Control.Monad.Writer (MonadWriter, WriterT (..), execWriter, execWriterT, lift, tell)
-import Data.Aeson (FromJSON, ToJSON)
-import Data.Bifunctor (first)
-import Data.ByteString.UTF8 (fromString)
-import Data.Data (Data (..), showConstr)
+import Control.Lens (At (..), makeLenses, use, view, (%=))
+import Control.Monad (forM_, guard, unless)
+import Control.Monad.Logger (MonadLoggerIO)
+import Control.Monad.State (MonadState, execStateT, get, modify)
+import Control.Monad.Writer (WriterT (..), execWriterT)
 import Data.Either (partitionEithers)
-import Data.Either.Combinators (mapLeft)
-import Data.Functor ((<&>))
--- import GTD.Haskell.Enrich (enrichTryPackage)
-
 import qualified Data.Graph as Graph
 import qualified Data.Map.Strict as Map
-import Data.Maybe (catMaybes, fromJust, fromMaybe, isJust, mapMaybe)
+import Data.Maybe (fromJust, fromMaybe, mapMaybe)
 import qualified Data.Set as Set
-import qualified Data.Text as T
-import qualified Distribution.ModuleName as Cabal
 import GHC.Generics (Generic)
-import GHC.IO.Unsafe (unsafePerformIO)
-import GTD.Cabal (CabalLibSrcDir, CabalPackage (..), ModuleNameS, PackageNameS, cabalPackageExportedModules, cabalPackageName, haskellPath)
+import GTD.Cabal (CabalPackage (..), ModuleNameS, PackageNameS)
 import GTD.Haskell.AST (Exports (..), Imports (..), haskellGetExports, haskellGetImports)
-import GTD.Haskell.Declaration (Declaration (..), Identifier (Identifier), hasNonEmptyOrig)
+import GTD.Haskell.Declaration (Declaration (..), hasNonEmptyOrig)
 import GTD.Haskell.Enrich (enrichTryModule, enrichTryPackage)
 import GTD.Haskell.Module (HsModule (..))
-import qualified GTD.Haskell.Module as HSM
 import GTD.Haskell.Utils (asDeclsMap)
 import GTD.Haskell.Walk (MS (MS), parseChosenModules)
 import qualified GTD.Haskell.Walk as MS
-import GTD.Utils (flipTuple, logDebugNSS, logErrorNSS, maybeToMaybeT, tryE, withExceptT)
-import Language.Haskell.Exts (Decl (..), ExportSpec (..), ExportSpecList (..), ImportDecl (..), ImportSpec (..), ImportSpecList (..), Module (..), ModuleHead (..), ModuleName (..), Name (..), ParseMode (..), ParseResult (..), QName (..), SrcSpan (..), SrcSpanInfo (..), defaultParseMode, parseFile, parseFileContents, parseFileContentsWithMode, parseFileWithCommentsAndPragmas, prettyPrint)
-import Language.Haskell.Exts.Extension (Language (..))
-import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
-import Language.Preprocessor.Cpphs (defaultCpphsOptions, runCpphs)
+import GTD.Utils (flipTuple, logDebugNSS, logErrorNSS)
 import Text.Printf (printf)
 
 data ContextCabalPackage = ContextCabalPackage
   { _ccpmodules :: Map.Map PackageNameS (Map.Map ModuleNameS HsModule),
-    _dependencies :: [CabalPackage]
+    _dependencies :: [CabalPackage],
+    _cabalCache :: Map.Map PackageNameS CabalPackage
   }
   deriving (Show, Generic)
 
@@ -62,10 +42,13 @@ $(makeLenses ''ContextCabalPackage)
 
 parsePackages :: (MonadLoggerIO m, MonadState ContextCabalPackage m) => m ()
 parsePackages = do
+  let logTag = "parse packages"
   deps <- use dependencies
-  mods <- use ccpmodules
+  st <- use ccpmodules
+  logDebugNSS logTag $ printf "already parsed packages: %s" (show $ Map.keys st)
   forM_ deps $ \dep -> do
-    unless (Map.member (_cabalPackageName dep) mods) $ do
+    unless (Map.member (_cabalPackageName dep) st) $ do
+      logDebugNSS logTag $ printf "parsing %s..." (show $ _cabalPackageName dep)
       mods <- parsePackage dep
       ccpmodules %= Map.insert (_cabalPackageName dep) mods
 
@@ -126,7 +109,7 @@ getAllImports mod = do
 
 ---
 
-enrich0 :: Declaration -> (MonadLogger m, MonadState ContextCabalPackage m) => m Declaration
+enrich0 :: Declaration -> (MonadLoggerIO m, MonadState ContextCabalPackage m) => m Declaration
 enrich0 d = do
   let logTag = "enrich"
   deps <- use dependencies
@@ -142,7 +125,6 @@ enrich0 d = do
 enrich :: HsModule -> (MonadLoggerIO m, MonadState ContextCabalPackage m) => m HsModule
 enrich mod = do
   let logTag = "module enrich for " ++ _name mod
-  (isImplicitExportAll, exports) <- runWriterT $ haskellGetExports (_ast mod)
   importsE <- getAllImports mod >>= mapM enrich0
   return $ mod {_decls = _decls mod <> asDeclsMap importsE}
 

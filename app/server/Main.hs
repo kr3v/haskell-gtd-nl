@@ -8,46 +8,26 @@
 
 module Main where
 
-import Control.Concurrent (MVar, modifyMVar_, newMVar, putMVar, takeMVar)
-import Control.Concurrent.MVar (modifyMVar)
-import Control.Lens (makeLenses, view, (.=), (<+=), (^.))
+import Control.Concurrent (MVar, newMVar, putMVar, takeMVar)
+import Control.Lens ((<+=), (^.))
 import Control.Monad.Cont (MonadIO (..))
-import Control.Monad.Except (MonadError (throwError), runExceptT)
-import Control.Monad.Logger (LoggingT (LoggingT), MonadLogger, MonadLoggerIO, logDebugN, logDebugSH, runFileLoggingT, runStdoutLoggingT)
-import Control.Monad.RWS (MonadIO (..), MonadReader, MonadState (get))
+import Control.Monad.Except (runExceptT)
+import Control.Monad.Logger (runFileLoggingT)
 import Control.Monad.Reader (ReaderT (runReaderT))
-import Control.Monad.State (MonadState, StateT (runStateT), get, gets, modify)
-import Control.Monad.State.Lazy (evalStateT, execStateT, lift)
-import Control.Monad.Trans.Except (ExceptT (..), throwE)
-import Data.Aeson (FromJSON, ToJSON, Value)
-import qualified Data.ByteString.Lazy as BS
-import Data.ByteString.Lazy.UTF8 (fromString)
+import Control.Monad.State (StateT (runStateT))
+import Control.Monad.State.Lazy (evalStateT)
 import Data.Data (Proxy (..))
-import qualified Data.Map.Strict as Map
-import qualified Data.Text as T
-import Data.Time.Clock.POSIX (getPOSIXTime)
-import GHC.Generics (Generic)
-import GHC.MVar (MVar (MVar))
-import GHC.TypeLits
-import qualified GHC.TypeLits
-import GTD.Cabal (cabalDeps, cabalPackageName, cabalPackagePath, cabalRead)
+import GHC.TypeLits (KnownSymbol)
 import GTD.Configuration (GTDConfiguration (_logs), prepareConstants, root)
-import GTD.Server (DefinitionRequest, DefinitionResponse (..), ServerState (..), definition, reqId)
-import GTD.Utils (deduplicateBy, ultraZoom, flipTuple)
-import Network.Socket (AddrInfo (addrAddress), Family (AF_INET), SockAddr (SockAddrInet), Socket (..), SocketType (Stream), bind, defaultProtocol, listen, openSocket, socket, socketPort, tupleToHostAddress, withSocketsDo)
-import Network.Wai.Handler.Warp (defaultSettings, run, runSettingsSocket)
-import Numeric (showHex)
-import Servant (Get, Handler, Header, Headers, JSON, Post, Proxy (..), ReqBody, addHeader, serve, type (:<|>) (..), type (:>))
-import Servant.Server
-import System.Directory (createDirectoryIfMissing, getCurrentDirectory, getHomeDirectory, listDirectory, setCurrentDirectory)
-import System.FilePath (takeExtension, (</>))
+import GTD.Server (DefinitionRequest, DefinitionResponse (..), ServerState (..), definition, emptyServerState, reqId)
+import Network.Socket (Family (AF_INET), SockAddr (SockAddrInet), SocketType (Stream), bind, defaultProtocol, listen, socket, socketPort, tupleToHostAddress, withSocketsDo)
+import Network.Wai.Handler.Warp (defaultSettings, runSettingsSocket)
+import Servant (Get, Header, Headers, JSON, Post, ReqBody, addHeader, type (:<|>) (..), type (:>))
+import Servant.Server (Handler, serve)
+import System.Directory (getCurrentDirectory, setCurrentDirectory)
+import System.FilePath ((</>))
 import System.Posix (getProcessID)
-import System.Posix.Signals (Signal (..), addSignal, awaitSignal, emptySignalSet, getPendingSignals, inSignalSet, keyboardSignal, signalProcess)
-import System.Process (getPid)
-import System.Process.Internals (ProcessHandle (waitpidLock))
-import System.Random.Stateful (StdGen, mkStdGen, randomIO)
 import Text.Printf (printf)
-import GTD.Haskell (ContextCabalPackage(..))
 
 -- two methods:
 -- definition - to obtain a source span for a given word
@@ -113,5 +93,5 @@ main = withSocketsDo $ do
   writeFile (constants ^. root </> "pid") (show pid)
   writeFile (constants ^. root </> "port") (show port)
 
-  s <- newMVar $ ServerState {_context = ContextCabalPackage {_ccpmodules = Map.empty, _dependencies = []}, _reqId = 0}
+  s <- newMVar emptyServerState
   runSettingsSocket defaultSettings sock $ serve api (definitionH constants s :<|> pingH)

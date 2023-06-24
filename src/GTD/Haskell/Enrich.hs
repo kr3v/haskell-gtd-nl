@@ -2,15 +2,11 @@
 
 module GTD.Haskell.Enrich where
 
-import Control.Monad.Logger (MonadLogger)
-import Control.Monad.RWS (guard, MonadState)
-import Control.Monad.Trans.Maybe (MaybeT)
+import Control.Monad.RWS (guard)
 import qualified Data.Map as Map
 import GTD.Cabal (CabalPackage (_cabalPackageExportedModules, _cabalPackageName), ModuleNameS, PackageNameS)
 import GTD.Haskell.Declaration (Declaration (..), Identifier (..))
 import GTD.Haskell.Module (HsModule (_exports))
-import GTD.Utils (logDebugNSS, maybeToMaybeT)
-import Text.Printf (printf)
 
 enrichTryPackage ::
   Declaration ->

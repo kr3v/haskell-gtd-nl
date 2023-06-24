@@ -1,1 +1,4 @@
-tests: True
+ignore-project: False
+library-profiling: True
+profiling: True
+profiling-detail: all
