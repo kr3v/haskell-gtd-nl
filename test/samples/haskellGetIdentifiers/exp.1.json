@@ -1,38 +1,41 @@
-[
-  {
-    "_declModule": "F",
-    "_declName": "f",
-    "_declSrcOrig": {
-      "sourceSpanEndColumn": 2,
-      "sourceSpanEndLine": 3,
-      "sourceSpanFileName": "./test/samples/haskellGetIdentifiers/in.1.hs",
-      "sourceSpanStartColumn": 1,
-      "sourceSpanStartLine": 3
+{
+  "_dataTypes": {},
+  "_decls": {
+    "f": {
+      "_declModule": "F",
+      "_declName": "f",
+      "_declSrcOrig": {
+        "sourceSpanEndColumn": 2,
+        "sourceSpanEndLine": 3,
+        "sourceSpanFileName": "./test/samples/haskellGetIdentifiers/in.1.hs",
+        "sourceSpanStartColumn": 1,
+        "sourceSpanStartLine": 3
+      },
+      "_declSrcUsage": {
+        "sourceSpanEndColumn": 0,
+        "sourceSpanEndLine": 0,
+        "sourceSpanFileName": "",
+        "sourceSpanStartColumn": 0,
+        "sourceSpanStartLine": 0
+      }
     },
-    "_declSrcUsage": {
-      "sourceSpanEndColumn": 0,
-      "sourceSpanEndLine": 0,
-      "sourceSpanFileName": "",
-      "sourceSpanStartColumn": 0,
-      "sourceSpanStartLine": 0
-    }
-  },
-  {
-    "_declModule": "F",
-    "_declName": "g",
-    "_declSrcOrig": {
-      "sourceSpanEndColumn": 5,
-      "sourceSpanEndLine": 3,
-      "sourceSpanFileName": "./test/samples/haskellGetIdentifiers/in.1.hs",
-      "sourceSpanStartColumn": 4,
-      "sourceSpanStartLine": 3
-    },
-    "_declSrcUsage": {
-      "sourceSpanEndColumn": 0,
-      "sourceSpanEndLine": 0,
-      "sourceSpanFileName": "",
-      "sourceSpanStartColumn": 0,
-      "sourceSpanStartLine": 0
+    "g": {
+      "_declModule": "F",
+      "_declName": "g",
+      "_declSrcOrig": {
+        "sourceSpanEndColumn": 5,
+        "sourceSpanEndLine": 3,
+        "sourceSpanFileName": "./test/samples/haskellGetIdentifiers/in.1.hs",
+        "sourceSpanStartColumn": 4,
+        "sourceSpanStartLine": 3
+      },
+      "_declSrcUsage": {
+        "sourceSpanEndColumn": 0,
+        "sourceSpanEndLine": 0,
+        "sourceSpanFileName": "",
+        "sourceSpanStartColumn": 0,
+        "sourceSpanStartLine": 0
+      }
     }
   }
-]
+}

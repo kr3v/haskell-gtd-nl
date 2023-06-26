@@ -6,36 +6,35 @@ import Control.Monad.Logger.CallStack (runFileLoggingT)
 import Control.Monad.State (MonadTrans (lift), StateT (..), evalStateT, forM)
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Maybe (MaybeT (runMaybeT))
-import Control.Monad.Trans.Reader (ReaderT (..))
+import Control.Monad.Trans.Reader
+import Control.Monad.Trans.State
 import Control.Monad.Writer (MonadIO (liftIO), execWriterT, forM_, join, runWriterT)
 import Data.Aeson (decode, defaultOptions, encode, genericToJSON)
-import qualified Data.ByteString.Lazy as BS
-import qualified Data.Map as Map
+import Data.List
 import Data.Maybe (fromJust)
-import qualified Data.Set as Set
 import Data.Time.Clock (diffUTCTime)
 import Data.Time.Clock.POSIX (getCurrentTime)
-import qualified Distribution.ModuleName as Cabal
-import qualified Distribution.ModuleName as ModuleName
 import Distribution.PackageDescription (emptyGenericPackageDescription, emptyPackageDescription)
 import GHC.RTS.Flags (ProfFlags (descrSelector))
 import GTD.Cabal (CabalPackage (..), ModuleNameS, PackageNameS)
 import GTD.Configuration (GTDConfiguration (_repos), prepareConstants)
+import GTD.Haskell
 import GTD.Haskell (dependencies, parsePackage)
-import GTD.Haskell.AST (haskellGetExportedIdentifiers, haskellGetIdentifiers, haskellGetImportedIdentifiers, haskellParse)
+import GTD.Haskell.AST
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
-import GTD.Haskell.Declaration (Declaration (Declaration, _declName, _declSrcOrig, _declSrcUsage), Identifier (Identifier), SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine), emptySourceSpan)
-import GTD.Haskell.Module (HsModule (_exports, _name), emptyHsModule)
+import GTD.Haskell.Declaration
+import GTD.Haskell.Module
+import GTD.Haskell.Utils
 import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), context, definition, emptyServerState, noDefintionFoundError, noDefintionFoundErrorE)
 import GTD.Utils (logDebugNSS, ultraZoom)
 import Language.Haskell.Exts (Module (..), SrcSpan (..), SrcSpanInfo (..))
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.FilePath ((</>))
-import GTD.Haskell.Module
-import GTD.Haskell
-import GTD.Haskell.Declaration
-import GTD.Haskell.Utils
-import Data.List
+import qualified Data.ByteString.Lazy as BS
+import qualified Data.Map as Map
+import qualified Data.Set as Set
+import qualified Distribution.ModuleName as Cabal
+import qualified Distribution.ModuleName as ModuleName
 
 :set -XRankNTypes
 :set -XFlexibleContexts

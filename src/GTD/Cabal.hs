@@ -86,7 +86,7 @@ data CabalPackage = CabalPackage
     _cabalPackageSrcDirs :: [CabalLibSrcDir],
     _cabalPackageExportedModules :: Map.Map ModuleNameS ModuleName
   }
-  deriving (Show, Generic)
+  deriving (Eq, Show, Generic)
 
 $(makeLenses ''CabalPackage)
 

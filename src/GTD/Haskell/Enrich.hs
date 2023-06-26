@@ -5,7 +5,7 @@ module GTD.Haskell.Enrich where
 import Control.Monad.RWS (guard)
 import qualified Data.Map as Map
 import GTD.Cabal (CabalPackage (_cabalPackageExportedModules, _cabalPackageName), ModuleNameS, PackageNameS)
-import GTD.Haskell.Declaration (Declaration (..), Identifier (..))
+import GTD.Haskell.Declaration (Declaration (..))
 import GTD.Haskell.Module (HsModule (_exports))
 
 enrichTryPackage ::
@@ -24,6 +24,5 @@ enrichTryModule ::
   Maybe Declaration
 enrichTryModule moduleDecls orig = do
   mod <- _declModule orig `Map.lookup` moduleDecls
-  mDecl <- Identifier (_declName orig) `Map.lookup` _exports mod
+  mDecl <- _declName orig `Map.lookup` _exports mod
   return $ orig {_declSrcOrig = _declSrcOrig mDecl}
-

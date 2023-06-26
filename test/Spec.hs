@@ -25,10 +25,9 @@ import Distribution.PackageDescription (emptyGenericPackageDescription, emptyPac
 import GHC.RTS.Flags (ProfFlags (descrSelector))
 import GTD.Cabal (CabalPackage (..), ModuleNameS, PackageNameS)
 import GTD.Configuration (GTDConfiguration (_repos), prepareConstants)
-import GTD.Haskell (dependencies, parsePackage)
-import GTD.Haskell.AST (Exports, Imports, haskellGetExports, haskellGetIdentifiers, haskellGetImports, haskellParse)
+import GTD.Haskell.AST (Declarations, Exports, Imports, haskellGetExports, haskellGetIdentifiers, haskellGetImports, haskellParse)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
-import GTD.Haskell.Declaration (Declaration (Declaration, _declName, _declSrcOrig, _declSrcUsage), Identifier (Identifier), SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine), emptySourceSpan)
+import GTD.Haskell.Declaration (Declaration (Declaration, _declName, _declSrcOrig, _declSrcUsage), Identifier (..), SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine), emptySourceSpan)
 import GTD.Haskell.Module (HsModule (_exports, _name), emptyHsModule)
 import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), context, definition, emptyServerState, noDefintionFoundError, noDefintionFoundErrorE)
 import GTD.Utils (logDebugNSS, ultraZoom)
@@ -40,6 +39,8 @@ import Test.Hspec (Spec, describe, expectationFailure, it, runIO, shouldBe, shou
 import Test.Hspec.Runner (Config (configPrintCpuTime), defaultConfig, hspecWith)
 import Test.QuickCheck (Testable (..), forAll, (==>))
 import Text.Printf (printf)
+import GTD.Haskell.Package (dependencies)
+import qualified GTD.Haskell.Package as Package
 
 haskellApplyCppHsSpec :: Spec
 haskellApplyCppHsSpec = do
@@ -86,7 +87,7 @@ haskellGetIdentifiersSpec = do
 
         src <- readFile srcPath
         expectedS <- BS.readFile expPath
-        let expected :: [Declaration] = fromJust $ decode expectedS
+        let expected :: Declarations = fromJust $ decode expectedS
 
         let result = haskellParse srcPath src
         case result of
@@ -101,10 +102,6 @@ haskellGetIdentifiersSpec = do
       test 0
     it "parses declarations of multiple functions with shared type signature" $
       test 1
-
-instance FromJSON Exports
-
-instance ToJSON Exports
 
 haskellGetExportsSpec :: Spec
 haskellGetExportsSpec = do
@@ -168,7 +165,7 @@ cmGen mn0 dn0 mnE dnE fnE =
   let d0 = Declaration emptySourceSpan emptySourceSpan mn0 dn0
       lE = emptySourceSpan {sourceSpanFileName = fnE}
       dE = d0 {_declSrcOrig = lE, _declSrcUsage = lE, _declName = dnE}
-      cmE = Map.fromList [(mnE, emptyHsModule {_exports = Map.fromList [(Identifier dnE, dE)]})]
+      cmE = Map.fromList [(mnE, emptyHsModule {_exports = Map.fromList [(dnE, dE)]})]
    in (d0, dE, cmE)
 
 nothingWasExpected d0 d1 = expectationFailure $ printf "expected Nothing, got %s (== (%s) => %s)" (show d0) (show d1) (show (d0 == d1))
@@ -278,9 +275,21 @@ definitionsSpec = do
     it "re-exported regular function" $ do
       join $ mstack evalStateT serverState $ do
         eval "mkStdGen" expectedMkStdGen
-    it "class name" $ do
+    it "re-exported throughout packages (?) class name" $ do
       join $ mstack evalStateT serverState $ do
         eval "State" noDefErr
+    it "class name" $ do
+      join $ mstack evalStateT serverState $ do
+        eval "Proxy" noDefErr
+    it "data name" $ do
+      join $ mstack evalStateT serverState $ do
+        eval "Picture" noDefErr
+    it "data constructor" $ do
+      join $ mstack evalStateT serverState $ do
+        eval "Display" noDefErr
+    it "data constructor" $ do
+      join $ mstack evalStateT serverState $ do
+        eval "InWindow" noDefErr
     it "data member" $ do
       join $ mstack evalStateT serverState $ do
         eval "runExceptT" noDefErr
@@ -317,7 +326,7 @@ parsePackageSpec = do
         deps <- use (context . dependencies)
 
         r <- forM deps $ \pkg -> do
-          modules <- Map.elems <$> ultraZoom context (parsePackage pkg)
+          modules <- Map.elems <$> ultraZoom context (Package.modules1 pkg)
           liftIO $ print (_cabalPackageName pkg)
           liftIO $ printf "\tmods=%s\n" (show $ _name <$> modules)
           return (_cabalPackageName pkg, _name <$> modules)

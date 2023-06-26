@@ -1,14 +1,15 @@
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
-{-# LANGUAGE InstanceSigs #-}
+
 module ScEaHs.Game.Surface (Surface (..), module ScEaHs.Game.Surface.Generator, putOn, putOn', isWithinSurface, maxHeight, width, heights) where
 
 import Control.Lens (makeLenses)
-import qualified Data.Map.Strict as Map
 import Data.Map.Lazy as Map
-import Graphics.Gloss (Point)
-import System.Random.Stateful (StdGen)
+import qualified Data.Map.Strict as Map
+import Graphics.Gloss (Picture (..), Point)
 import ScEaHs.Game.Renderable
+import System.Random.Stateful (StdGen)
 
 data Surface = Surface
   { _maxHeight :: Int,

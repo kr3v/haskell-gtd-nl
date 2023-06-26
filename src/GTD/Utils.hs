@@ -39,6 +39,9 @@ tryE m = catchE (fmap Right m) (return . Left)
 deduplicateBy :: Ord k => (a -> k) -> [a] -> [a]
 deduplicateBy f xs = Map.elems $ Map.fromList $ (\x -> (f x, x)) <$> xs
 
+deduplicate :: Ord k => [k] -> [k]
+deduplicate = deduplicateBy id
+
 withExceptT :: (Functor m) => (e -> e') -> ExceptT e m a -> ExceptT e' m a
 withExceptT f = mapExceptT $ fmap $ either (Left . f) Right
 

@@ -1,5 +1,30 @@
 {
-  "exports": [
+  "exportedCDs": [
+    {
+      "eExports": [],
+      "eName": {
+        "_declModule": "ScEaHs.Game.Surface",
+        "_declName": "Surface",
+        "_declSrcOrig": {
+          "sourceSpanEndColumn": 0,
+          "sourceSpanEndLine": 0,
+          "sourceSpanFileName": "",
+          "sourceSpanStartColumn": 0,
+          "sourceSpanStartLine": 0
+        },
+        "_declSrcUsage": {
+          "sourceSpanEndColumn": 36,
+          "sourceSpanEndLine": 5,
+          "sourceSpanFileName": "./test/samples/haskellGetExportedIdentifiers/in.0.hs",
+          "sourceSpanStartColumn": 29,
+          "sourceSpanStartLine": 5
+        }
+      },
+      "eWildcard": true
+    }
+  ],
+  "exportedModules": ["ScEaHs.Game.Surface.Generator"],
+  "exportedVars": [
     {
       "_declModule": "ScEaHs.Game.Surface",
       "_declName": "putOn",
@@ -108,8 +133,5 @@
         "sourceSpanStartLine": 5
       }
     }
-  ],
-  "reexports": [
-    "ScEaHs.Game.Surface.Generator"
   ]
 }

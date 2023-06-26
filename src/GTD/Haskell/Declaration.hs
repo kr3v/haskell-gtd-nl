@@ -26,11 +26,14 @@ sourceSpan (SrcSpan {srcSpanFilename = fileName, srcSpanStartLine = startLine, s
       sourceSpanEndColumn = endColumn
     }
 
-hasNonEmptyOrig :: Declaration -> Bool
-hasNonEmptyOrig = (/= emptySourceSpan) . _declSrcOrig
-
 emptySourceSpan :: SourceSpan
 emptySourceSpan = SourceSpan "" 0 0 0 0
+
+instance FromJSON SourceSpan
+
+instance ToJSON SourceSpan
+
+---
 
 data Declaration = Declaration
   { _declSrcUsage :: SourceSpan,
@@ -40,18 +43,16 @@ data Declaration = Declaration
   }
   deriving (Show, Eq, Generic, Ord)
 
-instance FromJSON SourceSpan
-
 instance FromJSON Declaration
-
-instance ToJSON SourceSpan
 
 instance ToJSON Declaration
 
-data Identifier
-  = Identifier String
-  | QualifiedIdentifier String String
-  deriving (Show, Eq, Ord)
+hasNonEmptyOrig :: Declaration -> Bool
+hasNonEmptyOrig = (/= emptySourceSpan) . _declSrcOrig
+
+---
+
+type Identifier = String
 
 identToDecl :: ModuleName SrcSpanInfo -> Name SrcSpanInfo -> Bool -> Declaration
 identToDecl m (Symbol l n) = identToDecl' m l n
