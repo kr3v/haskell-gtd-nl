@@ -10,19 +10,19 @@
 - research Haskell formatters to avoid lines longer than 80/120 characters (wrap the imports, wrap the exports, wrap function declarations, ...)
 
 - Headers -> err:failed to parse haskell-gtd/app/server/Main.hs: Parse error: :<|> @ SrcLoc "haskell-gtd/app/server/Main.hs" 25 77
-
 - "workspacePath is not parent of docPath, this case is broken right now"
-
 - qualified imports
-
-- operator exports 
-
+- operator exports
 - go to module definition in import
-
 - cross package re-exports
-
-- `data` definitions - just fetch Decl -> DataDecl -> DeclHead l -> (DHead, DHApp -> walk until DHead, if any)
-  - fields: QualConDecl -> ConDecl -> Name
+  - re-write `definition` to use this instead of custom functions
+- multiple hls instances...
+  - definitely caused by jumping to packages  
+    - provide symlink to <repo>/.repos/ -> ~/.../...-root/repo/
+- when resolution fails, show the module for the requested word, if found;
+  - consider caching the error(s) on per-module basis - like what lead to the error
+- when parsing file fails, try parsing only imports-exports
+- refactoring: try creating more clear 'borders' to allow isolated testing; right now, testing is blocked by the need to perform a proper DFS
 
 ---
 

@@ -8,6 +8,7 @@ import { homedir } from 'os'
 
 const userHomeDir = homedir();
 const serverRoot = path.join(userHomeDir, "/.local/share/haskell-gtd-extension-server-root");
+const serverRepos = path.join(serverRoot, "repos");
 const serverExe = "haskell-gtd-server";
 const serverPidF = path.join(serverRoot, 'pid');
 const serverPortF = path.join(serverRoot, 'port');
@@ -16,6 +17,14 @@ let port = 0;
 function isParentOf(p1: string, p2: string) {
 	const relative = path.relative(p1, p2);
 	return relative && !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
+async function createSymlink(src: string, dst: string) {
+	try {
+		await fs.promises.symlink(src, dst, 'file');
+	} catch (error) {
+		console.log('symlink %s -> %s failed: %s', src, dst, error);
+	}
 }
 
 class XDefinitionProvider implements vscode.DefinitionProvider {
@@ -38,7 +47,7 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 			let workspaceFolder = vscode.workspace.workspaceFolders[0];
 			let workspacePath = workspaceFolder.uri.fsPath;
 			let docPath = document.uri.fsPath;
-			
+
 			if (!isParentOf(workspacePath, docPath)) {
 				console.log("workspacePath is not parent of docPath, this case is broken right now");
 				return Promise.resolve([]);
@@ -62,15 +71,20 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 				return Promise.resolve([]);
 			}
 
+			let symlink = path.join(workspacePath, "./.repos");
+			await createSymlink(serverRepos, symlink);
+
 			let filePath = data.srcSpan.sourceSpanFileName;
-			let fileUri = vscode.Uri.file(path.normalize(filePath));
+			let filePathU = path.resolve(symlink, path.relative(serverRepos, filePath));
+
+			let fileUri = vscode.Uri.file(path.normalize(filePathU));
 
 			let line = data.srcSpan.sourceSpanStartLine - 1; // 0-based line number
 			let character = data.srcSpan.sourceSpanStartColumn - 1; // 0-based character position
 			let definitionPosition = new vscode.Position(line, character);
 			let definitionLocation = new vscode.Location(fileUri, definitionPosition);
 
-			console.log(filePath);
+			console.log("%s -> %s", filePath, filePathU);
 			return Promise.resolve(definitionLocation);
 		}
 		return Promise.resolve([]);
