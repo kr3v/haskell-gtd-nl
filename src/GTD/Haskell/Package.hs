@@ -207,9 +207,12 @@ updateExports m = do
             let liCD = mapFrom (_declName . _cdtName) $ mapMaybe (enrichTryModuleCDT st) iCD <> Map.elems (_dataTypes locals) <> concatMap (Map.elems . _dataTypes . _exports) (Map.elems iM')
             let liV = asDeclsMap $ Map.elems (_decls locals) <> mapMaybe (enrichTryModule st) iV <> concatMap (Map.elems . _decls . _exports) (Map.elems iM')
 
-            let eCD' = mapFrom (_declName . _cdtName) $ eCD <> concatMap (Map.elems . _dataTypes . _exports) (Map.elems eM')
-            let eV' = asDeclsMap $ eV <> concatMap (Map.elems . _decls . _exports) (Map.elems eM')
+            let eCDR = mapFrom (_declName . _cdtName) $ concatMap (Map.elems . _dataTypes . _exports) (Map.elems eM')
+            let eVR = asDeclsMap $ concatMap (Map.elems . _decls . _exports) (Map.elems eM')
 
-            HsModuleP {_m = m, _exports = Declarations {_decls = Map.intersection liV eV', _dataTypes = Map.intersection liCD eCD'}}
+            let eCD' = mapFrom (_declName . _cdtName) eCD
+            let eV' = asDeclsMap eV
+
+            HsModuleP {_m = m, _exports = Declarations {_decls = eVR <> Map.intersection liV eV', _dataTypes = eCDR <> Map.intersection liCD eCD'}}
   modify $ Map.insert (_name m) m'
   return m'

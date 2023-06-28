@@ -12,6 +12,7 @@ import Control.Monad.Writer (MonadIO (liftIO), execWriterT, forM_, join, runWrit
 import Data.Aeson (decode, defaultOptions, encode, genericToJSON)
 import Data.List
 import Data.Maybe
+import Data.Data
 import Data.Time.Clock (diffUTCTime)
 import Data.Time.Clock.POSIX (getCurrentTime)
 import Distribution.PackageDescription (emptyGenericPackageDescription, emptyPackageDescription)
@@ -64,6 +65,11 @@ forM_ enrichedDeclsI print
 let modules = _ccpmodules $ _context b
 let modulesGloss = fromJust $ "gloss" `Map.lookup` modules
 let moduleGlossIoGame = fromJust $ "Graphics.Gloss.Interface.IO.Game" `Map.lookup` modulesGloss
+
+
+let modules = _ccpmodules $ _context b
+let mh = fromJust $ "haskell-src-exts" `Map.lookup` modules
+let mhl = fromJust $ "Language.Haskell.Exts.Syntax" `Map.lookup` mh
 
 let modulesRandom = fromJust $ "random" `Map.lookup` modules
 let modulesRandomI = fromJust $ "System.Random.Internal" `Map.lookup` modulesRandom

@@ -272,6 +272,11 @@ definitionsSpec = do
             expLineNo = 9
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 11, sourceSpanEndColumn = 19, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
          in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+  let expectedProxy =
+        let expFile = _repos consts </> "base-4.16.4.0/./Data/Proxy.hs"
+            expLineNo = 56
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 16, sourceSpanEndColumn = 21, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
   let noDefErr = Left "No definition found"
 
   serverState <- runIO $ mstack execStateT emptyServerState $ eval0 "playIO"
@@ -305,9 +310,9 @@ definitionsSpec = do
       join $ mstack evalStateT serverState $ do
         eval "InWindow" expectedInWindow
 
-    it "class name" $ do
+    it "data type with type variable" $ do
       join $ mstack evalStateT serverState $ do
-        eval "Proxy" noDefErr
+        eval "Proxy" expectedProxy
 
     it "in-package module re-export + operator form 1" $ do
       join $ mstack evalStateT serverState $ do
@@ -358,8 +363,7 @@ parsePackageSpec = do
 --   let descr = "updateExports"
 --   describe descr $
 --     it "1" $ do
---       let expPath = "./test/samples/" ++ descr ++ "/exp.0.json"
---       let dstPath = "./test/samples/" ++ descr ++ "/out.0.json"
+--       let dstPath m = "./test/samples/" ++ descr ++ "/" ++ m ++ ".json"
 
 --       let tWorkDir = "./test/integrationTestRepo/sc-ea-hs"
 --       let mFile = tWorkDir </> "app/game/Main.hs"
@@ -367,14 +371,19 @@ parsePackageSpec = do
 --       -- let lift3 = lift . lift . lift
 
 --       consts <- prepareConstants
---       result <- flip evalStateT emptyServerState $ runFileLoggingT (tWorkDir </> descr ++ ".txt") $ flip runReaderT consts $ do
+--       flip evalStateT emptyServerState $ runFileLoggingT (tWorkDir </> descr ++ ".txt") $ flip runReaderT consts $ do
 --         let req = DefinitionRequest {workDir = tWorkDir, file = mFile, word = ""}
 --         x1 <- runExceptT $ definition req {word = "playIO"}
 
---         base <- use $ context . ccpmodules . at "base" . _Just
---         liftIO $ print $ Map.keys base
---         return $ _exports $ fromJust $ Map.lookup "Data.Maybe" base
---       BS.writeFile dstPath $ encode result
+--         pkg <- use $ context . ccpmodules . at "haskell-src-exts" . _Just
+--         liftIO $ print $ Map.keys pkg
+
+--         let m1 = "Language.Haskell.Exts.Extension"
+--         liftIO $ BS.writeFile (dstPath m1) $ encode $ _exports $ fromJust $ Map.lookup m1 pkg
+--         let m2 = "Language.Haskell.Exts"
+--         liftIO $ BS.writeFile (dstPath m2) $ encode $ _exports $ fromJust $ Map.lookup m2 pkg
+--         let m3 = "Language.Haskell.Exts.Syntax"
+--         liftIO $ BS.writeFile (dstPath m3) $ encode $ _exports $ fromJust $ Map.lookup m3 pkg
 
 --       True `shouldBe` True
 

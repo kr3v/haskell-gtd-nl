@@ -20,7 +20,7 @@ import GTD.Cabal (ModuleNameS)
 import GTD.Haskell.Declaration (Declaration (..), Identifier, identToDecl)
 import GTD.Haskell.Utils (asDeclsMap)
 import GTD.Utils (deduplicate, logDebugNSS)
-import Language.Haskell.Exts (Decl (..), DeclHead (..), EWildcard (..), ExportSpec (..), ExportSpecList (ExportSpecList), FieldDecl (..), ImportDecl (..), ImportSpec (..), ImportSpecList (ImportSpecList), Language (Haskell2010), Module (Module), ModuleHead (ModuleHead), ModuleHeadAndImports (..), ModuleName (ModuleName), Name (..), NonGreedy (..), ParseMode (..), ParseResult (ParseFailed, ParseOk), Parseable (..), QName (UnQual), QualConDecl (..), SrcSpanInfo, defaultParseMode, infix_, parseFileContentsWithMode)
+import Language.Haskell.Exts (Decl (..), DeclHead (..), EWildcard (..), ExportSpec (..), ExportSpecList (ExportSpecList), FieldDecl (..), ImportDecl (..), ImportSpec (..), ImportSpecList (ImportSpecList), Language (Haskell2010), Module (Module), ModuleHead (ModuleHead), ModuleHeadAndImports (..), ModuleName (ModuleName), Name (..), NonGreedy (..), ParseMode (..), ParseResult (ParseFailed, ParseOk), Parseable (..), QName (UnQual), QualConDecl (..), SrcSpan (..), SrcSpanInfo (..), defaultParseMode, infix_, parseFileContentsWithMode)
 import Language.Haskell.Exts.Extension (Extension (EnableExtension), KnownExtension (FlexibleContexts))
 import Language.Haskell.Exts.Syntax (CName (..), ConDecl (..))
 import Text.Printf (printf)
@@ -60,11 +60,6 @@ haskellParse src content = case parseFileContentsWithMode defaultParseMode {pars
   ParseFailed loc e -> case e of
     "Ambiguous infix expression" -> haskellParseAmbigousInfixOperators src content
     _ -> Left $ printf "failed to parse %s: %s @ %s" src e (show loc)
-
-haskellGetIdentifierFromDeclHead :: DeclHead SrcSpanInfo -> Maybe (Name SrcSpanInfo)
-haskellGetIdentifierFromDeclHead (DHead _ n) = Just n
-haskellGetIdentifierFromDeclHead (DHParen _ h) = haskellGetIdentifierFromDeclHead h
-haskellGetIdentifierFromDeclHead _ = Nothing
 
 ---
 
@@ -111,21 +106,30 @@ qualConDeclAsDataC mN (QualConDecl _ _ _ cd) =
         RecDecl _ n fs -> (n,) $ concatMap (\(FieldDecl _ ns _) -> ns) fs
    in [identToDecl mN n True] <> (flip (identToDecl mN) True <$> fs)
 
+haskellGetIdentifierFromDeclHead :: DeclHead SrcSpanInfo -> Maybe (Name SrcSpanInfo)
+haskellGetIdentifierFromDeclHead (DHead _ n) = Just n
+haskellGetIdentifierFromDeclHead (DHParen _ h) = haskellGetIdentifierFromDeclHead h
+-- FIXME: I don't know if `haskellGetIdentifierFromDeclHead (DHApp _ h _)` handler is correct
+haskellGetIdentifierFromDeclHead (DHApp _ h _) = haskellGetIdentifierFromDeclHead h
+haskellGetIdentifierFromDeclHead _ = Nothing
+
 haskellGetIdentifiers :: Module SrcSpanInfo -> (MonadWriter Declarations m, MonadLoggerIO m) => m ()
-haskellGetIdentifiers (Module _ mhead _ _ decls) =
+haskellGetIdentifiers (Module l mhead _ _ ds) = do
+  let logTag = "get identifiers @ Module (" ++ (srcSpanFilename . srcInfoSpan $ l) ++ ")"
   forM_ mhead $ \h -> do
     let (ModuleHead _ mN _ _) = h
-    forM_ decls $ \case
+    forM_ ds $ \case
       TypeSig _ names _ ->
         tell $ mempty {_decls = asDeclsMap $ (\n -> identToDecl mN n True) <$> names}
       DataDecl _ _ _ dh qcds _ -> do
-        forM_ (flip (identToDecl mN) True <$> haskellGetIdentifierFromDeclHead dh) $ \d -> do
-          let ctors = concatMap (qualConDeclAsDataC mN) qcds
-          tell $ mempty {_dataTypes = Map.singleton (_declName d) $ ClassOrData d (asDeclsMap ctors) False}
-      _ -> return ()
+        case haskellGetIdentifierFromDeclHead dh of
+          Just n -> do
+            let d = identToDecl mN n True
+            let ctors = concatMap (qualConDeclAsDataC mN) qcds
+            tell $ mempty {_dataTypes = Map.singleton (_declName d) $ ClassOrData d (asDeclsMap ctors) False}
+          Nothing -> logDebugNSS logTag (printf "not yet handled: DataDecl :t dh = %s" (showConstr . toConstr $ dh))
+      c -> logDebugNSS logTag (printf "not yet handled: :t c = %s" (showConstr . toConstr $ c))
 haskellGetIdentifiers m = logDebugNSS "get identifiers" (printf "not yet handled: :t m = %s" (showConstr . toConstr $ m))
-
----
 
 ---
 
