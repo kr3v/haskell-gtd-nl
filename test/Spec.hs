@@ -102,6 +102,8 @@ haskellGetIdentifiersSpec = do
       test 0
     it "parses declarations of multiple functions with shared type signature" $
       test 1
+    it "parses classes declarations" $
+      test 2
 
 haskellGetExportsSpec :: Spec
 haskellGetExportsSpec = do

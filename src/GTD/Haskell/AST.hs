@@ -16,13 +16,14 @@ import Data.Data (Data (toConstr), showConstr)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (isJust, isNothing)
 import GHC.Generics (Generic)
+import Data.Maybe (maybeToList)
 import GTD.Cabal (ModuleNameS)
 import GTD.Haskell.Declaration (Declaration (..), Identifier, identToDecl)
 import GTD.Haskell.Utils (asDeclsMap)
 import GTD.Utils (deduplicate, logDebugNSS)
-import Language.Haskell.Exts (Decl (..), DeclHead (..), EWildcard (..), ExportSpec (..), ExportSpecList (ExportSpecList), FieldDecl (..), ImportDecl (..), ImportSpec (..), ImportSpecList (ImportSpecList), Language (Haskell2010), Module (Module), ModuleHead (ModuleHead), ModuleHeadAndImports (..), ModuleName (ModuleName), Name (..), NonGreedy (..), ParseMode (..), ParseResult (ParseFailed, ParseOk), Parseable (..), QName (UnQual), QualConDecl (..), SrcSpan (..), SrcSpanInfo (..), defaultParseMode, infix_, parseFileContentsWithMode)
+import Language.Haskell.Exts (Decl (..), DeclHead (..), EWildcard (..), ExportSpec (..), ExportSpecList (ExportSpecList), FieldDecl (..), ImportDecl (..), ImportSpec (..), ImportSpecList (ImportSpecList), Language (Haskell2010), Module (Module), ModuleHead (ModuleHead), ModuleHeadAndImports (..), ModuleName (ModuleName), Name (..), NonGreedy (..), ParseMode (..), ParseResult (ParseFailed, ParseOk), Parseable (..), QName (UnQual), QualConDecl (..), SrcSpan (..), SrcSpanInfo (..), defaultParseMode, infix_, parseFileContentsWithMode, ClassDecl (ClsDecl))
 import Language.Haskell.Exts.Extension (Extension (EnableExtension), KnownExtension (FlexibleContexts))
-import Language.Haskell.Exts.Syntax (CName (..), ConDecl (..))
+import Language.Haskell.Exts.Syntax (CName (..), ConDecl (..), ClassDecl)
 import Text.Printf (printf)
 
 haskellGetImportedSymbols :: [ImportDecl SrcSpanInfo] -> Writer [String] ()
@@ -106,6 +107,10 @@ qualConDeclAsDataC mN (QualConDecl _ _ _ cd) =
         RecDecl _ n fs -> (n,) $ concatMap (\(FieldDecl _ ns _) -> ns) fs
    in [identToDecl mN n True] <> (flip (identToDecl mN) True <$> fs)
 
+classDeclAsDecls :: ModuleName SrcSpanInfo -> ClassDecl SrcSpanInfo -> [Declaration]
+classDeclAsDecls mN (ClsDecl _ (TypeSig _ names _)) = (\n -> identToDecl mN n True) <$> names
+classDeclAsDecls _ _ = []
+
 haskellGetIdentifierFromDeclHead :: DeclHead SrcSpanInfo -> Maybe (Name SrcSpanInfo)
 haskellGetIdentifierFromDeclHead (DHead _ n) = Just n
 haskellGetIdentifierFromDeclHead (DHParen _ h) = haskellGetIdentifierFromDeclHead h
@@ -119,8 +124,7 @@ haskellGetIdentifiers (Module l mhead _ _ ds) = do
   forM_ mhead $ \h -> do
     let (ModuleHead _ mN _ _) = h
     forM_ ds $ \case
-      TypeSig _ names _ ->
-        tell $ mempty {_decls = asDeclsMap $ (\n -> identToDecl mN n True) <$> names}
+      TypeSig _ names _ -> tell $ mempty {_decls = asDeclsMap $ (\n -> identToDecl mN n True) <$> names}
       DataDecl _ _ _ dh qcds _ -> do
         case haskellGetIdentifierFromDeclHead dh of
           Just n -> do
@@ -128,6 +132,12 @@ haskellGetIdentifiers (Module l mhead _ _ ds) = do
             let ctors = concatMap (qualConDeclAsDataC mN) qcds
             tell $ mempty {_dataTypes = Map.singleton (_declName d) $ ClassOrData d (asDeclsMap ctors) False}
           Nothing -> logDebugNSS logTag (printf "not yet handled: DataDecl :t dh = %s" (showConstr . toConstr $ dh))
+      ClassDecl _ _ dh _ mcds -> do
+        case haskellGetIdentifierFromDeclHead dh of
+          Just n -> do
+            let d = identToDecl mN n True
+            tell $ mempty {_dataTypes = Map.singleton (_declName d) $ ClassOrData d (asDeclsMap $ concatMap (classDeclAsDecls mN) (concat $ maybeToList mcds)) False}
+          Nothing -> logDebugNSS logTag (printf "not yet handled: ClassDecl :t dh = %s" (showConstr . toConstr $ dh))
       c -> logDebugNSS logTag (printf "not yet handled: :t c = %s" (showConstr . toConstr $ c))
 haskellGetIdentifiers m = logDebugNSS "get identifiers" (printf "not yet handled: :t m = %s" (showConstr . toConstr $ m))
 
