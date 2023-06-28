@@ -36,6 +36,9 @@ logErrorNSS a b = do
 tryE :: Monad m => ExceptT e m a -> ExceptT e m (Either e a)
 tryE m = catchE (fmap Right m) (return . Left)
 
+mapFrom :: Ord k => (a -> k) -> [a] -> Map.Map k a
+mapFrom f xs = Map.fromList $ (\x -> (f x, x)) <$> xs
+
 deduplicateBy :: Ord k => (a -> k) -> [a] -> [a]
 deduplicateBy f xs = Map.elems $ Map.fromList $ (\x -> (f x, x)) <$> xs
 

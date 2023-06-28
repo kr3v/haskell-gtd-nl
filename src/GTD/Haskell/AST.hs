@@ -21,6 +21,7 @@ import GTD.Haskell.Declaration (Declaration (..), Identifier, identToDecl)
 import GTD.Haskell.Utils (asDeclsMap)
 import GTD.Utils (deduplicate, logDebugNSS)
 import Language.Haskell.Exts (Decl (..), DeclHead (..), EWildcard (..), ExportSpec (..), ExportSpecList (ExportSpecList), FieldDecl (..), ImportDecl (..), ImportSpec (..), ImportSpecList (ImportSpecList), Language (Haskell2010), Module (Module), ModuleHead (ModuleHead), ModuleHeadAndImports (..), ModuleName (ModuleName), Name (..), NonGreedy (..), ParseMode (..), ParseResult (ParseFailed, ParseOk), Parseable (..), QName (UnQual), QualConDecl (..), SrcSpanInfo, defaultParseMode, infix_, parseFileContentsWithMode)
+import Language.Haskell.Exts.Extension (Extension (EnableExtension), KnownExtension (FlexibleContexts))
 import Language.Haskell.Exts.Syntax (CName (..), ConDecl (..))
 import Text.Printf (printf)
 
@@ -48,13 +49,13 @@ haskellParseAmbigousInfixOperators src content = do
     ParseOk (NonGreedy (ModuleHeadAndImports _ _ _ is)) -> do
       let operators = execWriter $ haskellGetImportedSymbols is
       let fixs = infix_ 0 operators
-      case parseFileContentsWithMode defaultParseMode {parseFilename = src, baseLanguage = Haskell2010, fixities = Just fixs} content of
+      case parseFileContentsWithMode defaultParseMode {parseFilename = src, baseLanguage = Haskell2010, extensions = [EnableExtension FlexibleContexts], fixities = Just fixs} content of
         ParseOk m -> Right m
         ParseFailed loc e -> Left $ printf "failed to parse %s: %s @ %s" src e (show loc)
 
 -- TODO: figure out #line pragmas
 haskellParse :: FilePath -> String -> Either String (Module SrcSpanInfo)
-haskellParse src content = case parseFileContentsWithMode defaultParseMode {parseFilename = src, baseLanguage = Haskell2010} content of
+haskellParse src content = case parseFileContentsWithMode defaultParseMode {parseFilename = src, extensions = [EnableExtension FlexibleContexts], baseLanguage = Haskell2010} content of
   ParseOk m -> Right m
   ParseFailed loc e -> case e of
     "Ambiguous infix expression" -> haskellParseAmbigousInfixOperators src content
@@ -65,29 +66,26 @@ haskellGetIdentifierFromDeclHead (DHead _ n) = Just n
 haskellGetIdentifierFromDeclHead (DHParen _ h) = haskellGetIdentifierFromDeclHead h
 haskellGetIdentifierFromDeclHead _ = Nothing
 
-data DataD = DataD
-  { dataName :: Declaration,
-    dataCtors :: Map.Map Identifier DataDC
+---
+
+data ClassOrData = ClassOrData
+  { _cdtName :: Declaration,
+    _cdtFields :: Map.Map Identifier Declaration,
+    _eWildcard :: Bool
   }
   deriving (Show, Generic, Eq)
 
-data DataDC = DataDC
-  { constructorName :: Declaration,
-    constructorFields :: Map.Map Identifier Declaration
-  }
-  deriving (Show, Generic, Eq)
+$(makeLenses ''ClassOrData)
 
-instance FromJSON DataD
+instance FromJSON ClassOrData
 
-instance ToJSON DataD
+instance ToJSON ClassOrData
 
-instance FromJSON DataDC
-
-instance ToJSON DataDC
+---
 
 data Declarations = Declarations
   { _decls :: Map.Map Identifier Declaration,
-    _dataTypes :: Map.Map Identifier DataD
+    _dataTypes :: Map.Map Identifier ClassOrData
   }
   deriving (Show, Generic, Eq)
 
@@ -105,16 +103,13 @@ instance FromJSON Declarations
 
 instance ToJSON Declarations
 
-qualConDeclAsDataC :: ModuleName SrcSpanInfo -> QualConDecl SrcSpanInfo -> DataDC
+qualConDeclAsDataC :: ModuleName SrcSpanInfo -> QualConDecl SrcSpanInfo -> [Declaration]
 qualConDeclAsDataC mN (QualConDecl _ _ _ cd) =
   let (n, fs) = case cd of
         ConDecl _ n _ -> (n, [])
         InfixConDecl _ _ n _ -> (n, [])
         RecDecl _ n fs -> (n,) $ concatMap (\(FieldDecl _ ns _) -> ns) fs
-   in DataDC
-        { constructorName = identToDecl mN n True,
-          constructorFields = asDeclsMap $ flip (identToDecl mN) True <$> fs
-        }
+   in [identToDecl mN n True] <> (flip (identToDecl mN) True <$> fs)
 
 haskellGetIdentifiers :: Module SrcSpanInfo -> (MonadWriter Declarations m, MonadLoggerIO m) => m ()
 haskellGetIdentifiers (Module _ mhead _ _ decls) =
@@ -125,23 +120,12 @@ haskellGetIdentifiers (Module _ mhead _ _ decls) =
         tell $ mempty {_decls = asDeclsMap $ (\n -> identToDecl mN n True) <$> names}
       DataDecl _ _ _ dh qcds _ -> do
         forM_ (flip (identToDecl mN) True <$> haskellGetIdentifierFromDeclHead dh) $ \d -> do
-          let ctors = qualConDeclAsDataC mN <$> qcds
-          tell $ mempty {_dataTypes = Map.singleton (_declName d) $ DataD d $ Map.fromList $ (\c -> (_declName . constructorName $ c, c)) <$> ctors}
+          let ctors = concatMap (qualConDeclAsDataC mN) qcds
+          tell $ mempty {_dataTypes = Map.singleton (_declName d) $ ClassOrData d (asDeclsMap ctors) False}
       _ -> return ()
 haskellGetIdentifiers m = logDebugNSS "get identifiers" (printf "not yet handled: :t m = %s" (showConstr . toConstr $ m))
 
 ---
-
-data ClassOrData = ClassOrData
-  { eName :: Declaration,
-    eExports :: [Declaration],
-    eWildcard :: Bool
-  }
-  deriving (Show, Generic, Eq)
-
-instance FromJSON ClassOrData
-
-instance ToJSON ClassOrData
 
 ---
 
@@ -164,10 +148,6 @@ instance Monoid Exports where
   mempty :: Exports
   mempty = Exports [] [] []
 
-handleQName :: (Show a) => a -> ModuleName SrcSpanInfo -> QName SrcSpanInfo -> (MonadWriter Exports m, MonadLoggerIO m) => m ()
-handleQName _ mN (UnQual _ n) = tell mempty {exportedVars = [identToDecl mN n False]}
-handleQName r _ qn = logDebugNSS "get exports" $ printf "not yet handled: %s -> %s" (show r) (show qn)
-
 handleCName :: CName l -> Name l
 handleCName (VarName _ n) = n
 handleCName (ConName _ n) = n
@@ -177,7 +157,7 @@ isEWildcard (NoWildcard _) = False
 isEWildcard (EWildcard _ _) = True
 
 classOrDataE :: ModuleName SrcSpanInfo -> Name SrcSpanInfo -> [CName SrcSpanInfo] -> Bool -> ClassOrData
-classOrDataE mN n cs = ClassOrData (identToDecl mN n False) (flip (identToDecl mN) False . handleCName <$> cs)
+classOrDataE mN n cs = ClassOrData (identToDecl mN n False) $ asDeclsMap (flip (identToDecl mN) False . handleCName <$> cs)
 
 haskellGetExports :: Module SrcSpanInfo -> (MonadWriter Exports m, MonadLoggerIO m) => m Bool
 haskellGetExports (Module _ mhead _ _ _) = do
@@ -185,9 +165,11 @@ haskellGetExports (Module _ mhead _ _ _) = do
     let (ModuleHead _ mN _ mE) = h
     forM_ mE $ \(ExportSpecList _ es) ->
       forM_ es $ \e -> case e of
-        EVar _ qn -> handleQName e mN qn
-        EAbs _ _ qn -> handleQName e mN qn
         EModuleContents _ (ModuleName _ mn) -> tell mempty {exportedModules = [mn]}
+        EVar _ (UnQual _ n) -> tell mempty {exportedVars = [identToDecl mN n False]}
+        EVar _ qn -> logDebugNSS "get exports" $ printf "not yet handled: %s -> %s" (show e) (show qn)
+        EAbs _ _ (UnQual _ n) -> tell mempty {exportedCDs = [classOrDataE mN n [] False]}
+        EAbs _ _ qn -> logDebugNSS "get exports" $ printf "not yet handled: %s -> %s" (show e) (show qn)
         EThingWith _ w qn cs -> case qn of
           UnQual _ qn' -> tell mempty {exportedCDs = [classOrDataE mN qn' cs (isEWildcard w)]}
           _ -> logDebugNSS "get exports" $ printf "not yet handled: %s -> %s" (show e) (show qn)
@@ -212,7 +194,7 @@ instance Monoid Imports where
   mempty = Imports [] [] []
 
 allImportedModules :: Imports -> [ModuleNameS]
-allImportedModules (Imports ids ims icds) = deduplicate $ ims <> (_declModule <$> ids) <> (_declModule . eName <$> icds)
+allImportedModules (Imports ids ims icds) = deduplicate $ ims <> (_declModule <$> ids) <> (_declModule . _cdtName <$> icds)
 
 haskellGetImports :: Module SrcSpanInfo -> (MonadWriter Imports m, MonadLoggerIO m) => m ()
 haskellGetImports (Module _ _ _ is _) = do
@@ -225,7 +207,7 @@ haskellGetImports (Module _ _ _ is _) = do
           forM_ is' $ \i -> do
             case i of
               IVar _ n -> tell mempty {importedDecls = [identToDecl im n False]}
-              IAbs _ _ n -> tell mempty {importedDecls = [identToDecl im n False]}
+              IAbs _ _ n -> tell mempty {importedCDs = [classOrDataE im n [] False]}
               IThingAll _ n -> tell mempty {importedCDs = [classOrDataE im n [] True]}
               IThingWith _ n cs -> tell mempty {importedCDs = [classOrDataE im n cs False]}
         Just (ImportSpecList _ True _) -> logDebugNSS logTag $ printf "not yet handled: isHidden is `True`"

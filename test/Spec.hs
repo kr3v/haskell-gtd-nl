@@ -4,7 +4,8 @@
 
 import Control.Applicative (Alternative (empty), Applicative (liftA2))
 import Control.Exception (evaluate)
-import Control.Lens
+import Control.Lens (At (at), use)
+import Control.Lens.Prism (_Just)
 import Control.Monad.Logger (runStderrLoggingT)
 import Control.Monad.Logger.CallStack (runFileLoggingT)
 import Control.Monad.State (MonadTrans (lift), StateT (..), evalStateT, execStateT, forM)
@@ -25,22 +26,21 @@ import Distribution.PackageDescription (emptyGenericPackageDescription, emptyPac
 import GHC.RTS.Flags (ProfFlags (descrSelector))
 import GTD.Cabal (CabalPackage (..), ModuleNameS, PackageNameS)
 import GTD.Configuration (GTDConfiguration (_repos), prepareConstants)
-import GTD.Haskell.AST (Declarations, Exports, Imports, haskellGetExports, haskellGetIdentifiers, haskellGetImports, haskellParse)
+import GTD.Haskell.AST (Declarations (..), Exports, Imports, haskellGetExports, haskellGetIdentifiers, haskellGetImports, haskellParse)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (Declaration (Declaration, _declName, _declSrcOrig, _declSrcUsage), Identifier (..), SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine), emptySourceSpan)
-import GTD.Haskell.Module (HsModule (_exports, _name), emptyHsModule)
+import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule)
+import GTD.Haskell.Package (ccpmodules, dependencies, updateExports)
+import qualified GTD.Haskell.Package as Package
 import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), context, definition, emptyServerState, noDefintionFoundError, noDefintionFoundErrorE)
 import GTD.Utils (logDebugNSS, ultraZoom)
 import Language.Haskell.Exts (Module (..), SrcSpan (..), SrcSpanInfo (..))
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.FilePath ((</>))
 import Test.Hspec (Spec, describe, expectationFailure, it, runIO, shouldBe, shouldNotBe, shouldSatisfy)
--- import Test.Hspec.Core.Spec (SpecM)
 import Test.Hspec.Runner (Config (configPrintCpuTime), defaultConfig, hspecWith)
 import Test.QuickCheck (Testable (..), forAll, (==>))
 import Text.Printf (printf)
-import GTD.Haskell.Package (dependencies)
-import qualified GTD.Haskell.Package as Package
 
 haskellApplyCppHsSpec :: Spec
 haskellApplyCppHsSpec = do
@@ -165,7 +165,7 @@ cmGen mn0 dn0 mnE dnE fnE =
   let d0 = Declaration emptySourceSpan emptySourceSpan mn0 dn0
       lE = emptySourceSpan {sourceSpanFileName = fnE}
       dE = d0 {_declSrcOrig = lE, _declSrcUsage = lE, _declName = dnE}
-      cmE = Map.fromList [(mnE, emptyHsModule {_exports = Map.fromList [(dnE, dE)]})]
+      cmE = Map.fromList [(mnE, HsModuleP {_m = emptyHsModule, _exports = Declarations {_decls = Map.fromList [(dnE, dE)], _dataTypes = Map.empty}})]
    in (d0, dE, cmE)
 
 nothingWasExpected d0 d1 = expectationFailure $ printf "expected Nothing, got %s (== (%s) => %s)" (show d0) (show d1) (show (d0 == d1))
@@ -232,13 +232,15 @@ definitionsSpec :: Spec
 definitionsSpec = do
   consts <- runIO prepareConstants
 
+  let descr = "definitions"
+
   let workDir = "./test/integrationTestRepo/sc-ea-hs"
   let file = workDir </> "app/game/Main.hs"
   let req = DefinitionRequest {workDir = "./test/integrationTestRepo/sc-ea-hs", file = file, word = ""}
 
   let eval0 w = runExceptT (definition req {word = w})
   let eval w r = eval0 w >>= (\x -> return $ x `shouldBe` r)
-  let mstack f s a = runFileLoggingT (workDir </> "log1.txt") $ flip f s $ runReaderT a consts
+  let mstack f s a = runFileLoggingT (workDir </> descr ++ ".txt") $ flip f s $ runReaderT a consts
 
   let expectedPlayIO =
         let expFile = _repos consts </> "gloss-1.13.2.2/./Graphics/Gloss/Interface/IO/Game.hs"
@@ -260,11 +262,21 @@ definitionsSpec = do
             expLineNo = 792
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
          in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+  let expectedDisplay =
+        let expFile = _repos consts </> "gloss-1.13.2.2/./Graphics/Gloss/Data/Display.hs"
+            expLineNo = 7
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 6, sourceSpanEndColumn = 13, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+  let expectedInWindow =
+        let expFile = _repos consts </> "gloss-1.13.2.2/./Graphics/Gloss/Data/Display.hs"
+            expLineNo = 9
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 11, sourceSpanEndColumn = 19, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
   let noDefErr = Left "No definition found"
 
   serverState <- runIO $ mstack execStateT emptyServerState $ eval0 "playIO"
 
-  describe "definitions" $ do
+  describe descr $ do
     it "directly exported regular function" $ do
       join $ mstack evalStateT serverState $ eval "playIO" expectedPlayIO
     it "sequential execution does not fail" $ do
@@ -275,27 +287,28 @@ definitionsSpec = do
     it "re-exported regular function" $ do
       join $ mstack evalStateT serverState $ do
         eval "mkStdGen" expectedMkStdGen
+
     it "re-exported throughout packages (?) class name" $ do
       join $ mstack evalStateT serverState $ do
         eval "State" noDefErr
-    it "class name" $ do
-      join $ mstack evalStateT serverState $ do
-        eval "Proxy" noDefErr
-    it "data name" $ do
-      join $ mstack evalStateT serverState $ do
-        eval "Picture" noDefErr
-    it "data constructor" $ do
-      join $ mstack evalStateT serverState $ do
-        eval "Display" noDefErr
-    it "data constructor" $ do
-      join $ mstack evalStateT serverState $ do
-        eval "InWindow" noDefErr
-    it "data member" $ do
-      join $ mstack evalStateT serverState $ do
-        eval "runExceptT" noDefErr
     it "cross-package module re-export" $ do
       join $ mstack evalStateT serverState $ do
         eval "runState" noDefErr
+    it "(re-export)? data name" $ do
+      join $ mstack evalStateT serverState $ do
+        eval "Picture" noDefErr
+
+    it "data type name" $ do
+      join $ mstack evalStateT serverState $ do
+        eval "Display" expectedDisplay
+    it "data constructor" $ do
+      join $ mstack evalStateT serverState $ do
+        eval "InWindow" expectedInWindow
+
+    it "class name" $ do
+      join $ mstack evalStateT serverState $ do
+        eval "Proxy" noDefErr
+
     it "in-package module re-export + operator form 1" $ do
       join $ mstack evalStateT serverState $ do
         eval "^." noDefErr
@@ -320,7 +333,7 @@ parsePackageSpec = do
       let mFile = tWorkDir </> "app/game/Main.hs"
 
       consts <- prepareConstants
-      result <- flip evalStateT emptyServerState $ runFileLoggingT (tWorkDir </> "log1.txt") $ flip runReaderT consts $ do
+      result <- flip evalStateT emptyServerState $ runFileLoggingT (tWorkDir </> descr ++ ".txt") $ flip runReaderT consts $ do
         let req = DefinitionRequest {workDir = tWorkDir, file = mFile, word = ""}
         x1 <- runExceptT $ definition req {word = "playIO"}
         deps <- use (context . dependencies)
@@ -328,8 +341,8 @@ parsePackageSpec = do
         r <- forM deps $ \pkg -> do
           modules <- Map.elems <$> ultraZoom context (Package.modules1 pkg)
           liftIO $ print (_cabalPackageName pkg)
-          liftIO $ printf "\tmods=%s\n" (show $ _name <$> modules)
-          return (_cabalPackageName pkg, _name <$> modules)
+          liftIO $ printf "\tmods=%s\n" (show $ _name . _m <$> modules)
+          return (_cabalPackageName pkg, _name . _m <$> modules)
         return $ Map.fromList r
 
       expectedS <- BS.readFile expPath
@@ -340,12 +353,38 @@ parsePackageSpec = do
       -- yet be aware of 'failed' modules, as some Cabal-exported modules might be missing from the returned value
       result `shouldBe` expected
 
+-- updateExportsSpec :: Spec
+-- updateExportsSpec = do
+--   let descr = "updateExports"
+--   describe descr $
+--     it "1" $ do
+--       let expPath = "./test/samples/" ++ descr ++ "/exp.0.json"
+--       let dstPath = "./test/samples/" ++ descr ++ "/out.0.json"
+
+--       let tWorkDir = "./test/integrationTestRepo/sc-ea-hs"
+--       let mFile = tWorkDir </> "app/game/Main.hs"
+
+--       -- let lift3 = lift . lift . lift
+
+--       consts <- prepareConstants
+--       result <- flip evalStateT emptyServerState $ runFileLoggingT (tWorkDir </> descr ++ ".txt") $ flip runReaderT consts $ do
+--         let req = DefinitionRequest {workDir = tWorkDir, file = mFile, word = ""}
+--         x1 <- runExceptT $ definition req {word = "playIO"}
+
+--         base <- use $ context . ccpmodules . at "base" . _Just
+--         liftIO $ print $ Map.keys base
+--         return $ _exports $ fromJust $ Map.lookup "Data.Maybe" base
+--       BS.writeFile dstPath $ encode result
+
+--       True `shouldBe` True
+
 ---
 
 integrationTestsSpec :: Spec
 integrationTestsSpec = do
   definitionsSpec
   parsePackageSpec
+  -- updateExportsSpec
 
 main :: IO ()
 main = hspecWith defaultConfig {configPrintCpuTime = False} $ do

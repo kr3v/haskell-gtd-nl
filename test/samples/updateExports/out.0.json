@@ -1,0 +1,167 @@
+{
+  "_dataTypes": {},
+  "_decls": {
+    "catMaybes": {
+      "_declModule": "Data.Maybe",
+      "_declName": "catMaybes",
+      "_declSrcOrig": {
+        "sourceSpanEndColumn": 10,
+        "sourceSpanEndLine": 260,
+        "sourceSpanFileName": "/home/dbaynak/.local/share/haskell-gtd-extension-server-root/repos/base-4.16.4.0/./Data/Maybe.hs",
+        "sourceSpanStartColumn": 1,
+        "sourceSpanStartLine": 260
+      },
+      "_declSrcUsage": {
+        "sourceSpanEndColumn": 0,
+        "sourceSpanEndLine": 0,
+        "sourceSpanFileName": "",
+        "sourceSpanStartColumn": 0,
+        "sourceSpanStartLine": 0
+      }
+    },
+    "fromJust": {
+      "_declModule": "Data.Maybe",
+      "_declName": "fromJust",
+      "_declSrcOrig": {
+        "sourceSpanEndColumn": 9,
+        "sourceSpanEndLine": 148,
+        "sourceSpanFileName": "/home/dbaynak/.local/share/haskell-gtd-extension-server-root/repos/base-4.16.4.0/./Data/Maybe.hs",
+        "sourceSpanStartColumn": 1,
+        "sourceSpanStartLine": 148
+      },
+      "_declSrcUsage": {
+        "sourceSpanEndColumn": 0,
+        "sourceSpanEndLine": 0,
+        "sourceSpanFileName": "",
+        "sourceSpanStartColumn": 0,
+        "sourceSpanStartLine": 0
+      }
+    },
+    "fromMaybe": {
+      "_declModule": "Data.Maybe",
+      "_declName": "fromMaybe",
+      "_declSrcOrig": {
+        "sourceSpanEndColumn": 10,
+        "sourceSpanEndLine": 175,
+        "sourceSpanFileName": "/home/dbaynak/.local/share/haskell-gtd-extension-server-root/repos/base-4.16.4.0/./Data/Maybe.hs",
+        "sourceSpanStartColumn": 1,
+        "sourceSpanStartLine": 175
+      },
+      "_declSrcUsage": {
+        "sourceSpanEndColumn": 0,
+        "sourceSpanEndLine": 0,
+        "sourceSpanFileName": "",
+        "sourceSpanStartColumn": 0,
+        "sourceSpanStartLine": 0
+      }
+    },
+    "isJust": {
+      "_declModule": "Data.Maybe",
+      "_declName": "isJust",
+      "_declSrcOrig": {
+        "sourceSpanEndColumn": 7,
+        "sourceSpanEndLine": 103,
+        "sourceSpanFileName": "/home/dbaynak/.local/share/haskell-gtd-extension-server-root/repos/base-4.16.4.0/./Data/Maybe.hs",
+        "sourceSpanStartColumn": 1,
+        "sourceSpanStartLine": 103
+      },
+      "_declSrcUsage": {
+        "sourceSpanEndColumn": 0,
+        "sourceSpanEndLine": 0,
+        "sourceSpanFileName": "",
+        "sourceSpanStartColumn": 0,
+        "sourceSpanStartLine": 0
+      }
+    },
+    "isNothing": {
+      "_declModule": "Data.Maybe",
+      "_declName": "isNothing",
+      "_declSrcOrig": {
+        "sourceSpanEndColumn": 10,
+        "sourceSpanEndLine": 127,
+        "sourceSpanFileName": "/home/dbaynak/.local/share/haskell-gtd-extension-server-root/repos/base-4.16.4.0/./Data/Maybe.hs",
+        "sourceSpanStartColumn": 1,
+        "sourceSpanStartLine": 127
+      },
+      "_declSrcUsage": {
+        "sourceSpanEndColumn": 0,
+        "sourceSpanEndLine": 0,
+        "sourceSpanFileName": "",
+        "sourceSpanStartColumn": 0,
+        "sourceSpanStartLine": 0
+      }
+    },
+    "listToMaybe": {
+      "_declModule": "Data.Maybe",
+      "_declName": "listToMaybe",
+      "_declSrcOrig": {
+        "sourceSpanEndColumn": 12,
+        "sourceSpanEndLine": 233,
+        "sourceSpanFileName": "/home/dbaynak/.local/share/haskell-gtd-extension-server-root/repos/base-4.16.4.0/./Data/Maybe.hs",
+        "sourceSpanStartColumn": 1,
+        "sourceSpanStartLine": 233
+      },
+      "_declSrcUsage": {
+        "sourceSpanEndColumn": 0,
+        "sourceSpanEndLine": 0,
+        "sourceSpanFileName": "",
+        "sourceSpanStartColumn": 0,
+        "sourceSpanStartLine": 0
+      }
+    },
+    "mapMaybe": {
+      "_declModule": "Data.Maybe",
+      "_declName": "mapMaybe",
+      "_declSrcOrig": {
+        "sourceSpanEndColumn": 9,
+        "sourceSpanEndLine": 286,
+        "sourceSpanFileName": "/home/dbaynak/.local/share/haskell-gtd-extension-server-root/repos/base-4.16.4.0/./Data/Maybe.hs",
+        "sourceSpanStartColumn": 1,
+        "sourceSpanStartLine": 286
+      },
+      "_declSrcUsage": {
+        "sourceSpanEndColumn": 0,
+        "sourceSpanEndLine": 0,
+        "sourceSpanFileName": "",
+        "sourceSpanStartColumn": 0,
+        "sourceSpanStartLine": 0
+      }
+    },
+    "maybe": {
+      "_declModule": "Data.Maybe",
+      "_declName": "maybe",
+      "_declSrcOrig": {
+        "sourceSpanEndColumn": 6,
+        "sourceSpanEndLine": 78,
+        "sourceSpanFileName": "/home/dbaynak/.local/share/haskell-gtd-extension-server-root/repos/base-4.16.4.0/./Data/Maybe.hs",
+        "sourceSpanStartColumn": 1,
+        "sourceSpanStartLine": 78
+      },
+      "_declSrcUsage": {
+        "sourceSpanEndColumn": 0,
+        "sourceSpanEndLine": 0,
+        "sourceSpanFileName": "",
+        "sourceSpanStartColumn": 0,
+        "sourceSpanStartLine": 0
+      }
+    },
+    "maybeToList": {
+      "_declModule": "Data.Maybe",
+      "_declName": "maybeToList",
+      "_declSrcOrig": {
+        "sourceSpanEndColumn": 12,
+        "sourceSpanEndLine": 200,
+        "sourceSpanFileName": "/home/dbaynak/.local/share/haskell-gtd-extension-server-root/repos/base-4.16.4.0/./Data/Maybe.hs",
+        "sourceSpanStartColumn": 1,
+        "sourceSpanStartLine": 200
+      },
+      "_declSrcUsage": {
+        "sourceSpanEndColumn": 0,
+        "sourceSpanEndLine": 0,
+        "sourceSpanFileName": "",
+        "sourceSpanStartColumn": 0,
+        "sourceSpanStartLine": 0
+      }
+    }
+  }
+}

@@ -1,8 +1,8 @@
 {
   "importedCDs": [
     {
-      "eExports": [],
-      "eName": {
+      "_cdtFields": {},
+      "_cdtName": {
         "_declModule": "Graphics.Gloss",
         "_declName": "Picture",
         "_declSrcOrig": {
@@ -20,7 +20,51 @@
           "sourceSpanStartLine": 10
         }
       },
-      "eWildcard": true
+      "_eWildcard": true
+    },
+    {
+      "_cdtFields": {},
+      "_cdtName": {
+        "_declModule": "Graphics.Gloss",
+        "_declName": "Point",
+        "_declSrcOrig": {
+          "sourceSpanEndColumn": 0,
+          "sourceSpanEndLine": 0,
+          "sourceSpanFileName": "",
+          "sourceSpanStartColumn": 0,
+          "sourceSpanStartLine": 0
+        },
+        "_declSrcUsage": {
+          "sourceSpanEndColumn": 43,
+          "sourceSpanEndLine": 10,
+          "sourceSpanFileName": "./test/samples/haskellGetImportedIdentifiers/in.0.hs",
+          "sourceSpanStartColumn": 38,
+          "sourceSpanStartLine": 10
+        }
+      },
+      "_eWildcard": false
+    },
+    {
+      "_cdtFields": {},
+      "_cdtName": {
+        "_declModule": "System.Random.Stateful",
+        "_declName": "StdGen",
+        "_declSrcOrig": {
+          "sourceSpanEndColumn": 0,
+          "sourceSpanEndLine": 0,
+          "sourceSpanFileName": "",
+          "sourceSpanStartColumn": 0,
+          "sourceSpanStartLine": 0
+        },
+        "_declSrcUsage": {
+          "sourceSpanEndColumn": 38,
+          "sourceSpanEndLine": 12,
+          "sourceSpanFileName": "./test/samples/haskellGetImportedIdentifiers/in.0.hs",
+          "sourceSpanStartColumn": 32,
+          "sourceSpanStartLine": 12
+        }
+      },
+      "_eWildcard": false
     }
   ],
   "importedDecls": [
@@ -40,42 +84,6 @@
         "sourceSpanFileName": "./test/samples/haskellGetImportedIdentifiers/in.0.hs",
         "sourceSpanStartColumn": 22,
         "sourceSpanStartLine": 7
-      }
-    },
-    {
-      "_declModule": "Graphics.Gloss",
-      "_declName": "Point",
-      "_declSrcOrig": {
-        "sourceSpanEndColumn": 0,
-        "sourceSpanEndLine": 0,
-        "sourceSpanFileName": "",
-        "sourceSpanStartColumn": 0,
-        "sourceSpanStartLine": 0
-      },
-      "_declSrcUsage": {
-        "sourceSpanEndColumn": 43,
-        "sourceSpanEndLine": 10,
-        "sourceSpanFileName": "./test/samples/haskellGetImportedIdentifiers/in.0.hs",
-        "sourceSpanStartColumn": 38,
-        "sourceSpanStartLine": 10
-      }
-    },
-    {
-      "_declModule": "System.Random.Stateful",
-      "_declName": "StdGen",
-      "_declSrcOrig": {
-        "sourceSpanEndColumn": 0,
-        "sourceSpanEndLine": 0,
-        "sourceSpanFileName": "",
-        "sourceSpanStartColumn": 0,
-        "sourceSpanStartLine": 0
-      },
-      "_declSrcUsage": {
-        "sourceSpanEndColumn": 38,
-        "sourceSpanEndLine": 12,
-        "sourceSpanFileName": "./test/samples/haskellGetImportedIdentifiers/in.0.hs",
-        "sourceSpanStartColumn": 32,
-        "sourceSpanStartLine": 12
       }
     }
   ],

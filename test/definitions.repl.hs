@@ -11,23 +11,23 @@ import Control.Monad.Trans.State
 import Control.Monad.Writer (MonadIO (liftIO), execWriterT, forM_, join, runWriterT)
 import Data.Aeson (decode, defaultOptions, encode, genericToJSON)
 import Data.List
-import Data.Maybe (fromJust)
+import Data.Maybe
 import Data.Time.Clock (diffUTCTime)
 import Data.Time.Clock.POSIX (getCurrentTime)
 import Distribution.PackageDescription (emptyGenericPackageDescription, emptyPackageDescription)
 import GHC.RTS.Flags (ProfFlags (descrSelector))
-import GTD.Cabal (CabalPackage (..), ModuleNameS, PackageNameS)
+import GTD.Cabal
 import GTD.Configuration (GTDConfiguration (_repos), prepareConstants)
-import GTD.Haskell
-import GTD.Haskell (dependencies, parsePackage)
 import GTD.Haskell.AST
-import GTD.Haskell.Cpphs (haskellApplyCppHs)
+import GTD.Haskell.Cpphs
 import GTD.Haskell.Declaration
+import GTD.Haskell.Enrich
+import GTD.Haskell.Package
 import GTD.Haskell.Module
 import GTD.Haskell.Utils
-import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), context, definition, emptyServerState, noDefintionFoundError, noDefintionFoundErrorE)
-import GTD.Utils (logDebugNSS, ultraZoom)
-import Language.Haskell.Exts (Module (..), SrcSpan (..), SrcSpanInfo (..))
+import GTD.Server
+import GTD.Utils
+import Language.Haskell.Exts
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.FilePath ((</>))
 import qualified Data.ByteString.Lazy as BS
@@ -38,6 +38,7 @@ import qualified Distribution.ModuleName as ModuleName
 
 :set -XRankNTypes
 :set -XFlexibleContexts
+:set -XTupleSections
 
 let tWorkDir = "./test/integrationTestRepo/sc-ea-hs"
 let mFile = tWorkDir </> "app/game/Main.hs"
@@ -60,6 +61,7 @@ enrichedDeclsA = filter hasNonEmptyOrig $ Map.elems $ _decls tM'
 enrichedDeclsI = filter (\d -> _declSrcUsage d /= emptySourceSpan) $ filter (\d -> _declSrcUsage d /= _declSrcOrig d) $ filter hasNonEmptyOrig $ Map.elems $ _decls tM'
 forM_ enrichedDeclsI print
 
+let modules = _ccpmodules $ _context b
 let modulesGloss = fromJust $ "gloss" `Map.lookup` modules
 let moduleGlossIoGame = fromJust $ "Graphics.Gloss.Interface.IO.Game" `Map.lookup` modulesGloss
 

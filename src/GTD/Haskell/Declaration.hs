@@ -1,7 +1,9 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module GTD.Haskell.Declaration where
 
+import Control.Lens (makeLenses)
 import Data.Aeson (FromJSON, ToJSON)
 import GHC.Generics (Generic)
 import GTD.Cabal (ModuleNameS)
@@ -42,6 +44,8 @@ data Declaration = Declaration
     _declName :: String
   }
   deriving (Show, Eq, Generic, Ord)
+
+$(makeLenses ''Declaration)
 
 instance FromJSON Declaration
 

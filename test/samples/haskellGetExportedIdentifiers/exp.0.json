@@ -1,8 +1,8 @@
 {
   "exportedCDs": [
     {
-      "eExports": [],
-      "eName": {
+      "_cdtFields": {},
+      "_cdtName": {
         "_declModule": "ScEaHs.Game.Surface",
         "_declName": "Surface",
         "_declSrcOrig": {
@@ -20,7 +20,7 @@
           "sourceSpanStartLine": 5
         }
       },
-      "eWildcard": true
+      "_eWildcard": true
     }
   ],
   "exportedModules": ["ScEaHs.Game.Surface.Generator"],

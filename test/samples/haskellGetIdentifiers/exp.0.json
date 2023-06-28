@@ -1,85 +1,81 @@
 {
   "_dataTypes": {
     "Surface": {
-      "dataCtors": {
+      "_cdtFields": {
         "Surface": {
-          "constructorFields": {
-            "_heights": {
-              "_declModule": "ScEaHs.Game.Surface",
-              "_declName": "_heights",
-              "_declSrcOrig": {
-                "sourceSpanEndColumn": 13,
-                "sourceSpanEndLine": 15,
-                "sourceSpanFileName": "./test/samples/haskellGetIdentifiers/in.0.hs",
-                "sourceSpanStartColumn": 5,
-                "sourceSpanStartLine": 15
-              },
-              "_declSrcUsage": {
-                "sourceSpanEndColumn": 0,
-                "sourceSpanEndLine": 0,
-                "sourceSpanFileName": "",
-                "sourceSpanStartColumn": 0,
-                "sourceSpanStartLine": 0
-              }
-            },
-            "_maxHeight": {
-              "_declModule": "ScEaHs.Game.Surface",
-              "_declName": "_maxHeight",
-              "_declSrcOrig": {
-                "sourceSpanEndColumn": 15,
-                "sourceSpanEndLine": 13,
-                "sourceSpanFileName": "./test/samples/haskellGetIdentifiers/in.0.hs",
-                "sourceSpanStartColumn": 5,
-                "sourceSpanStartLine": 13
-              },
-              "_declSrcUsage": {
-                "sourceSpanEndColumn": 0,
-                "sourceSpanEndLine": 0,
-                "sourceSpanFileName": "",
-                "sourceSpanStartColumn": 0,
-                "sourceSpanStartLine": 0
-              }
-            },
-            "_width": {
-              "_declModule": "ScEaHs.Game.Surface",
-              "_declName": "_width",
-              "_declSrcOrig": {
-                "sourceSpanEndColumn": 11,
-                "sourceSpanEndLine": 14,
-                "sourceSpanFileName": "./test/samples/haskellGetIdentifiers/in.0.hs",
-                "sourceSpanStartColumn": 5,
-                "sourceSpanStartLine": 14
-              },
-              "_declSrcUsage": {
-                "sourceSpanEndColumn": 0,
-                "sourceSpanEndLine": 0,
-                "sourceSpanFileName": "",
-                "sourceSpanStartColumn": 0,
-                "sourceSpanStartLine": 0
-              }
-            }
+          "_declModule": "ScEaHs.Game.Surface",
+          "_declName": "Surface",
+          "_declSrcOrig": {
+            "sourceSpanEndColumn": 23,
+            "sourceSpanEndLine": 12,
+            "sourceSpanFileName": "./test/samples/haskellGetIdentifiers/in.0.hs",
+            "sourceSpanStartColumn": 16,
+            "sourceSpanStartLine": 12
           },
-          "constructorName": {
-            "_declModule": "ScEaHs.Game.Surface",
-            "_declName": "Surface",
-            "_declSrcOrig": {
-              "sourceSpanEndColumn": 23,
-              "sourceSpanEndLine": 12,
-              "sourceSpanFileName": "./test/samples/haskellGetIdentifiers/in.0.hs",
-              "sourceSpanStartColumn": 16,
-              "sourceSpanStartLine": 12
-            },
-            "_declSrcUsage": {
-              "sourceSpanEndColumn": 0,
-              "sourceSpanEndLine": 0,
-              "sourceSpanFileName": "",
-              "sourceSpanStartColumn": 0,
-              "sourceSpanStartLine": 0
-            }
+          "_declSrcUsage": {
+            "sourceSpanEndColumn": 0,
+            "sourceSpanEndLine": 0,
+            "sourceSpanFileName": "",
+            "sourceSpanStartColumn": 0,
+            "sourceSpanStartLine": 0
+          }
+        },
+        "_heights": {
+          "_declModule": "ScEaHs.Game.Surface",
+          "_declName": "_heights",
+          "_declSrcOrig": {
+            "sourceSpanEndColumn": 13,
+            "sourceSpanEndLine": 15,
+            "sourceSpanFileName": "./test/samples/haskellGetIdentifiers/in.0.hs",
+            "sourceSpanStartColumn": 5,
+            "sourceSpanStartLine": 15
+          },
+          "_declSrcUsage": {
+            "sourceSpanEndColumn": 0,
+            "sourceSpanEndLine": 0,
+            "sourceSpanFileName": "",
+            "sourceSpanStartColumn": 0,
+            "sourceSpanStartLine": 0
+          }
+        },
+        "_maxHeight": {
+          "_declModule": "ScEaHs.Game.Surface",
+          "_declName": "_maxHeight",
+          "_declSrcOrig": {
+            "sourceSpanEndColumn": 15,
+            "sourceSpanEndLine": 13,
+            "sourceSpanFileName": "./test/samples/haskellGetIdentifiers/in.0.hs",
+            "sourceSpanStartColumn": 5,
+            "sourceSpanStartLine": 13
+          },
+          "_declSrcUsage": {
+            "sourceSpanEndColumn": 0,
+            "sourceSpanEndLine": 0,
+            "sourceSpanFileName": "",
+            "sourceSpanStartColumn": 0,
+            "sourceSpanStartLine": 0
+          }
+        },
+        "_width": {
+          "_declModule": "ScEaHs.Game.Surface",
+          "_declName": "_width",
+          "_declSrcOrig": {
+            "sourceSpanEndColumn": 11,
+            "sourceSpanEndLine": 14,
+            "sourceSpanFileName": "./test/samples/haskellGetIdentifiers/in.0.hs",
+            "sourceSpanStartColumn": 5,
+            "sourceSpanStartLine": 14
+          },
+          "_declSrcUsage": {
+            "sourceSpanEndColumn": 0,
+            "sourceSpanEndLine": 0,
+            "sourceSpanFileName": "",
+            "sourceSpanStartColumn": 0,
+            "sourceSpanStartLine": 0
           }
         }
       },
-      "dataName": {
+      "_cdtName": {
         "_declModule": "ScEaHs.Game.Surface",
         "_declName": "Surface",
         "_declSrcOrig": {
@@ -96,7 +92,8 @@
           "sourceSpanStartColumn": 0,
           "sourceSpanStartLine": 0
         }
-      }
+      },
+      "_eWildcard": false
     }
   },
   "_decls": {

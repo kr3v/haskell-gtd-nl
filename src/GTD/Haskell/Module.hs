@@ -1,9 +1,9 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
-{-# LANGUAGE DataKinds #-}
 
 module GTD.Haskell.Module where
 
@@ -12,16 +12,12 @@ import Control.Lens (makeLenses)
 import Control.Monad.Cont (MonadIO)
 import Control.Monad.Except (MonadError, liftEither)
 import Control.Monad.Logger (MonadLoggerIO)
-import Control.Monad.State (MonadIO (..), forM_)
-import Control.Monad.Trans.Writer (execWriterT)
+import Control.Monad.State (MonadIO (..))
 import Data.Either.Combinators (mapLeft)
-import qualified Data.Map.Strict as Map
 import GHC.Generics (Generic)
 import GTD.Cabal (ModuleNameS, PackageNameS)
-import GTD.Haskell.AST (Declarations, haskellGetIdentifiers, haskellParse)
-import qualified GTD.Haskell.AST as Declarations
+import GTD.Haskell.AST (Declarations, haskellParse)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
-import GTD.Haskell.Declaration (Declaration, Identifier)
 import GTD.Utils (logDebugNSS)
 import Language.Haskell.Exts (Module (Module), SrcSpan (..), SrcSpanInfo (..))
 import Text.Printf (printf)
@@ -30,12 +26,7 @@ data HsModule = HsModule
   { _package :: PackageNameS,
     _name :: ModuleNameS,
     _path :: FilePath,
-    --
-    _ast :: Module SrcSpanInfo,
-    _deps :: [ModuleNameS],
-    --
-    _exports :: Map.Map Identifier Declaration,
-    _decls :: Declarations
+    _ast :: Module SrcSpanInfo
   }
   deriving (Show, Eq, Generic)
 
@@ -56,10 +47,7 @@ emptyHsModule =
     { _package = "",
       _name = "",
       _path = "",
-      _ast = emptyHaskellModule,
-      _deps = [],
-      _exports = Map.empty,
-      _decls = mempty
+      _ast = emptyHaskellModule
     }
 
 parseModule :: HsModule -> (MonadLoggerIO m, MonadError String m) => m HsModule
@@ -72,8 +60,12 @@ parseModule cm = do
   srcPostCpp <- haskellApplyCppHs srcP src
   ast <- liftEither $ haskellParse srcP srcPostCpp
 
-  locals <- execWriterT $ haskellGetIdentifiers ast
-  logDebugNSS logTag "locals:"
-  forM_ (Declarations._decls locals) $ \i -> logDebugNSS logTag $ printf "\t%s" (show i)
+  return $ cm {_ast = ast}
 
-  return $ cm {_ast = ast, _decls = locals}
+---
+
+data HsModuleP = HsModuleP
+  { _m :: HsModule,
+    _exports :: Declarations
+  }
+  deriving (Show, Eq, Generic)
