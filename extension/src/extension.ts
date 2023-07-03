@@ -43,51 +43,61 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 			port = pid;
 		});
 
-		if (port > 0 && vscode.workspace.workspaceFolders) {
-			let workspaceFolder = vscode.workspace.workspaceFolders[0];
-			let workspacePath = workspaceFolder.uri.fsPath;
-			let docPath = document.uri.fsPath;
-
-			if (!isParentOf(workspacePath, docPath)) {
-				console.log("workspacePath is not parent of docPath, this case is broken right now");
-				return Promise.resolve([]);
-			}
-
-			let body = {
-				workDir: workspacePath,
-				file: docPath,
-				word: word
-			};
-			let res = await axios.
-				post(`http://localhost:${port}/definition`, body).
-				catch(function (error) {
-					console.log("for body {body}");
-					console.log(error);
-					return { "data": {} };
-				});
-			let data = res.data;
-			if (data.err != "" && data.err != undefined) {
-				console.log("%s -> err:%s", word, data.err);
-				return Promise.resolve([]);
-			}
-
-			let symlink = path.join(workspacePath, "./.repos");
-			await createSymlink(serverRepos, symlink);
-
-			let filePath = data.srcSpan.sourceSpanFileName;
-			let filePathU = path.resolve(symlink, path.relative(serverRepos, filePath));
-
-			let fileUri = vscode.Uri.file(path.normalize(filePathU));
-
-			let line = data.srcSpan.sourceSpanStartLine - 1; // 0-based line number
-			let character = data.srcSpan.sourceSpanStartColumn - 1; // 0-based character position
-			let definitionPosition = new vscode.Position(line, character);
-			let definitionLocation = new vscode.Location(fileUri, definitionPosition);
-
-			console.log("%s -> %s", filePath, filePathU);
-			return Promise.resolve(definitionLocation);
+		if (!(port > 0 && vscode.workspace.workspaceFolders)) {
+			return Promise.resolve([]);
 		}
-		return Promise.resolve([]);
+
+		let workspaceFolder = vscode.workspace.workspaceFolders[0];
+		let workspacePath = workspaceFolder.uri.fsPath;
+		let docPath = document.uri.fsPath;
+
+		if (!isParentOf(workspacePath, docPath)) {
+			console.log("workspacePath is not parent of docPath, this case is broken right now");
+			return Promise.resolve([]);
+		}
+
+		let body = {
+			workDir: workspacePath,
+			file: docPath,
+			word: word
+		};
+		let res = await axios.
+			post(`http://localhost:${port}/definition`, body).
+			catch(function (error) {
+				console.log("for body {body}");
+				console.log(error);
+				return { "data": {} };
+			});
+		let data = res.data;
+		console.log(data);
+		console.log(res);
+		if (data.err != "" && data.err != undefined) {
+			console.log("%s -> err:%s", word, data.err);
+			return Promise.resolve([]);
+		}
+
+		let symlink = path.join(workspacePath, "./.repos");
+		await createSymlink(serverRepos, symlink);
+
+		let filePath = data.srcSpan.sourceSpanFileName;
+		let filePathU;
+		if (isParentOf(workspacePath, filePath)) {
+			filePathU = filePath;
+		} else if (isParentOf(serverRepos, filePath)) {
+			filePathU = path.resolve(symlink, path.relative(serverRepos, filePath))
+		} else {
+			console.log("filePath is not parent of workspacePath or serverRepos");
+			return Promise.resolve([]);
+		}
+		let fileUri = vscode.Uri.file(path.normalize(filePathU));
+
+		let line = data.srcSpan.sourceSpanStartLine - 1; // 0-based line number
+		let character = data.srcSpan.sourceSpanStartColumn - 1; // 0-based character position
+		let definitionPosition = new vscode.Position(line, character);
+		let definitionLocation = new vscode.Location(fileUri, definitionPosition);
+
+		console.log("%s -> %s", filePath, filePathU);
+		return Promise.resolve(definitionLocation);
 	}
 }
 

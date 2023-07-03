@@ -83,6 +83,7 @@ library haskell-gtd-lib
         GTD.Haskell.Declaration
         GTD.Haskell.Enrich
         GTD.Haskell.Module
+        GTD.Haskell.Resolution
         GTD.Haskell.Utils
         GTD.Haskell.Package
         GTD.Server

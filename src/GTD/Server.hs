@@ -1,89 +1,45 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module GTD.Server where
 
-import Control.Lens (At (at), makeLenses, use, view, (%=), (.=))
-import Control.Monad (forM_, guard)
-import Control.Monad.Except (ExceptT, MonadError (throwError), liftEither, runExceptT)
+import Control.Exception (try)
+import Control.Lens (At (at), use, (%=), (.=))
+import Control.Monad (forM_, (>=>))
+import Control.Monad.Except (ExceptT, MonadError, MonadIO (..), liftEither, runExceptT)
 import Control.Monad.Logger (MonadLoggerIO)
-import Control.Monad.RWS (MonadIO (..), MonadReader, MonadState (..), modify)
-import Control.Monad.State (execState)
+import Control.Monad.RWS (MonadReader (..), MonadState (..), asks)
+import Control.Monad.State (evalStateT, execStateT)
 import Control.Monad.Trans.Except (throwE)
-import Control.Monad.Trans.Writer (WriterT (runWriterT), execWriterT)
-import Data.Aeson (FromJSON, ToJSON)
-import Data.Either (partitionEithers)
+import Control.Monad.Trans.Reader (ReaderT (..))
+import Control.Monad.Trans.Writer (execWriterT)
+import Data.Aeson (FromJSON, ToJSON, decode, encode)
+import qualified Data.ByteString.Lazy as BS
+import Data.Either (fromRight, partitionEithers)
 import qualified Data.Map as Map
-import Data.Maybe (mapMaybe)
-import Distribution.Compat.Directory (listDirectory)
+import Data.Maybe (catMaybes, isJust)
+import qualified Data.Set as Set
 import GHC.Generics (Generic)
-import GTD.Cabal (CabalPackage (..), ModuleNameS, PackageNameS, cabalDeps, cabalPackageName, cabalPackagePath, cabalRead)
-import GTD.Configuration (GTDConfiguration)
+import GTD.Cabal (ModuleNameS)
+import qualified GTD.Cabal as Cabal
+import GTD.Configuration (GTDConfiguration (..))
 import GTD.Haskell.AST (ClassOrData (..), Declarations (..), Imports (..), haskellGetIdentifiers, haskellGetImports)
 import qualified GTD.Haskell.AST as Declarations
 import GTD.Haskell.Declaration (Declaration (..), Identifier, SourceSpan, hasNonEmptyOrig)
 import GTD.Haskell.Enrich (enrichTryPackage, enrichTryPackageCDT)
 import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule, parseModule)
 import qualified GTD.Haskell.Module as HsModule
-import GTD.Haskell.Package (Package (..), ccpmodules, dependencies)
+import GTD.Haskell.Package (Context (..), Package (..), ccFindAt, ccFull, ccGet)
 import qualified GTD.Haskell.Package as Package
+import GTD.Haskell.Resolution (SchemeState (..), module'Dependencies, moduleR, scheme2, updateExports)
 import GTD.Haskell.Utils (asDeclsMap)
-import GTD.Utils (deduplicateBy, logDebugNSS, logErrorNSS, mapFrom, ultraZoom)
-import System.FilePath (takeExtension, (</>))
+import GTD.Utils (logDebugNSS, logErrorNSS, mapFrom, ultraZoom)
+import System.FilePath.Posix ((</>))
 import Text.Printf (printf)
-
----
-
--- FIXME: use `mtime`
-data CabalCacheEntry = CabalCacheEntry
-  { _mtime :: Integer,
-    _deps :: [CabalPackage]
-  }
-  deriving (Show, Generic)
-
-$(makeLenses ''CabalCacheEntry)
-
-cabalDependencies' ::
-  FilePath ->
-  (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadError String m) => m [CabalPackage]
-cabalDependencies' wd = do
-  cabalFiles <- liftIO $ filter (\x -> takeExtension x == ".cabal") <$> listDirectory wd
-  cabalFile <- case length cabalFiles of
-    0 -> throwError "No cabal file found"
-    1 -> return $ wd </> head cabalFiles
-    _ -> throwError "Multiple cabal files found"
-  logDebugNSS "definition" $ "Found cabal file: " ++ cabalFile
-  pkg <- cabalRead cabalFile
-  deduplicateBy (view cabalPackagePath) <$> cabalDeps pkg
-
-type CabalCache = Map.Map FilePath [CabalPackage]
-
-cabalDependencies ::
-  FilePath ->
-  (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState CabalCache m, MonadError String m) => m [CabalPackage]
-cabalDependencies wd = do
-  e <- use $ at wd
-  case e of
-    Just d -> return d
-    Nothing -> do
-      d <- cabalDependencies' wd
-      modify $ Map.insert wd d
-      return d
-
----
-
-data ServerState = ServerState
-  { _context :: Package,
-    _cabalPackages :: CabalCache,
-    _reqId :: Int
-  }
-
-$(makeLenses ''ServerState)
-
-emptyServerState :: ServerState
-emptyServerState = ServerState {_context = Package {_ccpmodules = Map.empty, _dependencies = [], _cabalCache = Map.empty}, _cabalPackages = Map.empty, _reqId = 0}
 
 data DefinitionRequest = DefinitionRequest
   { workDir :: FilePath,
@@ -121,15 +77,10 @@ getExportedModule ::
   Package ->
   ModuleNameS ->
   Either String HsModuleP
-getExportedModule Package {_ccpmodules = mods, _dependencies = ds} modN = do
-  let modules = flip mapMaybe ds $ \pkg -> do
-        guard $ modN `Map.member` _cabalPackageExportedModules pkg
-        dependencyModules <- _cabalPackageName pkg `Map.lookup` mods
-        modN `Map.lookup` dependencyModules
-  case length modules of
-    0 -> Left $ printf "no package seem to export" (show modN)
-    1 -> Right $ head modules
-    _ -> Left $ printf "multiple matches for %s: %s" (show modN) (show $ _name . HsModule._m <$> modules)
+getExportedModule Package {_modules = mods} modN = do
+  case modN `Map.lookup` mods of
+    Nothing -> Left $ printf "no package seem to export %s" (show modN)
+    Just m -> Right m
 
 getAllImports :: HsModule -> (MonadLoggerIO m, MonadState Package m) => m Declarations
 getAllImports m' = do
@@ -146,31 +97,23 @@ getAllImports m' = do
 
 enrich0 ::
   (Show a) =>
-  (a -> Map.Map PackageNameS (Map.Map ModuleNameS HsModuleP) -> CabalPackage -> Maybe a) ->
+  (a -> Map.Map ModuleNameS HsModuleP -> Maybe a) ->
   (a -> Bool) ->
   a ->
   (MonadLoggerIO m, MonadState Package m) => m a
 enrich0 f p d = do
-  let logTag = "enrich"
-  deps <- use dependencies
-  mods <- use ccpmodules
-  let xs = filter p $ mapMaybe (f d mods) deps
-  case length xs of
-    0 -> return d
-    1 -> return $ head xs
-    _ -> do
-      logDebugNSS logTag $ printf "multiple matches for %s: %s" (show d) (show xs)
-      return $ head xs
+  mods <- use Package.modules
+  return $ case f d mods of
+    Nothing -> d
+    Just x -> if p x then x else d
 
 enrich :: HsModule -> (MonadLoggerIO m, MonadState Package m) => m Declarations
-enrich mod = do
-  importsD <- getAllImports mod
+enrich m = do
+  importsD <- getAllImports m
   importsE <- Map.elems <$> mapM (enrich0 enrichTryPackage hasNonEmptyOrig) (Declarations._decls importsD)
   importsCD <- Map.elems <$> mapM (enrich0 enrichTryPackageCDT (hasNonEmptyOrig . _cdtName)) (Declarations._dataTypes importsD)
-  locals <- execWriterT $ haskellGetIdentifiers (_ast mod)
+  locals <- execWriterT $ haskellGetIdentifiers (_ast m)
   return $ Declarations {_decls = asDeclsMap importsE <> Declarations._decls locals, _dataTypes = mapFrom (_declName . _cdtName) importsCD <> Declarations._dataTypes locals}
-
----
 
 resolution :: Declarations -> Map.Map Identifier Declaration
 resolution Declarations {_decls = ds, _dataTypes = dts} =
@@ -178,18 +121,133 @@ resolution Declarations {_decls = ds, _dataTypes = dts} =
       dts' = concatMap (\cd -> [_cdtName cd] <> Map.elems (_cdtFields cd)) (Map.elems dts)
    in asDeclsMap $ ds' <> dts'
 
+---
+
+modules :: Package -> (MonadLoggerIO m) => m Package
+modules pkg@Package {_cabalPackage = c} = do
+  mods <- modules1 pkg c
+  return pkg {Package._exports = Map.restrictKeys mods (Cabal._exports . Cabal._modules $ c), Package._modules = mods}
+
+modules1 ::
+  Package ->
+  Cabal.PackageFull ->
+  (MonadLoggerIO m) => m (Map.Map ModuleNameS HsModuleP)
+modules1 pkg c = do
+  modsO <- flip runReaderT c $ flip evalStateT (SchemeState Map.empty Map.empty) $ do
+    scheme2 moduleR HsModule._name id module'Dependencies (Set.toList . Cabal._exports . Cabal._modules $ c)
+  execStateT (forM_ modsO updateExports) (_modules pkg)
+
+---
+
+cabalFindAtCached ::
+  FilePath ->
+  (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m, MonadError String m) => m Cabal.PackageFull
+cabalFindAtCached wd = do
+  e <- use $ ccFindAt . at wd
+  case e of
+    Just d -> return d
+    Nothing -> do
+      d <- Cabal.findAt wd
+      d' <- ultraZoom ccGet $ Cabal.full d
+      ccFindAt %= Map.insert wd d'
+      return d'
+
+cabalFull ::
+  Cabal.Package ->
+  (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m) => m Cabal.PackageFull
+cabalFull pkg = do
+  let k = Cabal.nameVersionP pkg
+  e <- use $ ccFull . at k
+  case e of
+    Just d -> return d
+    Nothing -> do
+      d <- ultraZoom ccGet $ Cabal.full pkg
+      ccFull %= Map.insert k d
+      return d
+
+contextFetchGetCache :: (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m) => m ()
+contextFetchGetCache = do
+  cfgP <- asks _ccGetPath
+  cE :: Either IOError BS.ByteString <- liftIO $ try (BS.readFile cfgP)
+  case cE of
+    Left e -> logErrorNSS "contextFetchGetCache" $ printf "readFile %s -> %s" cfgP (show e)
+    Right c -> forM_ (decode c) (ccGet .=)
+
+contextStoreGetCache :: (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m) => m ()
+contextStoreGetCache = do
+  cfgP <- asks _ccGetPath
+  cc <- use ccGet
+  o :: Either IOError () <- liftIO $ try $ BS.writeFile cfgP $ encode cc
+  case o of
+    Left e -> logErrorNSS "contextStoreGetCache" $ printf "writeFile %s -> %s" cfgP (show e)
+    Right _ -> return ()
+
+---
+
+packageCachedGet ::
+  Cabal.PackageFull ->
+  (MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m) => m (Maybe Package)
+packageCachedGet cPkg = do
+  let root = Cabal._path . Cabal._fpackage $ cPkg
+      modulesP = root </> "modules.json"
+      exportsP = root </> "exports.json"
+  modulesJ :: Either IOError (Maybe (Map.Map ModuleNameS HsModuleP)) <- liftIO (try $ decode <$> BS.readFile modulesP)
+  exportsJ :: Either IOError (Maybe (Map.Map ModuleNameS HsModuleP)) <- liftIO (try $ decode <$> BS.readFile exportsP)
+  let modulesJ' = fromRight Nothing modulesJ
+  let exportsJ' = fromRight Nothing exportsJ
+  let p = Package cPkg <$> modulesJ' <*> exportsJ'
+  logDebugNSS "package cached get" $ printf "%s -> %s" (show $ Cabal.nameVersionF cPkg) (show $ isJust p)
+  return $ Package cPkg <$> modulesJ' <*> exportsJ'
+
+packageCachedPut ::
+  Cabal.PackageFull ->
+  Package ->
+  (MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m) => m ()
+packageCachedPut cPkg pkg = do
+  let root = Cabal._path . Cabal._fpackage $ cPkg
+      modulesP = root </> "modules.json"
+      exportsP = root </> "exports.json"
+  liftIO $ BS.writeFile modulesP $ encode $ Package._modules pkg
+  liftIO $ BS.writeFile exportsP $ encode $ Package._exports pkg
+  logDebugNSS "package cached put" $ printf "%s -> (%d, %d)" (show $ Cabal.nameVersionF cPkg) (length $ Package._modules pkg) (length $ Package._exports pkg)
+
+package0 ::
+  Cabal.PackageFull ->
+  (MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m) => m ()
+package0 cPkg = do
+  pkgM <- packageCachedGet cPkg
+  case pkgM of
+    Just _ -> return ()
+    Nothing -> do
+      depsC <- catMaybes <$> mapM (cabalFull >=> packageCachedGet) (Cabal._dependencies cPkg)
+      let deps = foldr (<>) Map.empty $ Package._exports <$> depsC
+      pkg <- modules $ Package {_cabalPackage = cPkg, Package._modules = deps, Package._exports = Map.empty}
+      packageCachedPut cPkg pkg
+
+package ::
+  Cabal.PackageFull ->
+  (MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m) => m (Maybe Package)
+package cPkg0 = do
+  m <- packageCachedGet cPkg0
+  case m of
+    Just p -> return $ Just p
+    Nothing -> do
+      pkgsO <- flip evalStateT (SchemeState Map.empty Map.empty) $ do
+        scheme2 ((Just <$>) . cabalFull) Cabal.nameVersionF Cabal.nameVersionP (return . Cabal._dependencies) (Cabal._dependencies cPkg0)
+      forM_ pkgsO package0
+      package0 cPkg0
+      packageCachedGet cPkg0
+
 definition ::
   DefinitionRequest ->
-  (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState ServerState m, MonadError String m) => m DefinitionResponse
+  (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m, MonadError String m) => m DefinitionResponse
 definition (DefinitionRequest {workDir = wd, file = rf, word = w}) = do
-  deps <- ultraZoom cabalPackages $ cabalDependencies wd
+  cPkg <- cabalFindAtCached wd
+  pkgM <- package cPkg
+  pkg <- maybe noDefintionFoundErrorME return pkgM
 
-  logDebugNSS "definition" $ printf "deps list = %s" (show $ view cabalPackageName <$> deps)
-  context . dependencies .= deps
-  ultraZoom context Package.modules
-
-  m <- ultraZoom context (parseModule emptyHsModule {_path = rf})
-  m' <- resolution <$> ultraZoom context (enrich m)
+  m <- parseModule emptyHsModule {_path = rf}
+  m' <- resolution <$> evalStateT (enrich m) pkg
 
   case w `Map.lookup` m' of
     Nothing -> noDefintionFoundErrorME

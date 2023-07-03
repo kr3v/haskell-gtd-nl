@@ -25,6 +25,7 @@ import GTD.Haskell.Declaration
 import GTD.Haskell.Enrich
 import GTD.Haskell.Package
 import GTD.Haskell.Module
+import GTD.Haskell.Resolution
 import GTD.Haskell.Utils
 import GTD.Server
 import GTD.Utils
@@ -46,12 +47,21 @@ let mFile = tWorkDir </> "app/game/Main.hs"
 
 consts <- prepareConstants
 
+oS0 s f1 f2 = flip f1 s $ runFileLoggingT (tWorkDir </> "log1.txt") $ flip runReaderT consts $ f2
+rS0 s f = oS0 s runStateT f
+eaS0 s f = oS0 s evalStateT f
+esS0 s f = oS0 s execStateT f
+
 oS s f1 f2 = flip f1 s $ runFileLoggingT (tWorkDir </> "log1.txt") $ flip runReaderT consts $ runExceptT $ f2
 rS s f = oS s runStateT f
 eaS s f = oS s evalStateT f
 esS s f = oS s execStateT f
 
-(a, b) <- rS emptyServerState $ definition DefinitionRequest {workDir = tWorkDir, file = mFile, word = "playIO"}
+let st0 = emptyContext
+st1 <- esS0 st0 contextFetchGetCache
+(a, b) <- rS st1 $ definition DefinitionRequest {workDir = tWorkDir, file = mFile, word = "playIO"}
+
+Just x = Map.lookup (PackageWithVersion "gloss" "1.13.2.2") (_packages b)
 
 let modules = _ccpmodules $ _context b
 let cabalDeps = _dependencies $ _context b

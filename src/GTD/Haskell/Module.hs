@@ -13,6 +13,7 @@ import Control.Monad.Cont (MonadIO)
 import Control.Monad.Except (MonadError, liftEither)
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.State (MonadIO (..))
+import Data.Aeson (FromJSON, ToJSON)
 import Data.Either.Combinators (mapLeft)
 import GHC.Generics (Generic)
 import GTD.Cabal (ModuleNameS, PackageNameS)
@@ -53,8 +54,8 @@ emptyHsModule =
 parseModule :: HsModule -> (MonadLoggerIO m, MonadError String m) => m HsModule
 parseModule cm = do
   let srcP = _path cm
-  let logTag = printf "parsing module %s" srcP
-  logDebugNSS logTag $ printf ""
+  let logTag = "parsing module " ++ srcP
+  logDebugNSS logTag ""
 
   src <- liftEither . mapLeft show =<< (liftIO (try $ readFile srcP) :: (MonadIO m) => m (Either IOException String))
   srcPostCpp <- haskellApplyCppHs srcP src
@@ -64,8 +65,13 @@ parseModule cm = do
 
 ---
 
-data HsModuleP = HsModuleP
-  { _m :: HsModule,
-    _exports :: Declarations
+newtype HsModuleP = HsModuleP
+  { _exports :: Declarations
   }
   deriving (Show, Eq, Generic)
+
+$(makeLenses ''HsModuleP)
+
+instance FromJSON HsModuleP
+
+instance ToJSON HsModuleP

@@ -38,8 +38,7 @@ instance ToJSON SourceSpan
 ---
 
 data Declaration = Declaration
-  { _declSrcUsage :: SourceSpan,
-    _declSrcOrig :: SourceSpan,
+  { _declSrcOrig :: SourceSpan,
     _declModule :: ModuleNameS,
     _declName :: String
   }
@@ -70,8 +69,7 @@ identToDecl' ::
   Declaration
 identToDecl' (ModuleName _ mn) l n isDeclaration =
   Declaration
-    { _declSrcUsage = if isDeclaration then emptySourceSpan else l',
-      _declSrcOrig = if isDeclaration then l' else emptySourceSpan,
+    { _declSrcOrig = if isDeclaration then l' else emptySourceSpan,
       _declName = n,
       _declModule = mn
     }

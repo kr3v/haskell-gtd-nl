@@ -10,7 +10,8 @@ import System.FilePath ((</>))
 data GTDConfiguration = GTDConfiguration
   { _logs :: FilePath,
     _repos :: FilePath,
-    _root :: FilePath
+    _root :: FilePath,
+    _ccGetPath :: FilePath
   }
   deriving (Show)
 
@@ -21,7 +22,7 @@ prepareConstants = do
   now <- getPOSIXTime
   homeDir <- getHomeDirectory
   let dir = homeDir </> ".local/share/haskell-gtd-extension-server-root/"
-  let constants = GTDConfiguration {_root = dir, _logs = dir </> "logs" </> show now, _repos = dir </> "repos"}
+  let constants = GTDConfiguration {_root = dir, _logs = dir </> "logs" </> show now, _repos = dir </> "repos", _ccGetPath = dir </> "cc-get.json"}
   createDirectoryIfMissing True (constants ^. root)
   createDirectoryIfMissing True (constants ^. logs)
   createDirectoryIfMissing True (constants ^. repos)

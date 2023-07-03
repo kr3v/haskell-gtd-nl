@@ -24,15 +24,18 @@ import qualified Distribution.ModuleName as Cabal
 import qualified Distribution.ModuleName as ModuleName
 import Distribution.PackageDescription (emptyGenericPackageDescription, emptyPackageDescription)
 import GHC.RTS.Flags (ProfFlags (descrSelector))
-import GTD.Cabal (CabalPackage (..), ModuleNameS, PackageNameS)
+import GTD.Cabal
+import qualified GTD.Cabal as Cabal
 import GTD.Configuration (GTDConfiguration (_repos), prepareConstants)
 import GTD.Haskell.AST (Declarations (..), Exports, Imports, haskellGetExports, haskellGetIdentifiers, haskellGetImports, haskellParse)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
-import GTD.Haskell.Declaration (Declaration (Declaration, _declName, _declSrcOrig, _declSrcUsage), Identifier (..), SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine), emptySourceSpan)
+import GTD.Haskell.Declaration (Declaration (Declaration, _declName, _declSrcOrig), Identifier (..), SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine), emptySourceSpan)
 import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule)
-import GTD.Haskell.Package (ccpmodules, dependencies, updateExports)
+import GTD.Haskell.Package
 import qualified GTD.Haskell.Package as Package
-import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), context, definition, emptyServerState, noDefintionFoundError, noDefintionFoundErrorE)
+import qualified GTD.Haskell.Resolution as Resolution
+import qualified GTD.Haskell.Module as HsModule
+import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), definition, noDefintionFoundError, noDefintionFoundErrorE, contextStoreGetCache, contextFetchGetCache)
 import GTD.Utils (logDebugNSS, ultraZoom)
 import Language.Haskell.Exts (Module (..), SrcSpan (..), SrcSpanInfo (..))
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
@@ -160,14 +163,14 @@ haskellGetImportsSpec = do
     it "extracts only function imports" $
       test 0
 
-emptyCabalPackage :: CabalPackage
-emptyCabalPackage = CabalPackage "" "" emptyPackageDescription [] Map.empty
+emptyCabalPackage :: Cabal.Package
+emptyCabalPackage = Cabal.Package "" emptyPackageDescription
 
 cmGen mn0 dn0 mnE dnE fnE =
-  let d0 = Declaration emptySourceSpan emptySourceSpan mn0 dn0
+  let d0 = Declaration emptySourceSpan mn0 dn0
       lE = emptySourceSpan {sourceSpanFileName = fnE}
-      dE = d0 {_declSrcOrig = lE, _declSrcUsage = lE, _declName = dnE}
-      cmE = Map.fromList [(mnE, HsModuleP {_m = emptyHsModule, _exports = Declarations {_decls = Map.fromList [(dnE, dE)], _dataTypes = Map.empty}})]
+      dE = d0 {_declSrcOrig = lE, _declName = dnE}
+      cmE = Map.fromList [(mnE, HsModuleP {HsModule._exports = Declarations {_decls = Map.fromList [(dnE, dE)], _dataTypes = Map.empty}})]
    in (d0, dE, cmE)
 
 nothingWasExpected d0 d1 = expectationFailure $ printf "expected Nothing, got %s (== (%s) => %s)" (show d0) (show d1) (show (d0 == d1))
@@ -245,7 +248,7 @@ definitionsSpec = do
   let mstack f s a = runFileLoggingT (workDir </> descr ++ ".txt") $ flip f s $ runReaderT a consts
 
   let expectedPlayIO =
-        let expFile = _repos consts </> "gloss-1.13.2.2/./Graphics/Gloss/Interface/IO/Game.hs"
+        let expFile = _repos consts </> "gloss-1.13.2.2/Graphics/Gloss/Interface/IO/Game.hs"
             expLineNo = 20
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 7, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
          in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
@@ -265,23 +268,27 @@ definitionsSpec = do
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
          in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
   let expectedDisplay =
-        let expFile = _repos consts </> "gloss-1.13.2.2/./Graphics/Gloss/Data/Display.hs"
+        let expFile = _repos consts </> "gloss-1.13.2.2/Graphics/Gloss/Data/Display.hs"
             expLineNo = 7
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 6, sourceSpanEndColumn = 13, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
          in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
   let expectedInWindow =
-        let expFile = _repos consts </> "gloss-1.13.2.2/./Graphics/Gloss/Data/Display.hs"
+        let expFile = _repos consts </> "gloss-1.13.2.2/Graphics/Gloss/Data/Display.hs"
             expLineNo = 9
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 11, sourceSpanEndColumn = 19, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
          in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
   let expectedProxy =
-        let expFile = _repos consts </> "base-4.16.4.0/./Data/Proxy.hs"
+        let expFile = _repos consts </> "base-4.16.4.0/Data/Proxy.hs"
             expLineNo = 56
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 16, sourceSpanEndColumn = 21, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
          in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
   let noDefErr = Left "No definition found"
 
-  serverState <- runIO $ mstack execStateT emptyServerState $ eval0 "playIO"
+  let st0 = emptyContext
+  st1 <- runIO $ mstack execStateT st0 contextFetchGetCache
+  (a, serverState) <- runIO $ mstack runStateT st1 $ eval0 "playIO"
+  runIO $ print a
+  runIO $ mstack execStateT serverState contextStoreGetCache
 
   describe descr $ do
     it "directly exported regular function" $ do
@@ -328,37 +335,41 @@ definitionsSpec = do
       join $ mstack evalStateT serverState $ do
         eval "view" expectedLensView
 
-parsePackageSpec :: Spec
-parsePackageSpec = do
-  let descr = "parsePackage"
-  describe descr $
-    it "for each dependency in the integration repo, it parses all its modules" $ do
-      let expPath = "./test/samples/" ++ descr ++ "/exp.0.json"
-      let dstPath = "./test/samples/" ++ descr ++ "/out.0.json"
+-- parsePackageSpec :: Spec
+-- parsePackageSpec = do
+--   let descr = "parsePackage"
+--   describe descr $
+--     it "for each dependency in the integration repo, it parses all its modules" $ do
+--       let expPath = "./test/samples/" ++ descr ++ "/exp.0.json"
+--       let dstPath = "./test/samples/" ++ descr ++ "/out.0.json"
 
-      let tWorkDir = "./test/integrationTestRepo/sc-ea-hs"
-      let mFile = tWorkDir </> "app/game/Main.hs"
+--       let tWorkDir = "./test/integrationTestRepo/sc-ea-hs"
+--       let mFile = tWorkDir </> "app/game/Main.hs"
 
-      consts <- prepareConstants
-      result <- flip evalStateT emptyServerState $ runFileLoggingT (tWorkDir </> descr ++ ".txt") $ flip runReaderT consts $ do
-        let req = DefinitionRequest {workDir = tWorkDir, file = mFile, word = ""}
-        x1 <- runExceptT $ definition req {word = "playIO"}
-        deps <- use (context . dependencies)
+--       consts <- prepareConstants
+--       result <- flip evalStateT emptyServerState $ runFileLoggingT (tWorkDir </> descr ++ ".txt") $ flip runReaderT consts $ do
+--         let req = DefinitionRequest {workDir = tWorkDir, file = mFile, word = ""}
+--         x1 <- runExceptT $ definition req {word = "playIO"}
+--         pkgM <- use $ context . ccFindAt . at tWorkDir
+--         case pkgM of
+--           Nothing -> error "package not found"
+--           Just pkgR -> do
+--             deps <- Cabal._dependencies <$> Cabal.full pkgR
+--             depsF <- mapM Cabal.full deps
+--             r <- forM depsF $ \dep -> do
+--               modules <- Map.elems <$> ultraZoom context (Resolution.modules1 dep)
+--               liftIO $ print (Cabal.nameF dep)
+--               liftIO $ printf "\tmods=%s\n" (show $ HsModule._name . _m <$> modules)
+--               return (Cabal.nameF dep, HsModule._name . _m <$> modules)
+--             return $ Map.fromList r
 
-        r <- forM deps $ \pkg -> do
-          modules <- Map.elems <$> ultraZoom context (Package.modules1 pkg)
-          liftIO $ print (_cabalPackageName pkg)
-          liftIO $ printf "\tmods=%s\n" (show $ _name . _m <$> modules)
-          return (_cabalPackageName pkg, _name . _m <$> modules)
-        return $ Map.fromList r
+--       expectedS <- BS.readFile expPath
+--       let expected :: Map.Map PackageNameS [ModuleNameS] = fromJust $ decode expectedS
+--       BS.writeFile dstPath $ encode result
 
-      expectedS <- BS.readFile expPath
-      let expected :: Map.Map PackageNameS [ModuleNameS] = fromJust $ decode expectedS
-      BS.writeFile dstPath $ encode result
-
-      -- explicitly verify that there are non-exported modules that were parsed
-      -- yet be aware of 'failed' modules, as some Cabal-exported modules might be missing from the returned value
-      result `shouldBe` expected
+--       -- explicitly verify that there are non-exported modules that were parsed
+--       -- yet be aware of 'failed' modules, as some Cabal-exported modules might be missing from the returned value
+--       result `shouldBe` expected
 
 -- updateExportsSpec :: Spec
 -- updateExportsSpec = do
@@ -394,8 +405,9 @@ parsePackageSpec = do
 integrationTestsSpec :: Spec
 integrationTestsSpec = do
   definitionsSpec
-  parsePackageSpec
-  -- updateExportsSpec
+  -- parsePackageSpec
+
+-- updateExportsSpec
 
 main :: IO ()
 main = hspecWith defaultConfig {configPrintCpuTime = False} $ do

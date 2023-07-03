@@ -4,12 +4,13 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Main where
 
 import Control.Concurrent (MVar, newMVar, putMVar, takeMVar)
-import Control.Lens ((<+=), (^.))
+import Control.Lens ((<+=), (^.), makeLenses)
 import Control.Monad.Cont (MonadIO (..))
 import Control.Monad.Except (runExceptT)
 import Control.Monad.Logger (runFileLoggingT)
@@ -19,8 +20,9 @@ import Control.Monad.State.Lazy (evalStateT)
 import Data.Proxy (Proxy (..))
 import GHC.TypeLits (KnownSymbol)
 import GTD.Configuration (GTDConfiguration (_logs), prepareConstants, root)
-import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), ServerState (..), definition, emptyServerState, reqId)
-import GTD.Utils (logDebugNSS, peekM)
+import GTD.Haskell.Package (Context, emptyContext)
+import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), definition)
+import GTD.Utils (logDebugNSS, peekM, ultraZoom)
 import Network.Socket (Family (AF_INET), SockAddr (SockAddrInet), SocketType (Stream), bind, defaultProtocol, listen, socket, socketPort, tupleToHostAddress, withSocketsDo)
 import Network.Wai.Handler.Warp (defaultSettings, runSettingsSocket)
 import Servant (Get, Header, Headers, JSON, Post, ReqBody, addHeader, type (:<|>) (..), type (:>))
@@ -30,10 +32,19 @@ import System.FilePath ((</>))
 import System.Posix (getProcessID)
 import Text.Printf (printf)
 
+data ServerState = ServerState
+  { _context :: Context,
+    _reqId :: Int
+  }
+
+$(makeLenses ''ServerState)
+
+emptyServerState :: ServerState
+emptyServerState = ServerState {_context = emptyContext, _reqId = 0}
+
 -- two methods:
 -- definition - to obtain a source span for a given word
 -- ping - to check if the server is alive
-
 type API =
   "definition"
     :> ReqBody '[JSON] DefinitionRequest
@@ -66,7 +77,7 @@ definitionH c m req = do
     liftIO $ putStrLn $ "Got request with ID:" ++ show reqId
 
     let peekF r = logDebugNSS "definition" $ printf "%s@%s -> %s" (word req) (file req) (show r)
-    r' <- runFileLoggingT log $ peekM peekF $ runReaderT (runExceptT $ definition req) c
+    r' <- ultraZoom context $ runFileLoggingT log $ peekM peekF $ runReaderT (runExceptT $ definition req) c
     case r' of
       Left e -> return $ addHeader reqId DefinitionResponse {srcSpan = Nothing, err = Just e}
       Right r -> return $ addHeader reqId r
@@ -78,7 +89,7 @@ pingH = return "pong"
 
 main :: IO ()
 main = withSocketsDo $ do
-  let addr = SockAddrInet 0 (tupleToHostAddress (127, 0, 0, 1)) -- SockAddrUnix String
+  let addr = SockAddrInet 0 (tupleToHostAddress (127, 0, 0, 1))
   sock <- socket AF_INET Stream defaultProtocol
   bind sock addr
   listen sock 5

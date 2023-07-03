@@ -1,5 +1,9 @@
 # Revision history for haskell-gtd
 
+## 0.0.2.0 -- 2023-07-03
+
+* Cross-package re-exports. Caching. Still very slow (especially first initialization), but once a completion actually gets provided - works fast enough.
+
 ## 0.0.1.1 -- 2023-06-28
 
 * More stuff supported. The extension now creates a symlink to the repos root to prevent `hls` from creating multiple instances of the server.

@@ -22,7 +22,7 @@ import GTD.Haskell.Utils (asDeclsMap)
 import GTD.Utils (deduplicate, logDebugNSS)
 import Language.Haskell.Exts (ClassDecl (ClsDecl), Decl (..), DeclHead (..), EWildcard (..), ExportSpec (..), ExportSpecList (ExportSpecList), FieldDecl (..), ImportDecl (..), ImportSpec (..), ImportSpecList (ImportSpecList), Language (Haskell2010), Module (Module), ModuleHead (ModuleHead), ModuleHeadAndImports (..), ModuleName (ModuleName), Name (..), NonGreedy (..), ParseMode (..), ParseResult (ParseFailed, ParseOk), Parseable (..), QName (UnQual), QualConDecl (..), SrcSpan (..), SrcSpanInfo (..), defaultParseMode, infix_, parseFileContentsWithMode)
 import Language.Haskell.Exts.Extension (Extension (EnableExtension), KnownExtension (FlexibleContexts))
-import Language.Haskell.Exts.Syntax (CName (..), ClassDecl, ConDecl (..))
+import Language.Haskell.Exts.Syntax (CName (..), ConDecl (..))
 import Text.Printf (printf)
 
 haskellGetImportedSymbols :: [ImportDecl SrcSpanInfo] -> Writer [String] ()
@@ -97,6 +97,14 @@ instance Monoid Declarations where
 instance FromJSON Declarations
 
 instance ToJSON Declarations
+
+asResolutionMap :: Declarations -> Map.Map Identifier Declaration
+asResolutionMap Declarations {_decls = ds, _dataTypes = dts} =
+  let ds' = Map.elems ds
+      dts' = concatMap (\cd -> [_cdtName cd] <> Map.elems (_cdtFields cd)) (Map.elems dts)
+   in asDeclsMap $ ds' <> dts'
+
+---
 
 qualConDeclAsDataC :: ModuleName SrcSpanInfo -> QualConDecl SrcSpanInfo -> [Declaration]
 qualConDeclAsDataC mN (QualConDecl _ _ _ cd) =
