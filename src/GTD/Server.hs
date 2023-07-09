@@ -8,11 +8,12 @@ module GTD.Server where
 
 import Control.Exception (try)
 import Control.Lens (At (at), use, (%=), (.=))
-import Control.Monad (forM_, (>=>), when)
+import Control.Monad (forM_, when, (>=>))
 import Control.Monad.Except (ExceptT, MonadError, MonadIO (..), liftEither, runExceptT)
-import Control.Monad.Logger (MonadLoggerIO)
+import Control.Monad.Logger (MonadLoggerIO, logDebug)
 import Control.Monad.RWS (MonadReader (..), MonadState (..), asks)
 import Control.Monad.State (evalStateT, execStateT)
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Except (throwE)
 import Control.Monad.Trans.Reader (ReaderT (..))
 import Control.Monad.Trans.Writer (execWriterT)
@@ -32,14 +33,14 @@ import GTD.Haskell.Declaration (Declaration (..), Identifier, SourceSpan, hasNon
 import GTD.Haskell.Enrich (enrichTryModule, enrichTryModuleCDT)
 import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule, parseModule)
 import qualified GTD.Haskell.Module as HsModule
-import GTD.Haskell.Package (Context (..), Package (..), ccFindAt, ccFull, ccGet)
+import GTD.Haskell.Package (Context (..), Package (..), cExports, ccFindAt, ccFull, ccGet)
 import qualified GTD.Haskell.Package as Package
 import GTD.Haskell.Resolution (SchemeState (..), module'Dependencies, moduleR, scheme2, updateExports)
 import GTD.Haskell.Utils (asDeclsMap)
 import GTD.Utils (logDebugNSS, logErrorNSS, mapFrom, ultraZoom)
 import System.FilePath.Posix ((</>))
 import Text.Printf (printf)
-import Control.Monad.Trans.Control (MonadBaseControl)
+import System.Directory (doesFileExist)
 
 data DefinitionRequest = DefinitionRequest
   { workDir :: FilePath,
@@ -184,20 +185,30 @@ cabalCacheStore = do
 
 ---
 
-packageCachedGet ::
+persistenceGet :: Cabal.PackageFull -> FilePath -> (MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m, FromJSON a) => m (Maybe a)
+persistenceGet cPkg f = do
+  let p = (Cabal._path . Cabal._fpackage $ cPkg) </> f
+  rJ :: Either IOError (Maybe a) <- liftIO (try $ decode <$> BS.readFile p)
+  let r = fromRight Nothing rJ
+  logDebugNSS "persistence get" $ printf "%s / %s -> %s" (show $ Cabal.nameVersionF cPkg) p (show $ isJust r)
+  return r
+
+persistenceExists :: Cabal.Package -> (MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m) => m Bool
+persistenceExists cPkg = do
+  let p = Cabal._path cPkg </> "exports.json"
+  r <- liftIO $ doesFileExist p
+  logDebugNSS "package cached exists" $ printf "%s, %s -> %s" (show $ Cabal.nameVersionP cPkg) p (show r)
+  return r
+
+packagePersistenceGet ::
   Cabal.PackageFull ->
   (MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m) => m (Maybe Package)
-packageCachedGet cPkg = do
-  let root = Cabal._path . Cabal._fpackage $ cPkg
-      modulesP = root </> "modules.json"
-      exportsP = root </> "exports.json"
-  modulesJ :: Either IOError (Maybe (Map.Map ModuleNameS HsModuleP)) <- liftIO (try $ decode <$> BS.readFile modulesP)
-  exportsJ :: Either IOError (Maybe (Map.Map ModuleNameS HsModuleP)) <- liftIO (try $ decode <$> BS.readFile exportsP)
-  let modulesJ' = fromRight Nothing modulesJ
-  let exportsJ' = fromRight Nothing exportsJ
-  let p = Package cPkg <$> modulesJ' <*> exportsJ'
+packagePersistenceGet cPkg = do
+  modulesJ <- persistenceGet cPkg "modules.json"
+  exportsJ <- persistenceGet cPkg "exports.json"
+  let p = Package cPkg <$> modulesJ <*> exportsJ
   logDebugNSS "package cached get" $ printf "%s -> %s" (show $ Cabal.nameVersionF cPkg) (show $ isJust p)
-  return $ Package cPkg <$> modulesJ' <*> exportsJ'
+  return p
 
 packageCachedPut ::
   Cabal.PackageFull ->
@@ -210,6 +221,22 @@ packageCachedPut cPkg pkg = do
   liftIO $ BS.writeFile modulesP $ encode $ Package._modules pkg
   liftIO $ BS.writeFile exportsP $ encode $ Package._exports pkg
   logDebugNSS "package cached put" $ printf "%s -> (%d, %d)" (show $ Cabal.nameVersionF cPkg) (length $ Package._modules pkg) (length $ Package._exports pkg)
+
+packageCachedGet ::
+  Cabal.PackageFull ->
+  (MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m) => m (Maybe Package)
+packageCachedGet cPkg = do
+  let k = Cabal.nameVersionF cPkg
+  c <- use $ cExports . at k
+  case c of
+    Just es -> return $ Just Package {_cabalPackage = cPkg, _modules = Map.empty, Package._exports = es}
+    Nothing -> do
+      eM <- persistenceGet cPkg "exports.json"
+      case eM of
+        Nothing -> return Nothing
+        Just e -> do
+          cExports %= Map.insert k e
+          return $ Just Package {_cabalPackage = cPkg, _modules = Map.empty, Package._exports = e}
 
 package0 ::
   Cabal.PackageFull ->
@@ -228,15 +255,15 @@ package ::
   Cabal.PackageFull ->
   (MonadBaseControl IO m, MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m) => m (Maybe Package)
 package cPkg0 = do
-  m <- packageCachedGet cPkg0
+  m <- packagePersistenceGet cPkg0
   case m of
     Just p -> return $ Just p
     Nothing -> do
       pkgsO <- flip evalStateT (SchemeState Map.empty Map.empty) $ do
-        scheme2 ((Just <$>) . cabalFull) Cabal.nameVersionF Cabal.nameVersionP (return . Cabal._dependencies) (Cabal._dependencies cPkg0)
+        scheme2 (\cPkg -> do b <- persistenceExists cPkg; if b then return Nothing else ((Just <$>) . cabalFull) cPkg) Cabal.nameVersionF Cabal.nameVersionP (return . Cabal._dependencies) (Cabal._dependencies cPkg0)
       forM_ pkgsO package0
       package0 cPkg0
-      packageCachedGet cPkg0
+      packagePersistenceGet cPkg0
 
 definition ::
   DefinitionRequest ->
