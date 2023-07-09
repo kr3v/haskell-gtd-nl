@@ -44,4 +44,4 @@ data Context = Context
 $(makeLenses ''Context)
 
 emptyContext :: Context
-emptyContext = Context Map.empty Map.empty Map.empty Map.empty
+emptyContext = Context Map.empty Map.empty (Cabal.GetCache Map.empty False) Map.empty

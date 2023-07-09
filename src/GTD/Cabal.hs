@@ -1,21 +1,32 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Avoid lambda" #-}
 
 module GTD.Cabal where
 
-import Control.Lens (makeLenses, view, use, At (..))
+import Control.Concurrent.Async.Lifted (forConcurrently, mapConcurrently)
+import Control.Lens (At (..), makeLenses, use, view, (%=), (.=))
 import Control.Monad (forM, forM_)
-import Control.Monad.Except (MonadError (..))
-import Control.Monad.Logger (MonadLoggerIO)
-import Control.Monad.RWS (MonadReader (..), asks, MonadState)
+import Control.Monad.Except (MonadError (..), MonadTrans (..))
+import Control.Monad.Logger (LoggingT (..), MonadLogger, MonadLoggerIO (..), runWriterLoggingT)
+import Control.Monad.RWS (MonadReader (..), MonadState (put), asks)
+import Control.Monad.Reader (ReaderT (..))
+import Control.Monad.State (StateT (..))
+import qualified Control.Monad.State.Lazy as State
 import Control.Monad.Trans (MonadIO (liftIO))
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Maybe (MaybeT (..))
+import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.ByteString.UTF8 as BS
 import Data.List (find)
+import qualified Data.Map as Map
 import Data.Maybe (catMaybes, fromMaybe)
 import qualified Data.Set as Set
 import Distribution.Compat.Prelude (Generic)
@@ -26,15 +37,12 @@ import Distribution.PackageDescription.Parsec (parseGenericPackageDescription, r
 import Distribution.Pretty (prettyShow)
 import Distribution.Utils.Path (getSymbolicPath)
 import GTD.Configuration (GTDConfiguration (..), repos)
-import GTD.Utils (logDebugNSS, deduplicate)
+import GTD.Utils (deduplicate, logDebugNSS)
 import System.Directory (listDirectory)
-import System.FilePath (takeExtension, (</>), takeDirectory)
+import System.FilePath (takeDirectory, takeExtension, (</>))
 import System.IO (IOMode (ReadMode), hGetContents, openFile)
 import System.Process (CreateProcess (..), StdStream (CreatePipe), createProcess, proc, waitForProcess)
-import Text.Printf (printf)
 import Text.Regex.Posix ((=~))
-import qualified Data.Map as Map
-import Control.Monad.RWS.Class (modify)
 
 type PackageNameS = String
 
@@ -76,13 +84,31 @@ findAt wd = do
 
 ---
 
-type GetCache = Map.Map String (Maybe FilePath)
+data GetCache = GetCache
+  { _vs :: Map.Map String (Maybe FilePath),
+    _changed :: Bool
+  }
+  deriving (Show, Generic)
+
+$(makeLenses ''GetCache)
+
+instance FromJSON GetCache
+
+instance ToJSON GetCache
+
+instance Semigroup GetCache where
+  (<>) :: GetCache -> GetCache -> GetCache
+  (GetCache vs1 c1) <> (GetCache vs2 c2) = GetCache (vs1 <> vs2) (c1 || c2)
+
+instance Monoid GetCache where
+  mempty :: GetCache
+  mempty = GetCache mempty False
 
 -- executes `cabal get` on given `pkg + pkgVerPredicate`
-get :: String -> String -> (MonadLoggerIO m, MonadState GetCache m, MonadReader GTDConfiguration m) => MaybeT m FilePath
+get :: String -> String -> (MonadIO m, MonadLogger m, MonadState GetCache m, MonadReader GTDConfiguration m) => MaybeT m FilePath
 get pkg pkgVerPredicate = do
   let k = pkg ++ pkgVerPredicate
-  r0 <- use $ at k
+  r0 <- use $ vs . at k
   case r0 of
     Just p -> MaybeT $ return p
     Nothing -> do
@@ -94,10 +120,12 @@ get pkg pkgVerPredicate = do
       let re = pkg ++ "-" ++ "[^\\/]*\\/"
       let packageVersion :: [String] = (=~ re) <$> lines content
       ec <- liftIO $ waitForProcess h
-      logDebugNSS "cabal get" $ printf "cabal get %s %s: exit code %s" pkg pkgVerPredicate (show ec)
+      -- logDebugNSS "cabal get" $ printf "cabal get %s %s: exit code %s" pkg pkgVerPredicate (show ec)
 
       let r = find (not . null) packageVersion
-      modify $ Map.insert k r
+      vs %= Map.insert k r
+      changed .= True
+
       MaybeT $ return r
 
 ---
@@ -122,16 +150,20 @@ __exports pkg = do
 
 ---
 
-__dependencies :: Package -> (MonadLoggerIO m, MonadState GetCache m, MonadReader GTDConfiguration m) => m [Package]
+__dependencies :: Package -> (MonadBaseControl IO m, MonadLoggerIO m, MonadState GetCache m, MonadReader GTDConfiguration m) => m [Package]
 __dependencies pkg = do
   let c = view cabal pkg
   logDebugNSS "cabal fetch" (prettyShow $ packageName c)
   let deps = concatMap targetBuildDepends $ allBuildInfo c
   let names = deduplicate $ (\(Dependency n v _) -> (unPackageName n, prettyShow v)) <$> deps
   logDebugNSS "cabal fetch" $ "dependencies: " ++ show names
+  st <- State.get
   pkgs <-
     let fetchDependency n vp = (,) n <$> get n vp
-        fetchDependencies ds = catMaybes <$> mapM runMaybeT (uncurry fetchDependency <$> ds)
+        fetchDependencies ds = do
+          (c, d) <- unzip <$> forConcurrently ds (flip runStateT st . runMaybeT . uncurry fetchDependency)
+          put $ foldr (<>) st d
+          return $ catMaybes c
      in fetchDependencies names
   reposR <- asks _repos
   forM pkgs $ \(n, p) -> _read $ reposR </> p </> (n ++ ".cabal")
@@ -147,7 +179,7 @@ data PackageFull = PackageFull
 
 $(makeLenses ''PackageFull)
 
-full :: Package -> (MonadLoggerIO m, MonadState GetCache m, MonadReader GTDConfiguration m) => m PackageFull
+full :: Package -> (MonadBaseControl IO m, MonadLoggerIO m, MonadState GetCache m, MonadReader GTDConfiguration m) => m PackageFull
 full pkg = do
   logDebugNSS "Cabal.full" $ "enriching " ++ nameP pkg
   deps <- __dependencies pkg

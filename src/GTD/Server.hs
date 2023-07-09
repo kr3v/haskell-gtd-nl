@@ -3,13 +3,12 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 module GTD.Server where
 
 import Control.Exception (try)
 import Control.Lens (At (at), use, (%=), (.=))
-import Control.Monad (forM_, (>=>))
+import Control.Monad (forM_, (>=>), when)
 import Control.Monad.Except (ExceptT, MonadError, MonadIO (..), liftEither, runExceptT)
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (MonadReader (..), MonadState (..), asks)
@@ -30,7 +29,7 @@ import GTD.Configuration (GTDConfiguration (..))
 import GTD.Haskell.AST (ClassOrData (..), Declarations (..), Imports (..), haskellGetIdentifiers, haskellGetImports)
 import qualified GTD.Haskell.AST as Declarations
 import GTD.Haskell.Declaration (Declaration (..), Identifier, SourceSpan, hasNonEmptyOrig)
-import GTD.Haskell.Enrich (enrichTryPackage, enrichTryPackageCDT)
+import GTD.Haskell.Enrich (enrichTryModule, enrichTryModuleCDT)
 import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule, parseModule)
 import qualified GTD.Haskell.Module as HsModule
 import GTD.Haskell.Package (Context (..), Package (..), ccFindAt, ccFull, ccGet)
@@ -40,6 +39,7 @@ import GTD.Haskell.Utils (asDeclsMap)
 import GTD.Utils (logDebugNSS, logErrorNSS, mapFrom, ultraZoom)
 import System.FilePath.Posix ((</>))
 import Text.Printf (printf)
+import Control.Monad.Trans.Control (MonadBaseControl)
 
 data DefinitionRequest = DefinitionRequest
   { workDir :: FilePath,
@@ -110,8 +110,8 @@ enrich0 f p d = do
 enrich :: HsModule -> (MonadLoggerIO m, MonadState Package m) => m Declarations
 enrich m = do
   importsD <- getAllImports m
-  importsE <- Map.elems <$> mapM (enrich0 enrichTryPackage hasNonEmptyOrig) (Declarations._decls importsD)
-  importsCD <- Map.elems <$> mapM (enrich0 enrichTryPackageCDT (hasNonEmptyOrig . _cdtName)) (Declarations._dataTypes importsD)
+  importsE <- Map.elems <$> mapM (enrich0 (flip enrichTryModule) hasNonEmptyOrig) (Declarations._decls importsD)
+  importsCD <- Map.elems <$> mapM (enrich0 (flip enrichTryModuleCDT) (hasNonEmptyOrig . _cdtName)) (Declarations._dataTypes importsD)
   locals <- execWriterT $ haskellGetIdentifiers (_ast m)
   return $ Declarations {_decls = asDeclsMap importsE <> Declarations._decls locals, _dataTypes = mapFrom (_declName . _cdtName) importsCD <> Declarations._dataTypes locals}
 
@@ -141,7 +141,7 @@ modules1 pkg c = do
 
 cabalFindAtCached ::
   FilePath ->
-  (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m, MonadError String m) => m Cabal.PackageFull
+  (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m, MonadError String m) => m Cabal.PackageFull
 cabalFindAtCached wd = do
   e <- use $ ccFindAt . at wd
   case e of
@@ -154,7 +154,7 @@ cabalFindAtCached wd = do
 
 cabalFull ::
   Cabal.Package ->
-  (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m) => m Cabal.PackageFull
+  (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m) => m Cabal.PackageFull
 cabalFull pkg = do
   let k = Cabal.nameVersionP pkg
   e <- use $ ccFull . at k
@@ -165,21 +165,21 @@ cabalFull pkg = do
       ccFull %= Map.insert k d
       return d
 
-contextFetchGetCache :: (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m) => m ()
-contextFetchGetCache = do
+cabalCacheGet :: (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m) => m ()
+cabalCacheGet = do
   cfgP <- asks _ccGetPath
   cE :: Either IOError BS.ByteString <- liftIO $ try (BS.readFile cfgP)
   case cE of
-    Left e -> logErrorNSS "contextFetchGetCache" $ printf "readFile %s -> %s" cfgP (show e)
+    Left e -> logErrorNSS "cabalCacheGet" $ printf "readFile %s -> %s" cfgP (show e)
     Right c -> forM_ (decode c) (ccGet .=)
 
-contextStoreGetCache :: (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m) => m ()
-contextStoreGetCache = do
+cabalCacheStore :: (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m) => m ()
+cabalCacheStore = do
   cfgP <- asks _ccGetPath
   cc <- use ccGet
   o :: Either IOError () <- liftIO $ try $ BS.writeFile cfgP $ encode cc
   case o of
-    Left e -> logErrorNSS "contextStoreGetCache" $ printf "writeFile %s -> %s" cfgP (show e)
+    Left e -> logErrorNSS "cabalCacheStore" $ printf "writeFile %s -> %s" cfgP (show e)
     Right _ -> return ()
 
 ---
@@ -213,7 +213,7 @@ packageCachedPut cPkg pkg = do
 
 package0 ::
   Cabal.PackageFull ->
-  (MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m) => m ()
+  (MonadBaseControl IO m, MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m) => m ()
 package0 cPkg = do
   pkgM <- packageCachedGet cPkg
   case pkgM of
@@ -226,7 +226,7 @@ package0 cPkg = do
 
 package ::
   Cabal.PackageFull ->
-  (MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m) => m (Maybe Package)
+  (MonadBaseControl IO m, MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m) => m (Maybe Package)
 package cPkg0 = do
   m <- packageCachedGet cPkg0
   case m of
@@ -240,7 +240,7 @@ package cPkg0 = do
 
 definition ::
   DefinitionRequest ->
-  (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m, MonadError String m) => m DefinitionResponse
+  (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m, MonadError String m) => m DefinitionResponse
 definition (DefinitionRequest {workDir = wd, file = rf, word = w}) = do
   cPkg <- cabalFindAtCached wd
   pkgM <- package cPkg
@@ -248,6 +248,10 @@ definition (DefinitionRequest {workDir = wd, file = rf, word = w}) = do
 
   m <- parseModule emptyHsModule {_path = rf}
   m' <- resolution <$> evalStateT (enrich m) pkg
+
+  ccGC <- use $ ccGet . Cabal.changed
+  when ccGC $ do
+    cabalCacheStore
 
   case w `Map.lookup` m' of
     Nothing -> noDefintionFoundErrorME

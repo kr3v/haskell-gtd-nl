@@ -22,6 +22,9 @@
 - refactoring: try creating more clear 'borders' to allow isolated testing; right now, testing is blocked by the need to perform a proper DFS
 - ToJSON?
 
+-- parallelize `cabal get` invocations
+-- keep `Package._exports` in memory
+
 ---
 
 - https://github.com/ennocramer/floskell/issues/9 - haskell-gtd/src/GTD/Server.hs: Ambiguous infix expression @ SrcLoc "" (-1) (-1)
