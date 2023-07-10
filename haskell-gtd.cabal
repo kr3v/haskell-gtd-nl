@@ -85,11 +85,15 @@ library haskell-gtd-lib
         GTD.Haskell.AST
         GTD.Haskell.Cpphs
         GTD.Haskell.Declaration
-        GTD.Haskell.Enrich
         GTD.Haskell.Module
-        GTD.Haskell.Resolution
         GTD.Haskell.Utils
-        GTD.Haskell.Package
+        GTD.Resolution.Definition
+        GTD.Resolution.Module
+        GTD.Resolution.Package
+        GTD.Resolution.State
+        GTD.Resolution.State.Caching.Cabal
+        GTD.Resolution.State.Caching.Package
+        GTD.Resolution.Utils
         GTD.Server
         GTD.Utils
 

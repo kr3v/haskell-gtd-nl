@@ -1,26 +1,14 @@
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module GTD.Haskell.Package where
+module GTD.Resolution.State where
 
 import Control.Lens (makeLenses)
 import qualified Data.Map.Strict as Map
 import GHC.Generics (Generic)
 import GTD.Cabal (ModuleNameS)
 import qualified GTD.Cabal as Cabal
-import GTD.Haskell.Module (HsModuleP (..))
-
--- FIXME: use `mtime`
--- data CabalCacheEntry = CabalCacheEntry
---   { _mtime :: Integer,
---     _deps :: [Cabal.Package]
---   }
---   deriving (Show, Generic)
-
--- $(makeLenses ''CabalCacheEntry)
+import GTD.Haskell.Module (HsModuleP)
 
 data Package = Package
   { _cabalPackage :: Cabal.PackageFull,

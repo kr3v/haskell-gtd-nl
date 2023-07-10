@@ -15,13 +15,15 @@ import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.State (MonadIO (..))
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Either.Combinators (mapLeft)
+import qualified Data.Map.Strict as Map
 import GHC.Generics (Generic)
 import GTD.Cabal (ModuleNameS, PackageNameS)
-import GTD.Haskell.AST (Declarations, haskellParse)
+import GTD.Haskell.AST (ClassOrData (..), Declarations, haskellParse)
+import qualified GTD.Haskell.AST as Declarations
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
+import GTD.Haskell.Declaration (Declaration (_declModule, _declName))
 import GTD.Utils (logDebugNSS)
 import Language.Haskell.Exts (Module (Module), SrcSpan (..), SrcSpanInfo (..))
-import Text.Printf (printf)
 
 data HsModule = HsModule
   { _package :: PackageNameS,
@@ -59,9 +61,9 @@ parseModule cm = do
 
   src <- liftEither . mapLeft show =<< (liftIO (try $ readFile srcP) :: (MonadIO m) => m (Either IOException String))
   srcPostCpp <- haskellApplyCppHs srcP src
-  ast <- liftEither $ haskellParse srcP srcPostCpp
+  a <- liftEither $ haskellParse srcP srcPostCpp
 
-  return $ cm {_ast = ast}
+  return $ cm {_ast = a}
 
 ---
 
@@ -75,3 +77,15 @@ $(makeLenses ''HsModuleP)
 instance FromJSON HsModuleP
 
 instance ToJSON HsModuleP
+
+---
+
+resolve :: Map.Map ModuleNameS HsModuleP -> Declaration -> Maybe Declaration
+resolve moduleDecls orig = do
+  m <- _declModule orig `Map.lookup` moduleDecls
+  _declName orig `Map.lookup` (Declarations._decls . _exports) m
+
+resolveCDT :: Map.Map ModuleNameS HsModuleP -> ClassOrData -> Maybe ClassOrData
+resolveCDT moduleDecls orig = do
+  m <- (_declModule . _cdtName) orig `Map.lookup` moduleDecls
+  (_declName . _cdtName) orig `Map.lookup` (Declarations._dataTypes . _exports) m

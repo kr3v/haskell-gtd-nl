@@ -24,18 +24,16 @@ import qualified Distribution.ModuleName as Cabal
 import qualified Distribution.ModuleName as ModuleName
 import Distribution.PackageDescription (emptyGenericPackageDescription, emptyPackageDescription)
 import GHC.RTS.Flags (ProfFlags (descrSelector))
-import GTD.Cabal
 import qualified GTD.Cabal as Cabal
 import GTD.Configuration (GTDConfiguration (_repos), prepareConstants)
 import GTD.Haskell.AST (Declarations (..), Exports, Imports, haskellGetExports, haskellGetIdentifiers, haskellGetImports, haskellParse)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (Declaration (Declaration, _declName, _declSrcOrig), Identifier (..), SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine), emptySourceSpan)
 import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule)
-import GTD.Haskell.Package
-import qualified GTD.Haskell.Package as Package
-import qualified GTD.Haskell.Resolution as Resolution
 import qualified GTD.Haskell.Module as HsModule
-import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), definition, noDefintionFoundError, noDefintionFoundErrorE, contextStoreGetCache, contextFetchGetCache)
+import GTD.Resolution.State (emptyContext)
+import GTD.Resolution.State.Caching.Cabal (cabalCacheGet, cabalCacheStore)
+import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), definition, noDefintionFoundError, noDefintionFoundErrorE)
 import GTD.Utils (logDebugNSS, ultraZoom)
 import Language.Haskell.Exts (Module (..), SrcSpan (..), SrcSpanInfo (..))
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
@@ -175,64 +173,6 @@ cmGen mn0 dn0 mnE dnE fnE =
 
 nothingWasExpected d0 d1 = expectationFailure $ printf "expected Nothing, got %s (== (%s) => %s)" (show d0) (show d1) (show (d0 == d1))
 
--- enrichTryModuleSpec :: Spec
--- enrichTryModuleSpec = do
---   describe "enrichTryModule" do
---     it "returns nothing in case of a missing module name" $
---       property $ \moduleName1 moduleName2 declName fileName ->
---         moduleName1 /= moduleName2 && fileName /= "" ==> do
---           let (d0, dE, cmE) = cmGen moduleName1 declName moduleName2 declName fileName
---           result <- liftIO $ runStderrLoggingT $ runMaybeT $ enrichTryModule d0 cmE
---           forM_ result (nothingWasExpected d0)
---     it "returns nothing if there's a matching module without a matching declaration" $
---       property $ \moduleName declName1 declName2 fileName ->
---         declName1 /= declName2 && fileName /= "" ==> do
---           let (d0, dE, cmE) = cmGen moduleName declName1 moduleName declName2 fileName
---           result <- liftIO $ runStderrLoggingT $ runMaybeT $ enrichTryModule d0 cmE
---           forM_ result (nothingWasExpected d0)
---     it "actually enriches in case of matched module and declaration" $
---       property $ \moduleName declName fileName ->
---         fileName /= "" ==> do
---           let (d0, dE, cmE) = cmGen moduleName declName moduleName declName fileName
---           result <- liftIO $ runStderrLoggingT $ runMaybeT $ enrichTryModule d0 cmE
---           case result of
---             Nothing -> expectationFailure $ printf "expected Just %s, got Nothing" (show d0)
---             Just d1 -> do
---               _declSrcOrig d1 `shouldBe` _declSrcOrig dE
---               _declSrcUsage d1 `shouldNotBe` _declSrcUsage dE
-
--- enrichTryPackageSpec :: Spec
--- enrichTryPackageSpec = do
---   describe "enrichTryPackage" do
---     it "returns nothing in case of an exported module from a missing package" $
---       property \moduleName declName fileName packageName1 packageName2 ->
---         fileName /= "" && packageName1 /= packageName2 ==> do
---           let (d0, dE, cmE) = cmGen moduleName declName moduleName declName fileName
---               pmE = Map.fromList [(packageName1, cmE)]
---               cp = emptyCabalPackage {_cabalPackageName = packageName2, _cabalPackageExportedModules = Map.singleton moduleName ModuleName.main}
---           result <- liftIO $ runStderrLoggingT $ runMaybeT $ enrichTryPackage d0 pmE cp
---           forM_ result (nothingWasExpected d0)
---     it "returns nothing in case of a non-exported module name" $
---       property \moduleName1 moduleName2 declName fileName packageName ->
---         fileName /= "" && moduleName1 /= moduleName2 ==> do
---           let (d0, dE, cmE) = cmGen moduleName1 declName moduleName1 declName fileName
---               pmE = Map.fromList [(packageName, cmE)]
---               cp = emptyCabalPackage {_cabalPackageName = packageName, _cabalPackageExportedModules = Map.singleton moduleName2 ModuleName.main}
---           result <- liftIO $ runStderrLoggingT $ runMaybeT $ enrichTryPackage d0 pmE cp
---           forM_ result (nothingWasExpected d0)
---     it "actually enriches in case of an exported module and matching package name" $
---       property \moduleName declName fileName packageName ->
---         fileName /= "" ==> do
---           let (d0, dE, cmE) = cmGen moduleName declName moduleName declName fileName
---               pmE = Map.fromList [(packageName, cmE)]
---               cp = emptyCabalPackage {_cabalPackageName = packageName, _cabalPackageExportedModules = Map.singleton moduleName ModuleName.main}
---           result <- liftIO $ runStderrLoggingT $ runMaybeT $ enrichTryPackage d0 pmE cp
---           case result of
---             Nothing -> expectationFailure $ printf "expected Just %s, got Nothing" (show d0)
---             Just d1 -> do
---               _declSrcOrig d1 `shouldBe` _declSrcOrig dE
---               _declSrcUsage d1 `shouldNotBe` _declSrcUsage dE
-
 definitionsSpec :: Spec
 definitionsSpec = do
   consts <- runIO prepareConstants
@@ -285,10 +225,10 @@ definitionsSpec = do
   let noDefErr = Left "No definition found"
 
   let st0 = emptyContext
-  st1 <- runIO $ mstack execStateT st0 contextFetchGetCache
+  st1 <- runIO $ mstack execStateT st0 cabalCacheGet
   (a, serverState) <- runIO $ mstack runStateT st1 $ eval0 "playIO"
   runIO $ print a
-  runIO $ mstack execStateT serverState contextStoreGetCache
+  runIO $ mstack execStateT serverState cabalCacheStore
 
   describe descr $ do
     it "directly exported regular function" $ do
@@ -405,7 +345,8 @@ definitionsSpec = do
 integrationTestsSpec :: Spec
 integrationTestsSpec = do
   definitionsSpec
-  -- parsePackageSpec
+
+-- parsePackageSpec
 
 -- updateExportsSpec
 

@@ -22,8 +22,12 @@
 - refactoring: try creating more clear 'borders' to allow isolated testing; right now, testing is blocked by the need to perform a proper DFS
 - ToJSON?
 
--- parallelize `cabal get` invocations
--- keep `Package._exports` in memory
+- keep `Package._exports` in memory
+  - implement 'lru'
+- parallelize `cabal read`s if necessary
+- parallelize packages processing
+- parallelize modules processing
+- research haskell gc behaviour
 
 ---
 
