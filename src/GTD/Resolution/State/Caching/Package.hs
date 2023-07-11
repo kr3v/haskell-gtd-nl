@@ -6,10 +6,10 @@
 module GTD.Resolution.State.Caching.Package where
 
 import Control.Exception (try)
-import Control.Lens ((%=))
+import Control.Lens ((%=), use)
 import Control.Monad.Except (MonadIO (..))
 import Control.Monad.Logger (MonadLoggerIO)
-import Control.Monad.RWS (MonadReader (..), MonadState (..))
+import Control.Monad.RWS (MonadReader (..), MonadState (..), gets)
 import Data.Aeson (FromJSON, decode, encode)
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.Cache.LRU as LRU
@@ -87,7 +87,11 @@ packageCachedGet cPkg = do
 
 packageCachedAdaptSizeTo :: (MonadLoggerIO m, MonadState (LRU.LRU k v) m, Ord k) => Integer -> m ()
 packageCachedAdaptSizeTo n = do
-  logDebugNSS "package cached adapt size to" $ printf "%d" n
-  lru <- get
-  let lru' = LRU.fromList (Just n) $ LRU.toList lru
-  put lru'
+  z <- gets LRU.maxSize
+  case z of
+    Just n0 | n0 >= n -> return ()
+    _ -> do
+      logDebugNSS "package cached adapt size to" $ printf "%d" n
+      lru <- get
+      let lru' = LRU.fromList (Just n) $ LRU.toList lru
+      put lru'
