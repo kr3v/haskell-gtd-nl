@@ -1,27 +1,29 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module GTD.Resolution.State.Caching.Package where
 
 import Control.Exception (try)
-import Control.Lens (At (at), use, (%=))
+import Control.Lens ((%=))
 import Control.Monad.Except (MonadIO (..))
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (MonadReader (..), MonadState (..))
 import Data.Aeson (FromJSON, decode, encode)
 import qualified Data.ByteString.Lazy as BS
+import qualified Data.Cache.LRU as LRU
 import Data.Either (fromRight)
 import qualified Data.Map as Map
 import Data.Maybe (isJust)
 import qualified GTD.Cabal as Cabal
 import GTD.Configuration (GTDConfiguration (..))
 import GTD.Resolution.State (Context, Package (..), cExports)
-import GTD.Utils (logDebugNSS)
+import qualified GTD.Resolution.State as Package
+import GTD.Utils (logDebugNSS, ultraZoom)
 import System.Directory (doesFileExist)
 import System.FilePath.Posix ((</>))
 import Text.Printf (printf)
-import qualified GTD.Resolution.State as Package
 
 persistenceGet :: Cabal.PackageFull -> FilePath -> (MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m, FromJSON a) => m (Maybe a)
 persistenceGet cPkg f = do
@@ -60,12 +62,19 @@ packageCachedPut cPkg pkg = do
   liftIO $ BS.writeFile exportsP $ encode $ Package._exports pkg
   logDebugNSS "package cached put" $ printf "%s -> (%d, %d)" (show $ Cabal.nameVersionF cPkg) (length $ Package._modules pkg) (length $ Package._exports pkg)
 
+lookupS :: (MonadState (LRU.LRU k v) m, Ord k) => k -> m (Maybe v)
+lookupS k = do
+  lru <- get
+  let (lru', v) = LRU.lookup k lru
+  put lru'
+  return v
+
 packageCachedGet ::
   Cabal.PackageFull ->
   (MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m) => m (Maybe Package)
 packageCachedGet cPkg = do
   let k = Cabal.nameVersionF cPkg
-  c <- use $ cExports . at k
+  c <- ultraZoom cExports (lookupS k)
   case c of
     Just es -> return $ Just Package {_cabalPackage = cPkg, _modules = Map.empty, Package._exports = es}
     Nothing -> do
@@ -73,5 +82,12 @@ packageCachedGet cPkg = do
       case eM of
         Nothing -> return Nothing
         Just e -> do
-          cExports %= Map.insert k e
+          cExports %= LRU.insert k e
           return $ Just Package {_cabalPackage = cPkg, _modules = Map.empty, Package._exports = e}
+
+packageCachedAdaptSizeTo :: (MonadLoggerIO m, MonadState (LRU.LRU k v) m, Ord k) => Integer -> m ()
+packageCachedAdaptSizeTo n = do
+  logDebugNSS "package cached adapt size to" $ printf "%d" n
+  lru <- get
+  let lru' = LRU.fromList (Just n) $ LRU.toList lru
+  put lru'

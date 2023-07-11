@@ -10,24 +10,43 @@
 - research Haskell formatters to avoid lines longer than 80/120 characters (wrap the imports, wrap the exports, wrap function declarations, ...)
 
 - Headers -> err:failed to parse haskell-gtd/app/server/Main.hs: Parse error: :<|> @ SrcLoc "haskell-gtd/app/server/Main.hs" 25 77
-- "workspacePath is not parent of docPath, this case is broken right now" -- priority 2
 - qualified imports
 - operator exports
 - go to module definition in import -- priority 2
-- cross package re-exports -- priority 1
-  - re-write `definition` to use this instead of custom functions
 - when resolution fails, show the module for the requested word, if found;
   - consider caching the error(s) on per-module basis - like what lead to the error
 - when parsing file fails, try parsing only imports-exports  -- priority 3
 - refactoring: try creating more clear 'borders' to allow isolated testing; right now, testing is blocked by the need to perform a proper DFS
 - ToJSON?
 
-- keep `Package._exports` in memory
-  - implement 'lru'
+- lru: either fork the library or find something with the following: in case entries were not touched for a long time (15 min?), just silently drop them
 - parallelize `cabal read`s if necessary
 - parallelize packages processing
 - parallelize modules processing
-- research haskell gc behaviour
+- research haskell gc behaviour (haskell allocates more than it uses and it is even worse compared to Golang GOGC)
+- Prelude support
+-
+```
+BangPatterns language extension is not enabled
+BlockArguments language extension is not enabled
+ConstraintKinds language extension is not enabled
+DataKinds language extension is not enabled
+DefaultSignatures language extension is not enabled
+ExistentialQuantification language extension is not enabled
+ExplicitForAll language extension is not enabled
+ExplicitNamespaces language extension is not enabled
+FunctionalDependencies language extension is not enabled
+GADTs language extension is not enabled
+KindSignatures language extension is not enabled
+MultiParamTypeClasses language extension is not enabled
+PackageImports language extension is not enabled (`import "crypto-api" Crypto.Random`)
+ScopedTypeVariables language extension is not enabled
+StandaloneDeriving language extension is not enabled
+TemplateHaskell language extension is not enabled
+TypeFamilies language extension is not enabled
+TypeOperators language extension is not enabled
+```
+- `cabal get` fetches multiple versions of the same package, yet, as far as I understand, only of them is actually used during the build
 
 ---
 

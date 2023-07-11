@@ -4,7 +4,7 @@ module GTD.Utils where
 
 import Control.Lens (Lens', use, (.=))
 import Control.Monad.Except (ExceptT, MonadIO (liftIO))
-import Control.Monad.Logger (MonadLoggerIO, logDebugNS, logErrorNS)
+import Control.Monad.Logger (MonadLoggerIO, logDebugNS, logErrorNS, MonadLogger)
 import Control.Monad.RWS (MonadState)
 import Control.Monad.State (StateT (runStateT))
 import Control.Monad.Trans.Except (catchE, mapExceptT)
@@ -25,6 +25,11 @@ ultraZoom l sa = do
 
 logDebugNSS :: MonadLoggerIO m => String -> String -> m ()
 logDebugNSS a b = do
+  now <- liftIO getPOSIXTime
+  logDebugNS (T.pack a) (T.pack $ show now ++ ": " ++ b)
+
+logDebugNSS' :: (MonadIO m, MonadLogger m) => String -> String -> m ()
+logDebugNSS' a b = do
   now <- liftIO getPOSIXTime
   logDebugNS (T.pack a) (T.pack $ show now ++ ": " ++ b)
 

@@ -8,7 +8,7 @@ module GTD.Server where
 
 import Control.Lens (use)
 import Control.Monad (forM_, when, (>=>))
-import Control.Monad.Except (ExceptT, MonadError, liftEither, runExceptT)
+import Control.Monad.Except (ExceptT, MonadError, MonadIO (..), liftEither, runExceptT)
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (MonadReader (..), MonadState (..))
 import Control.Monad.State (evalStateT, execStateT)
@@ -20,6 +20,7 @@ import qualified Data.Map as Map
 import Data.Maybe (catMaybes)
 import qualified Data.Set as Set
 import GHC.Generics (Generic)
+import GHC.Stats (getRTSStats)
 import GTD.Cabal (ModuleNameS)
 import qualified GTD.Cabal as Cabal
 import GTD.Configuration (GTDConfiguration (..))
@@ -28,11 +29,12 @@ import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule, parseMo
 import qualified GTD.Haskell.Module as HsModule
 import GTD.Resolution.Definition (enrich, resolution)
 import GTD.Resolution.Module (figureOutExports, module'Dependencies, moduleR)
-import GTD.Resolution.State (Context, Package (Package, _cabalPackage, _modules), ccGet)
+import GTD.Resolution.State (Context, Package (Package, _cabalPackage, _modules), ccGet, cExports)
 import qualified GTD.Resolution.State as Package
 import GTD.Resolution.State.Caching.Cabal (cabalCacheStore, cabalFindAtCached, cabalFull)
-import GTD.Resolution.State.Caching.Package (packageCachedGet, packageCachedPut, packagePersistenceGet, persistenceExists)
+import GTD.Resolution.State.Caching.Package (packageCachedGet, packageCachedPut, packagePersistenceGet, persistenceExists, packageCachedAdaptSizeTo)
 import GTD.Resolution.Utils (SchemeState (..), scheme)
+import GTD.Utils (ultraZoom)
 
 data DefinitionRequest = DefinitionRequest
   { workDir :: FilePath,
@@ -126,9 +128,15 @@ definition (DefinitionRequest {workDir = wd, file = rf, word = w}) = do
   when ccGC $ do
     cabalCacheStore
 
+  stats <- liftIO getRTSStats
+  liftIO $ putStrLn $ "GCs: " ++ show stats
+
+  ultraZoom cExports $ packageCachedAdaptSizeTo (toInteger $ 10 + length (Cabal._dependencies cPkg))
+
   case w `Map.lookup` m' of
     Nothing -> noDefintionFoundErrorME
     Just d ->
       if hasNonEmptyOrig d
         then return $ DefinitionResponse {srcSpan = Just $ _declSrcOrig d, err = Nothing}
         else noDefintionFoundErrorME
+ 

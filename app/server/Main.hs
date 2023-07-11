@@ -10,7 +10,7 @@
 module Main where
 
 import Control.Concurrent (MVar, newMVar, putMVar, takeMVar)
-import Control.Lens ((<+=), (^.), makeLenses)
+import Control.Lens (makeLenses, (<+=), (^.))
 import Control.Monad.Cont (MonadIO (..))
 import Control.Monad.Except (runExceptT)
 import Control.Monad.Logger (runFileLoggingT, runStdoutLoggingT)
@@ -20,8 +20,8 @@ import Control.Monad.State.Lazy (evalStateT)
 import Data.Proxy (Proxy (..))
 import GHC.TypeLits (KnownSymbol)
 import GTD.Configuration (GTDConfiguration (_logs), prepareConstants, root)
-import GTD.Haskell.Package (Context, emptyContext)
-import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), definition, cabalCacheGet)
+import GTD.Resolution.State (Context, emptyContext)
+import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), definition)
 import GTD.Utils (logDebugNSS, peekM, ultraZoom)
 import Network.Socket (Family (AF_INET), SockAddr (SockAddrInet), SocketType (Stream), bind, defaultProtocol, listen, socket, socketPort, tupleToHostAddress, withSocketsDo)
 import Network.Wai.Handler.Warp (defaultSettings, runSettingsSocket)
@@ -31,6 +31,7 @@ import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.FilePath ((</>))
 import System.Posix (getProcessID)
 import Text.Printf (printf)
+import GTD.Resolution.State.Caching.Cabal (cabalCacheGet)
 
 data ServerState = ServerState
   { _context :: Context,
@@ -73,11 +74,11 @@ definitionH c m req = do
   (r, s') <- flip runStateT s $ do
     rq <- reqId <+= 1
     let reqId = printf "%06d" rq
-    let log = _logs c </> (reqId ++ ".log")
+    let logP = _logs c </> (reqId ++ ".log")
     liftIO $ putStrLn $ "Got request with ID:" ++ show reqId
 
     let peekF r = logDebugNSS "definition" $ printf "%s@%s -> %s" (word req) (file req) (show r)
-    r' <- ultraZoom context $ runFileLoggingT log $ peekM peekF $ runReaderT (runExceptT $ definition req) c
+    r' <- ultraZoom context $ runFileLoggingT logP $ peekM peekF $ runReaderT (runExceptT $ definition req) c
     case r' of
       Left e -> return $ addHeader reqId DefinitionResponse {srcSpan = Nothing, err = Just e}
       Right r -> return $ addHeader reqId r

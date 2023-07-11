@@ -5,7 +5,7 @@ author:             kr3v
 extra-source-files: CHANGELOG.md
 
 -- add the following line to `ghc-options` to enable profiling
---  -fprof-auto -rtsopts "-with-rtsopts=-N24 -p -s -h -i0.1"
+-- -fprof-auto -rtsopts "-with-rtsopts=-N4 -p -s -h -i0.1"
 
 
 executable haskell-gtd-server
@@ -44,7 +44,7 @@ executable haskell-gtd-server
     hs-source-dirs:   app/server
     default-language: Haskell2010
 
-    ghc-options: -O2 -g3 -threaded -Wall -fprof-auto -rtsopts "-with-rtsopts=-N24 -p -s -h -i0.1"
+    ghc-options: -O2 -g3 -threaded -Wall -rtsopts "-with-rtsopts=-N4 -T"
 
 library haskell-gtd-lib
     hs-source-dirs:      src
@@ -78,6 +78,7 @@ library haskell-gtd-lib
         , async ^>= 2.2.4
         , lifted-async ^>= 0.10.2.4
         , monad-control ^>= 1.0.3.1
+        , lrucache ^>= 1.2.0.1
     
     exposed-modules:
         GTD.Cabal
@@ -97,7 +98,7 @@ library haskell-gtd-lib
         GTD.Server
         GTD.Utils
 
-    ghc-options: -O2 -g3 -threaded -Wall -fprof-auto -rtsopts "-with-rtsopts=-N24 -p -s -h -i0.1"
+    ghc-options: -O2 -g3 -threaded -Wall -rtsopts "-with-rtsopts=-N4 -T"
 
 test-suite haskell-gtd-lib-test
     type: exitcode-stdio-1.0
@@ -132,4 +133,4 @@ test-suite haskell-gtd-lib-test
             , utf8-string ^>= 1.0.2
     build-tool-depends: hspec-discover:hspec-discover
     default-language: Haskell2010
-    ghc-options: -O2 -g3 -threaded -fprof-auto -rtsopts "-with-rtsopts=-N24 -p -s -h -i0.1"
+    ghc-options: -O2 -g3 -threaded -rtsopts "-with-rtsopts=-N4 -T"

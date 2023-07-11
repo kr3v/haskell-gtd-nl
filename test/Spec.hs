@@ -132,10 +132,6 @@ haskellGetExportsSpec = do
     it "parses a file with an explicit list of exported functions" $
       test 0
 
-instance FromJSON Imports
-
-instance ToJSON Imports
-
 haskellGetImportsSpec :: Spec
 haskellGetImportsSpec = do
   let descr = "haskellGetImportedIdentifiers"

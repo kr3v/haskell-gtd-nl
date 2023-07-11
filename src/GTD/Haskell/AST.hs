@@ -20,8 +20,8 @@ import GTD.Cabal (ModuleNameS)
 import GTD.Haskell.Declaration (Declaration (..), Identifier, identToDecl)
 import GTD.Haskell.Utils (asDeclsMap)
 import GTD.Utils (deduplicate, logDebugNSS)
-import Language.Haskell.Exts (ClassDecl (ClsDecl), Decl (..), DeclHead (..), EWildcard (..), ExportSpec (..), ExportSpecList (ExportSpecList), FieldDecl (..), ImportDecl (..), ImportSpec (..), ImportSpecList (ImportSpecList), Language (Haskell2010), Module (Module), ModuleHead (ModuleHead), ModuleHeadAndImports (..), ModuleName (ModuleName), Name (..), NonGreedy (..), ParseMode (..), ParseResult (ParseFailed, ParseOk), Parseable (..), QName (UnQual), QualConDecl (..), SrcSpan (..), SrcSpanInfo (..), defaultParseMode, infix_, parseFileContentsWithMode)
-import Language.Haskell.Exts.Extension (Extension (EnableExtension), KnownExtension (FlexibleContexts))
+import Language.Haskell.Exts (ClassDecl (ClsDecl), Decl (..), DeclHead (..), EWildcard (..), ExportSpec (..), ExportSpecList (ExportSpecList), FieldDecl (..), ImportDecl (..), ImportSpec (..), ImportSpecList (ImportSpecList), Language (Haskell2010), Module (Module), ModuleHead (ModuleHead), ModuleHeadAndImports (..), ModuleName (ModuleName), Name (..), NonGreedy (..), ParseMode (..), ParseResult (ParseFailed, ParseOk), Parseable (..), QName (UnQual), QualConDecl (..), SrcSpan (..), SrcSpanInfo (..), defaultParseMode, infix_, parseFileContentsWithMode, KnownExtension (..))
+import Language.Haskell.Exts.Extension (Extension (EnableExtension))
 import Language.Haskell.Exts.Syntax (CName (..), ConDecl (..))
 import Text.Printf (printf)
 
@@ -49,7 +49,7 @@ haskellParseAmbigousInfixOperators src content = do
     ParseOk (NonGreedy (ModuleHeadAndImports _ _ _ is)) -> do
       let operators = execWriter $ haskellGetImportedSymbols is
       let fixs = infix_ 0 operators
-      case parseFileContentsWithMode defaultParseMode {parseFilename = src, baseLanguage = Haskell2010, extensions = [EnableExtension FlexibleContexts], fixities = Just fixs} content of
+      case parseFileContentsWithMode defaultParseMode {parseFilename = src, baseLanguage = Haskell2010, extensions = [EnableExtension FlexibleContexts, EnableExtension StandaloneDeriving], fixities = Just fixs} content of
         ParseOk m -> Right m
         ParseFailed loc e -> Left $ printf "failed to parse %s: %s @ %s" src e (show loc)
 
@@ -86,6 +86,10 @@ data Declarations = Declarations
 
 $(makeLenses ''Declarations)
 
+instance FromJSON Declarations
+
+instance ToJSON Declarations
+
 instance Semigroup Declarations where
   (<>) :: Declarations -> Declarations -> Declarations
   (<>) (Declarations d1 dt1) (Declarations d2 dt2) = Declarations (d1 <> d2) (dt1 <> dt2)
@@ -93,10 +97,6 @@ instance Semigroup Declarations where
 instance Monoid Declarations where
   mempty :: Declarations
   mempty = Declarations mempty mempty
-
-instance FromJSON Declarations
-
-instance ToJSON Declarations
 
 asResolutionMap :: Declarations -> Map.Map Identifier Declaration
 asResolutionMap Declarations {_decls = ds, _dataTypes = dts} =
@@ -210,6 +210,10 @@ data Imports = Imports
     importedCDs :: [ClassOrData]
   }
   deriving (Show, Generic, Eq)
+
+instance FromJSON Imports
+
+instance ToJSON Imports
 
 instance Semigroup Imports where
   (<>) :: Imports -> Imports -> Imports

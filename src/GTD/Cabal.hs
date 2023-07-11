@@ -11,13 +11,12 @@
 
 module GTD.Cabal where
 
-import Control.Concurrent.Async.Lifted (forConcurrently, mapConcurrently)
+import Control.Concurrent.Async.Lifted (forConcurrently)
 import Control.Lens (At (..), makeLenses, use, view, (%=), (.=))
 import Control.Monad (forM, forM_)
-import Control.Monad.Except (MonadError (..), MonadTrans (..))
-import Control.Monad.Logger (LoggingT (..), MonadLogger, MonadLoggerIO (..), runWriterLoggingT)
+import Control.Monad.Except (MonadError (..))
+import Control.Monad.Logger (MonadLogger, MonadLoggerIO (..))
 import Control.Monad.RWS (MonadReader (..), MonadState (put), asks)
-import Control.Monad.Reader (ReaderT (..))
 import Control.Monad.State (StateT (..))
 import qualified Control.Monad.State.Lazy as State
 import Control.Monad.Trans (MonadIO (liftIO))
@@ -37,12 +36,13 @@ import Distribution.PackageDescription.Parsec (parseGenericPackageDescription, r
 import Distribution.Pretty (prettyShow)
 import Distribution.Utils.Path (getSymbolicPath)
 import GTD.Configuration (GTDConfiguration (..), repos)
-import GTD.Utils (deduplicate, logDebugNSS)
+import GTD.Utils (deduplicate, logDebugNSS, logDebugNSS')
 import System.Directory (listDirectory)
 import System.FilePath (takeDirectory, takeExtension, (</>))
 import System.IO (IOMode (ReadMode), hGetContents, openFile)
 import System.Process (CreateProcess (..), StdStream (CreatePipe), createProcess, proc, waitForProcess)
 import Text.Regex.Posix ((=~))
+import Text.Printf (printf)
 
 type PackageNameS = String
 
@@ -120,7 +120,7 @@ get pkg pkgVerPredicate = do
       let re = pkg ++ "-" ++ "[^\\/]*\\/"
       let packageVersion :: [String] = (=~ re) <$> lines content
       ec <- liftIO $ waitForProcess h
-      -- logDebugNSS "cabal get" $ printf "cabal get %s %s: exit code %s" pkg pkgVerPredicate (show ec)
+      logDebugNSS' "cabal get" $ printf "cabal get %s %s: exit code %s" pkg pkgVerPredicate (show ec)
 
       let r = find (not . null) packageVersion
       vs %= Map.insert k r

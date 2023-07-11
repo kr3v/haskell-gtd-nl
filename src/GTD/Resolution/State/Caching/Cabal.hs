@@ -24,15 +24,15 @@ import Text.Printf (printf)
 cabalFindAtCached ::
   FilePath ->
   (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m, MonadError String m) => m Cabal.PackageFull
-cabalFindAtCached wd = do
-  e <- use $ ccFindAt . at wd
+cabalFindAtCached p = do
+  e <- use $ ccFindAt . at p
   case e of
     Just d -> return d
     Nothing -> do
-      d <- Cabal.findAt wd
-      d' <- ultraZoom ccGet $ Cabal.full d
-      ccFindAt %= Map.insert wd d'
-      return d'
+      d <- Cabal.findAt p
+      dF <- ultraZoom ccGet $ Cabal.full d
+      ccFindAt %= Map.insert p dF
+      return dF
 
 cabalFull ::
   Cabal.Package ->
@@ -46,6 +46,8 @@ cabalFull pkg = do
       d <- ultraZoom ccGet $ Cabal.full pkg
       ccFull %= Map.insert k d
       return d
+
+---
 
 cabalCacheGet :: (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m) => m ()
 cabalCacheGet = do
