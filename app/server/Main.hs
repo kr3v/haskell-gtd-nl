@@ -9,7 +9,7 @@
 
 module Main where
 
-import Control.Concurrent (MVar, newMVar, putMVar, takeMVar)
+import Control.Concurrent (MVar, newMVar, putMVar, takeMVar, modifyMVar_, readMVar, threadDelay, forkIO)
 import Control.Lens (makeLenses, (<+=), (^.))
 import Control.Monad.Cont (MonadIO (..))
 import Control.Monad.Except (runExceptT)
@@ -25,13 +25,14 @@ import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), definition)
 import GTD.Utils (logDebugNSS, peekM, ultraZoom)
 import Network.Socket (Family (AF_INET), SockAddr (SockAddrInet), SocketType (Stream), bind, defaultProtocol, listen, socket, socketPort, tupleToHostAddress, withSocketsDo)
 import Network.Wai.Handler.Warp (defaultSettings, runSettingsSocket)
-import Servant (Get, Header, Headers, JSON, Post, ReqBody, addHeader, type (:<|>) (..), type (:>))
+import Servant (Header, Headers, JSON, Post, ReqBody, addHeader, type (:<|>) (..), type (:>))
 import Servant.Server (Handler, serve)
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.FilePath ((</>))
-import System.Posix (getProcessID)
+import System.Posix (getProcessID, exitImmediately)
 import Text.Printf (printf)
 import GTD.Resolution.State.Caching.Cabal (cabalCacheGet)
+import System.Exit (ExitCode (..))
 
 data ServerState = ServerState
   { _context :: Context,
@@ -51,7 +52,7 @@ type API =
     :> ReqBody '[JSON] DefinitionRequest
     :> Post '[JSON] (Headers '[Header "X-Request-ID" String] DefinitionResponse)
     :<|> "ping"
-      :> Get '[JSON] String
+      :> Post '[JSON] String
 
 api :: Proxy API
 api = Proxy
@@ -85,8 +86,24 @@ definitionH c m req = do
   liftIO $ putMVar m s'
   return r
 
-pingH :: Handler String
-pingH = return "pong"
+pingH :: MVar ServerState -> Handler String
+pingH m = do
+  liftIO $ modifyMVar_ m $ \s -> return s {_reqId = _reqId s + 1}
+  return "pong"
+
+selfKiller :: MVar ServerState -> IO ()
+selfKiller m = do
+  s1 <- _reqId <$> readMVar m
+  threadDelay $ 60 * 1000 * 1000
+  m' <- takeMVar m
+  let s2 = _reqId m'
+  if s1 == s2
+    then do
+      putStrLn "No requests for 60 seconds, exiting _now_"
+      exitImmediately ExitSuccess
+    else do
+      putMVar m m'
+      selfKiller m
 
 main :: IO ()
 main = withSocketsDo $ do
@@ -108,4 +125,5 @@ main = withSocketsDo $ do
   writeFile (constants ^. root </> "port") (show port)
 
   s <- newMVar =<< runReaderT (runStdoutLoggingT $ execStateT (ultraZoom context cabalCacheGet) emptyServerState) constants
-  runSettingsSocket defaultSettings sock $ serve api (definitionH constants s :<|> pingH)
+  _ <- forkIO $ selfKiller s
+  runSettingsSocket defaultSettings sock $ serve api (definitionH constants s :<|> pingH s)

@@ -2,8 +2,9 @@ import axios from 'axios';
 import * as vscode from 'vscode';
 import path = require('path/posix');
 import fs = require('node:fs');
-import { exec, spawn } from 'child_process';
+import { ChildProcess, exec, spawn } from 'child_process';
 import { homedir } from 'os'
+import { SingleEntryPlugin } from 'webpack';
 
 
 const userHomeDir = homedir();
@@ -12,7 +13,10 @@ const serverRepos = path.join(serverRoot, "repos");
 const serverExe = "haskell-gtd-server";
 const serverPidF = path.join(serverRoot, 'pid');
 const serverPortF = path.join(serverRoot, 'port');
+
 let port = 0;
+let stdout: number | null = null, stderr: number | null = null;
+let server: ChildProcess | null = null;
 
 function isParentOf(p1: string, p2: string) {
 	const relative = path.relative(p1, p2);
@@ -27,6 +31,43 @@ async function createSymlink(src: string, dst: string) {
 	}
 }
 
+async function sendHeartbeat() {
+	fs.readFile(serverPortF, "utf8", (err, data) => {
+		let pid = parseInt(data, 10);
+		port = pid;
+	});
+
+	if (port <= 0) return false;
+
+	let res = await axios.
+		post(`http://localhost:${port}/ping`, null).
+		catch(function (error) {
+			console.log(error);
+			return null;
+		});
+	console.log("heartbeat: %s", res);
+	return res != null;
+}
+
+async function startServerIfRequired() {
+	if (await sendHeartbeat()) return;
+	console.log("starting server");
+
+	if (stdout != null) { fs.closeSync(stdout); stdout = null; }
+	if (stderr != null) { fs.closeSync(stderr); stderr = null; }
+	if (server != null) { server.kill(); server = null; }
+
+	stdout = fs.openSync(path.join(serverRoot, 'stdout.log'), 'a');
+	stderr = fs.openSync(path.join(serverRoot, 'stderr.log'), 'a');
+	server = spawn(path.join(serverRoot, serverExe), {
+		detached: true,
+		stdio: ['ignore', stdout, stderr],
+	});
+	server.unref();
+	await new Promise(r => setTimeout(r, 3000));
+	await sendHeartbeat();
+}
+
 class XDefinitionProvider implements vscode.DefinitionProvider {
 	async provideDefinition(
 		document: vscode.TextDocument,
@@ -38,12 +79,7 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 
 		console.log("%s", word);
 
-		fs.readFile(serverPortF, "utf8", (err, data) => {
-			let pid = parseInt(data, 10);
-			port = pid;
-		});
-
-		if (!(port > 0 && vscode.workspace.workspaceFolders)) {
+		if (!vscode.workspace.workspaceFolders) {
 			return Promise.resolve([]);
 		}
 
@@ -56,6 +92,7 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 			return Promise.resolve([]);
 		}
 
+		await startServerIfRequired();
 		let body = {
 			workDir: workspacePath,
 			file: docPath,
@@ -105,12 +142,6 @@ export function activate(context: vscode.ExtensionContext) {
 	console.log('Congratulations, your extension "hs-gtd" is now active!');
 	console.log(userHomeDir);
 
-	const stdout = fs.openSync(path.join(serverRoot, 'stdout.log'), 'a');
-	const stderr = fs.openSync(path.join(serverRoot, 'stderr.log'), 'a');
-	let server = spawn(path.join(serverRoot, serverExe), {
-		detached: true,
-		stdio: ['ignore', stdout, stderr],
-	});
 
 	context.subscriptions.push(
 		vscode.workspace.onDidSaveTextDocument((document: vscode.TextDocument) => {
@@ -137,14 +168,10 @@ export function activate(context: vscode.ExtensionContext) {
 			new XDefinitionProvider()
 		)
 	);
+
+	let intervalId = setInterval(sendHeartbeat, 30 * 1000);
+	context.subscriptions.push({ dispose: () => clearInterval(intervalId) });
 }
 
 // This method is called when your extension is deactivated
-export async function deactivate() {
-	console.log("deactivating...");
-	fs.readFile(serverPidF, "utf8", (err, data) => {
-		let pid = parseInt(data, 10);
-		console.log(`killing ${pid}`);
-		exec(`kill -9 ${pid}`);
-	});
-}
+export async function deactivate() { }
