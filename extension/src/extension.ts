@@ -113,6 +113,25 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	context.subscriptions.push(
+		vscode.workspace.onDidSaveTextDocument((document: vscode.TextDocument) => {
+			let workspaceFolders = vscode.workspace.workspaceFolders;
+			if (!workspaceFolders) {
+				return;
+			}
+			let workspacePath = workspaceFolders[0].uri.fsPath;
+			let symlink = path.join(workspacePath, "./.repos");
+
+			console.log("saved languageId=%s: %s", document.languageId, document.uri.fsPath);
+			if (isParentOf(symlink, document.uri.fsPath) || !(document.languageId == "haskell" || document.languageId == "cabal") || !isParentOf(workspacePath, document.uri.fsPath)) {
+				return;
+			}
+			console.log("resetting workspace extension cache");
+			fs.rmSync(path.join(workspacePath, "modules.json"), { recursive: false, force: true });
+			fs.rmSync(path.join(workspacePath, "exports.json"), { recursive: false, force: true });
+		})
+	);
+
+	context.subscriptions.push(
 		vscode.languages.registerDefinitionProvider(
 			{ scheme: 'file', language: 'haskell' },
 			new XDefinitionProvider()

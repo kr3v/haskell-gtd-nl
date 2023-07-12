@@ -12,10 +12,10 @@
 - Headers -> err:failed to parse haskell-gtd/app/server/Main.hs: Parse error: :<|> @ SrcLoc "haskell-gtd/app/server/Main.hs" 25 77
 - qualified imports
 - operator exports
-- go to module definition in import -- priority 2
+- go to module definition in import
 - when resolution fails, show the module for the requested word, if found;
   - consider caching the error(s) on per-module basis - like what lead to the error
-- when parsing file fails, try parsing only imports-exports  -- priority 3
+- when parsing file fails, try parsing only imports-exports
 - refactoring: try creating more clear 'borders' to allow isolated testing; right now, testing is blocked by the need to perform a proper DFS
 - ToJSON?
 
@@ -47,6 +47,8 @@ TypeFamilies language extension is not enabled
 TypeOperators language extension is not enabled
 ```
 - `cabal get` fetches multiple versions of the same package, yet, as far as I understand, only of them is actually used during the build
+- immutable via vs code on `.repos`
+- repo `.hs / .cabal` file modified => invalidate the repo cache
 
 ---
 
