@@ -15,10 +15,11 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Aeson (decode, encode)
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.Map as Map
+import Data.Maybe (isJust)
 import qualified GTD.Cabal as Cabal
 import GTD.Configuration (GTDConfiguration (..))
 import GTD.Resolution.State (Context, ccFindAt, ccFull, ccGet)
-import GTD.Utils (logErrorNSS, ultraZoom)
+import GTD.Utils (logDebugNSS, logErrorNSS, ultraZoom)
 import Text.Printf (printf)
 
 cabalFindAtCached ::

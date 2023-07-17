@@ -12,6 +12,8 @@ import Control.Monad.Trans.Maybe (MaybeT (..))
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
 import Data.Time.Clock.POSIX (getPOSIXTime)
+import Control.Concurrent (myThreadId)
+import Text.Printf (printf)
 
 maybeToMaybeT :: Monad m => Maybe a -> MaybeT m a
 maybeToMaybeT = MaybeT . return
@@ -26,17 +28,22 @@ ultraZoom l sa = do
 logDebugNSS :: MonadLoggerIO m => String -> String -> m ()
 logDebugNSS a b = do
   now <- liftIO getPOSIXTime
-  logDebugNS (T.pack a) (T.pack $ show now ++ ": " ++ b)
+  threadID <- liftIO myThreadId
+  logDebugNS (T.pack a) (T.pack $ printf "%s (thread id=%s): %s" (show now) (show threadID) b)
+
 
 logDebugNSS' :: (MonadIO m, MonadLogger m) => String -> String -> m ()
 logDebugNSS' a b = do
   now <- liftIO getPOSIXTime
-  logDebugNS (T.pack a) (T.pack $ show now ++ ": " ++ b)
+  threadID <- liftIO myThreadId
+  logDebugNS (T.pack a) (T.pack $ printf "%s (thread id=%s): %s" (show now) (show threadID) b)
 
 logErrorNSS :: MonadLoggerIO m => String -> String -> m ()
 logErrorNSS a b = do
   now <- liftIO getPOSIXTime
-  logErrorNS (T.pack a) (T.pack $ show now ++ ": " ++ b)
+  threadID <- liftIO myThreadId
+  logErrorNS (T.pack a) (T.pack $ printf "%s (thread id=%s): %s" (show now) (show threadID) b)
+
 
 tryE :: Monad m => ExceptT e m a -> ExceptT e m (Either e a)
 tryE m = catchE (fmap Right m) (return . Left)

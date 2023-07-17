@@ -13,7 +13,7 @@ import Control.Concurrent (MVar, newMVar, putMVar, takeMVar, modifyMVar_, readMV
 import Control.Lens (makeLenses, (<+=), (^.))
 import Control.Monad.Cont (MonadIO (..))
 import Control.Monad.Except (runExceptT)
-import Control.Monad.Logger (runFileLoggingT, runStdoutLoggingT)
+import Control.Monad.Logger (runFileLoggingT, runStdoutLoggingT, filterLogger, LogLevel (LevelDebug))
 import Control.Monad.Reader (ReaderT (runReaderT))
 import Control.Monad.State (StateT (runStateT), execStateT)
 import Control.Monad.State.Lazy (evalStateT)
@@ -79,7 +79,7 @@ definitionH c m req = do
     liftIO $ putStrLn $ "Got request with ID:" ++ show reqId
 
     let peekF r = logDebugNSS "definition" $ printf "%s@%s -> %s" (word req) (file req) (show r)
-    r' <- ultraZoom context $ runFileLoggingT logP $ peekM peekF $ runReaderT (runExceptT $ definition req) c
+    r' <- ultraZoom context $ runFileLoggingT logP $ filterLogger (\_ l -> l /= LevelDebug) $ peekM peekF $ runReaderT (runExceptT $ definition req) c
     case r' of
       Left e -> return $ addHeader reqId DefinitionResponse {srcSpan = Nothing, err = Just e}
       Right r -> return $ addHeader reqId r

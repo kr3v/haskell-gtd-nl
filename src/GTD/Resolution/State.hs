@@ -33,4 +33,4 @@ data Context = Context
 $(makeLenses ''Context)
 
 emptyContext :: Context
-emptyContext = Context Map.empty Map.empty (Cabal.GetCache Map.empty False) (LRU.newLRU $ Just 32)
+emptyContext = Context Map.empty Map.empty (Cabal.GetCache Map.empty False) (LRU.newLRU $ Nothing)

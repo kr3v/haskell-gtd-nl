@@ -45,13 +45,13 @@ haskellParseAmbigousInfixOperators :: FilePath -> String -> Either String (Modul
 haskellParseAmbigousInfixOperators src content = do
   let ei = parse (haskellDropPragmas content) :: ParseResult (NonGreedy (ModuleHeadAndImports SrcSpanInfo))
   case ei of
-    ParseFailed loc e -> Left $ printf "failed to parse %s: %s @ %s" src e (show loc)
+    ParseFailed loc e -> Left $ printf "failed to parse %s: %s @ %s" src (take 512 e) (show loc)
     ParseOk (NonGreedy (ModuleHeadAndImports _ _ _ is)) -> do
       let operators = execWriter $ haskellGetImportedSymbols is
       let fixs = infix_ 0 operators
       case parseFileContentsWithMode defaultParseMode {parseFilename = src, baseLanguage = Haskell2010, extensions = [EnableExtension FlexibleContexts, EnableExtension StandaloneDeriving], fixities = Just fixs} content of
         ParseOk m -> Right m
-        ParseFailed loc e -> Left $ printf "failed to parse %s: %s @ %s" src e (show loc)
+        ParseFailed loc e -> Left $ printf "failed to parse %s: %s @ %s" src (take 512 e) (show loc)
 
 -- TODO: figure out #line pragmas
 haskellParse :: FilePath -> String -> Either String (Module SrcSpanInfo)
@@ -59,7 +59,7 @@ haskellParse src content = case parseFileContentsWithMode defaultParseMode {pars
   ParseOk m -> Right m
   ParseFailed loc e -> case e of
     "Ambiguous infix expression" -> haskellParseAmbigousInfixOperators src content
-    _ -> Left $ printf "failed to parse %s: %s @ %s" src e (show loc)
+    _ -> Left $ printf "failed to parse %s: %s @ %s" src (take 512 e) (show loc)
 
 ---
 

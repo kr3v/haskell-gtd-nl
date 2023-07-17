@@ -6,7 +6,7 @@
 module GTD.Resolution.State.Caching.Package where
 
 import Control.Exception (try)
-import Control.Lens ((%=), use)
+import Control.Lens (over, set, use, view, (%=))
 import Control.Monad.Except (MonadIO (..))
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (MonadReader (..), MonadState (..), gets)
@@ -25,13 +25,14 @@ import System.Directory (doesFileExist)
 import System.FilePath.Posix ((</>))
 import Text.Printf (printf)
 
-persistenceGet :: Cabal.PackageFull -> FilePath -> (MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m, FromJSON a) => m (Maybe a)
+persistenceGet :: Cabal.PackageFull -> FilePath -> (MonadLoggerIO m, MonadReader GTDConfiguration m, FromJSON a) => m (Maybe a)
 persistenceGet cPkg f = do
   let p = (Cabal._path . Cabal._fpackage $ cPkg) </> f
   rJ :: Either IOError (Maybe a) <- liftIO (try $ decode <$> BS.readFile p)
-  let r = fromRight Nothing rJ
-  logDebugNSS "persistence get" $ printf "%s / %s -> %s" (show $ Cabal.nameVersionF cPkg) p (show $ isJust r)
-  return r
+  case rJ of
+    Left e -> do logDebugNSS "persistence get" $ printf "%s / %s failed: %s" (show $ Cabal.nameVersionF cPkg) p (show e)
+    Right _ -> do logDebugNSS "persistence get" $ printf "%s / %s -> True" (show $ Cabal.nameVersionF cPkg) p
+  return $ fromRight Nothing rJ
 
 persistenceExists :: Cabal.Package -> (MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m) => m Bool
 persistenceExists cPkg = do
@@ -42,7 +43,7 @@ persistenceExists cPkg = do
 
 packagePersistenceGet ::
   Cabal.PackageFull ->
-  (MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m) => m (Maybe Package)
+  (MonadLoggerIO m, MonadReader GTDConfiguration m) => m (Maybe Package)
 packagePersistenceGet cPkg = do
   modulesJ <- persistenceGet cPkg "modules.json"
   exportsJ <- persistenceGet cPkg "exports.json"
@@ -53,7 +54,7 @@ packagePersistenceGet cPkg = do
 packageCachedPut ::
   Cabal.PackageFull ->
   Package ->
-  (MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m) => m ()
+  (MonadLoggerIO m, MonadReader GTDConfiguration m) => m ()
 packageCachedPut cPkg pkg = do
   let root = Cabal._path . Cabal._fpackage $ cPkg
       modulesP = root </> "modules.json"
@@ -73,17 +74,26 @@ packageCachedGet ::
   Cabal.PackageFull ->
   (MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m) => m (Maybe Package)
 packageCachedGet cPkg = do
+  c <- get
+  (r, m) <- packageCachedGet' c cPkg
+  put $ m c
+  return r
+
+packageCachedGet' ::
+  Context ->
+  Cabal.PackageFull ->
+  (MonadLoggerIO m, MonadReader GTDConfiguration m) => m (Maybe Package, Context -> Context)
+packageCachedGet' c cPkg = do
   let k = Cabal.nameVersionF cPkg
-  c <- ultraZoom cExports (lookupS k)
-  case c of
-    Just es -> return $ Just Package {_cabalPackage = cPkg, _modules = Map.empty, Package._exports = es}
+  let (lru', r) = LRU.lookup k (view cExports c)
+  logDebugNSS "package cached get'" $ printf "%s -> %s" (show $ Cabal.nameVersionF cPkg) (show $ isJust r)
+  case r of
+    Just es -> return (Just Package {_cabalPackage = cPkg, _modules = Map.empty, Package._exports = es}, id)
     Nothing -> do
       eM <- persistenceGet cPkg "exports.json"
-      case eM of
-        Nothing -> return Nothing
-        Just e -> do
-          cExports %= LRU.insert k e
-          return $ Just Package {_cabalPackage = cPkg, _modules = Map.empty, Package._exports = e}
+      return $ case eM of
+        Nothing -> (Nothing, id)
+        Just e -> (Just Package {_cabalPackage = cPkg, _modules = Map.empty, Package._exports = e}, over cExports (LRU.insert k e))
 
 packageCachedAdaptSizeTo :: (MonadLoggerIO m, MonadState (LRU.LRU k v) m, Ord k) => Integer -> m ()
 packageCachedAdaptSizeTo n = do

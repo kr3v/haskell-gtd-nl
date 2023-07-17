@@ -5,14 +5,14 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
 {-# HLINT ignore "Avoid lambda" #-}
+{-# LANGUAGE TupleSections #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 module GTD.Cabal where
 
 import Control.Concurrent.Async.Lifted (forConcurrently)
-import Control.Lens (At (..), makeLenses, use, view, (%=), (.=))
+import Control.Lens (At (..), makeLenses, set, use, view, (%=), (%~), (.=))
 import Control.Monad (forM, forM_)
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.Logger (MonadLogger, MonadLoggerIO (..))
@@ -36,13 +36,13 @@ import Distribution.PackageDescription.Parsec (parseGenericPackageDescription, r
 import Distribution.Pretty (prettyShow)
 import Distribution.Utils.Path (getSymbolicPath)
 import GTD.Configuration (GTDConfiguration (..), repos)
-import GTD.Utils (deduplicate, logDebugNSS, logDebugNSS')
+import GTD.Utils (deduplicate, logDebugNSS, logDebugNSS', logErrorNSS)
 import System.Directory (listDirectory)
 import System.FilePath (takeDirectory, takeExtension, (</>))
 import System.IO (IOMode (ReadMode), hGetContents, openFile)
 import System.Process (CreateProcess (..), StdStream (CreatePipe), createProcess, proc, waitForProcess)
-import Text.Regex.Posix ((=~))
 import Text.Printf (printf)
+import Text.Regex.Posix ((=~))
 
 type PackageNameS = String
 
@@ -103,6 +103,7 @@ instance Semigroup GetCache where
 instance Monoid GetCache where
   mempty :: GetCache
   mempty = GetCache mempty False
+
 
 -- executes `cabal get` on given `pkg + pkgVerPredicate`
 get :: String -> String -> (MonadIO m, MonadLogger m, MonadState GetCache m, MonadReader GTDConfiguration m) => MaybeT m FilePath

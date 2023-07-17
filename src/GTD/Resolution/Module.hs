@@ -56,12 +56,12 @@ module'1 p m = do
   es <- module'2 p m
 
   let (errors, ms) = partitionEithers es
-  let errorsS = (\(srcDir, modS, e) -> printf "error parsing module %s/%s: %s" (show srcDir) (show modS) (show e)) <$> errors
+  let errorsS = (\(srcDir, modS, e) -> printf "error parsing module %s/%s: %s" (show srcDir) (show modS) (show $ take 512 e)) <$> errors
 
   return $ case length ms of
     0 -> (errorsS, Nothing)
     1 -> (errorsS, Just $ head ms)
-    _ -> (errorsS ++ [printf "multiple modules found: %s" (show ms)], Nothing)
+    _ -> (errorsS ++ [printf "multiple modules found: %s" (show $ HsModule._name <$> ms)], Nothing)
 
 module' :: Cabal.PackageFull -> ModuleNameS -> (MonadLoggerIO m) => m (Maybe HsModule)
 module' p m = do
@@ -81,6 +81,16 @@ figureOutExports ::
   HsModule ->
   (MonadLoggerIO m, MonadState (Map.Map ModuleNameS HsModuleP) m) => m HsModuleP
 figureOutExports m = do
+  st <- get
+  (r, s) <- figureOutExports0 st m
+  modify s
+  return r
+
+figureOutExports0 ::
+  Map.Map ModuleNameS HsModuleP ->
+  HsModule ->
+  (MonadLoggerIO m) => m (HsModuleP, Map.Map ModuleNameS HsModuleP -> Map.Map ModuleNameS HsModuleP)
+figureOutExports0 st m = do
   let logTag = "module prepare exports for " ++ _name m
   logDebugNSS logTag $ _name m
 
@@ -88,7 +98,6 @@ figureOutExports m = do
   Imports {importedDecls = iV, importedModules = iM, importedCDs = iCD} <- execWriterT $ haskellGetImports (_ast m)
   locals <- execWriterT $ haskellGetIdentifiers (_ast m)
 
-  st <- get
   let m' =
         if isImplicitExportAll
           then HsModuleP {HsModule._exports = locals}
@@ -106,5 +115,4 @@ figureOutExports m = do
             let eV' = asDeclsMap eV
 
             HsModuleP {HsModule._exports = Declarations {_decls = eVR <> Map.intersection liV eV', _dataTypes = eCDR <> Map.intersection liCD eCD'}}
-  modify $ Map.insert (_name m) m'
-  return m'
+  return (m', Map.insert (_name m) m')

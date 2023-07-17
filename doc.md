@@ -48,7 +48,6 @@ TypeOperators language extension is not enabled
 ```
 - `cabal get` fetches multiple versions of the same package, yet, as far as I understand, only of them is actually used during the build
 - immutable via vs code on `.repos`
-- repo `.hs / .cabal` file modified => invalidate the repo cache
 
 ---
 
