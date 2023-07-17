@@ -82,11 +82,11 @@ modules1 ::
   (MonadBaseControl IO m, MonadLoggerIO m) => m (Map.Map ModuleNameS HsModuleP)
 modules1 pkg c = do
   modsO <- flip runReaderT c $ flip evalStateT (SchemeState Map.empty Map.empty) $ do
-    scheme moduleR HsModule._name id module'Dependencies (Set.toList . Cabal._exports . Cabal._modules $ c)
-  execStateT (forM_ modsO figureOutExports) (_modules pkg)
+    scheme moduleR HsModule._name id (return . module'Dependencies) (Set.toList . Cabal._exports . Cabal._modules $ c)
+  -- execStateT (forM_ modsO figureOutExports) (_modules pkg)
 
--- let st = ParallelizedState modsO Map.empty Map.empty (_modules pkg)
--- parallelized st (Cabal.nameVersionF c) figureOutExports0 HsModule._name module'Dependencies
+  let st = ParallelizedState modsO Map.empty Map.empty (_modules pkg)
+  parallelized st (Cabal.nameVersionF c) figureOutExports0 (const "tbd") HsModule._name (return . module'Dependencies)
 
 ---
 
@@ -139,12 +139,12 @@ package cPkg0 = do
       pkgsO <- flip evalStateT (SchemeState Map.empty Map.empty) $ do
         scheme (\cPkg -> do b <- persistenceExists cPkg; if b then return Nothing else ((Just <$>) . cabalFull) cPkg) Cabal.nameVersionF Cabal.nameVersionP (return . Cabal._dependencies) (Cabal._dependencies cPkg0)
 
-      forM_ pkgsO package0
+      -- forM_ pkgsO package0
 
-      -- stC0 <- get
-      -- let st = ParallelizedState pkgsO Map.empty Map.empty stC0
-      -- stC1 <- parallelized st ("packages", Cabal.nameVersionF cPkg0) packageK simpleShowContext Cabal.nameVersionF (return . fmap Cabal.nameVersionP . Cabal._dependencies)
-      -- put stC1
+      stC0 <- get
+      let st = ParallelizedState pkgsO Map.empty Map.empty stC0
+      stC1 <- parallelized st ("packages", Cabal.nameVersionF cPkg0) packageK simpleShowContext Cabal.nameVersionF (return . fmap Cabal.nameVersionP . Cabal._dependencies)
+      put stC1
 
       package0 cPkg0
       packagePersistenceGet cPkg0

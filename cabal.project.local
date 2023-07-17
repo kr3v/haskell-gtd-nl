@@ -1,4 +1,4 @@
 ignore-project: False
-library-profiling: True
-profiling: True
-profiling-detail: all
+library-profiling: False
+profiling: False
+profiling-detail: none

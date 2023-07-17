@@ -1,8 +1,6 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 
 module GTD.Resolution.Module where
@@ -21,7 +19,7 @@ import GTD.Cabal (ModuleNameS)
 import qualified GTD.Cabal as Cabal
 import GTD.Haskell.AST (ClassOrData (..), Declarations (..), Exports (..), Imports (..), allImportedModules, haskellGetExports, haskellGetIdentifiers, haskellGetImports)
 import GTD.Haskell.Declaration (Declaration (..))
-import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule, parseModule)
+import GTD.Haskell.Module (HsModule (..), HsModuleData (..), HsModuleP (..), emptyHsModule, parseModule)
 import qualified GTD.Haskell.Module as HsModule
 import GTD.Haskell.Utils (asDeclsMap)
 import GTD.Utils (logDebugNSS, logErrorNSS, mapFrom)
@@ -35,11 +33,8 @@ resolve repoRoot srcDir moduleName = normalise $ repoRoot </> srcDir </> ((toFil
 
 ---
 
-module'Dependencies :: HsModule -> (MonadLoggerIO m) => m [ModuleNameS]
-module'Dependencies m = do
-  eM <- execWriterT $ haskellGetExports (_ast m)
-  iM <- execWriterT $ haskellGetImports (_ast m)
-  return $ exportedModules eM ++ allImportedModules iM
+module'Dependencies :: HsModule -> [ModuleNameS]
+module'Dependencies m = exportedModules (_exports0 . _info $ m) ++ allImportedModules (_imports . _info $ m)
 
 module'2 :: Cabal.PackageFull -> ModuleNameS -> (MonadLoggerIO m) => m [Either (FilePath, ModuleNameS, String) HsModule]
 module'2 p m = do
@@ -94,9 +89,10 @@ figureOutExports0 st m = do
   let logTag = "module prepare exports for " ++ _name m
   logDebugNSS logTag $ _name m
 
-  (isImplicitExportAll, Exports {exportedVars = eV, exportedModules = eM, exportedCDs = eCD}) <- runWriterT $ haskellGetExports (_ast m)
-  Imports {importedDecls = iV, importedModules = iM, importedCDs = iCD} <- execWriterT $ haskellGetImports (_ast m)
-  locals <- execWriterT $ haskellGetIdentifiers (_ast m)
+  let isImplicitExportAll = _isImplicitExportAll . _info $ m
+      Exports {exportedVars = eV, exportedModules = eM, exportedCDs = eCD} = _exports0 . _info $ m
+      Imports {importedDecls = iV, importedModules = iM, importedCDs = iCD} = _imports . _info $ m
+      locals = _locals . _info $ m
 
   let m' =
         if isImplicitExportAll

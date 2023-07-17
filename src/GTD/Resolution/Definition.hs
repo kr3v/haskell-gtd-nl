@@ -34,7 +34,7 @@ getExportedModule Package {_modules = mods} modN = do
 getAllImports :: HsModule -> (MonadLoggerIO m, MonadState Package m) => m Declarations
 getAllImports m' = do
   let logTag = "get all imports for " <> show (_name m')
-  Imports {importedDecls = iD, importedModules = iM, importedCDs = iCD} <- execWriterT $ haskellGetImports (_ast m')
+  let Imports {importedDecls = iD, importedModules = iM, importedCDs = iCD} = HsModule._imports . _info $ m'
   ctx <- get
   let (errorsM, importsM) = partitionEithers $ getExportedModule ctx <$> iM
   forM_ errorsM (logErrorNSS logTag)
@@ -61,7 +61,7 @@ enrich m = do
   importsD <- getAllImports m
   importsE <- Map.elems <$> mapM (enrich0 (flip HsModule.resolve) hasNonEmptyOrig) (Declarations._decls importsD)
   importsCD <- Map.elems <$> mapM (enrich0 (flip HsModule.resolveCDT) (hasNonEmptyOrig . _cdtName)) (Declarations._dataTypes importsD)
-  locals <- execWriterT $ haskellGetIdentifiers (_ast m)
+  let locals = HsModule._locals . _info $ m
   return $ Declarations {_decls = asDeclsMap importsE <> Declarations._decls locals, _dataTypes = mapFrom (_declName . _cdtName) importsCD <> Declarations._dataTypes locals}
 
 resolution :: Declarations -> Map.Map Identifier Declaration
