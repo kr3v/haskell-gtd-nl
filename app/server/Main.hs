@@ -9,11 +9,11 @@
 
 module Main where
 
-import Control.Concurrent (MVar, newMVar, putMVar, takeMVar, modifyMVar_, readMVar, threadDelay, forkIO)
+import Control.Concurrent (MVar, forkIO, modifyMVar_, newMVar, putMVar, readMVar, takeMVar, threadDelay)
 import Control.Lens (makeLenses, (<+=), (^.))
 import Control.Monad.Cont (MonadIO (..))
 import Control.Monad.Except (runExceptT)
-import Control.Monad.Logger (runFileLoggingT, runStdoutLoggingT, filterLogger, LogLevel (LevelDebug))
+import Control.Monad.Logger (LogLevel (LevelDebug), filterLogger, runFileLoggingT, runStdoutLoggingT)
 import Control.Monad.Reader (ReaderT (runReaderT))
 import Control.Monad.State (StateT (runStateT), execStateT)
 import Control.Monad.State.Lazy (evalStateT)
@@ -21,18 +21,19 @@ import Data.Proxy (Proxy (..))
 import GHC.TypeLits (KnownSymbol)
 import GTD.Configuration (GTDConfiguration (_logs), prepareConstants, root)
 import GTD.Resolution.State (Context, emptyContext)
+import GTD.Resolution.State.Caching.Cabal (cabalCacheGet)
 import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), definition)
 import GTD.Utils (logDebugNSS, peekM, ultraZoom)
 import Network.Socket (Family (AF_INET), SockAddr (SockAddrInet), SocketType (Stream), bind, defaultProtocol, listen, socket, socketPort, tupleToHostAddress, withSocketsDo)
 import Network.Wai.Handler.Warp (defaultSettings, runSettingsSocket)
-import Servant (Header, Headers, JSON, Post, ReqBody, addHeader, type (:<|>) (..), type (:>))
+import Options.Applicative
+import Servant (Header, Headers, JSON, Post, ReqBody, addHeader, (:<|>) (..), (:>))
 import Servant.Server (Handler, serve)
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
-import System.FilePath ((</>))
-import System.Posix (getProcessID, exitImmediately)
-import Text.Printf (printf)
-import GTD.Resolution.State.Caching.Cabal (cabalCacheGet)
 import System.Exit (ExitCode (..))
+import System.FilePath ((</>))
+import System.Posix (exitImmediately, getProcessID)
+import Text.Printf (printf)
 
 data ServerState = ServerState
   { _context :: Context,
@@ -91,10 +92,10 @@ pingH m = do
   liftIO $ modifyMVar_ m $ \s -> return s {_reqId = _reqId s + 1}
   return "pong"
 
-selfKiller :: MVar ServerState -> IO ()
-selfKiller m = do
+selfKiller :: MVar ServerState -> Int -> IO ()
+selfKiller m ttl = do
   s1 <- _reqId <$> readMVar m
-  threadDelay $ 60 * 1000 * 1000
+  threadDelay $ ttl * 1000 * 1000
   m' <- takeMVar m
   let s2 = _reqId m'
   if s1 == s2
@@ -103,10 +104,27 @@ selfKiller m = do
       exitImmediately ExitSuccess
     else do
       putMVar m m'
-      selfKiller m
+      selfKiller m ttl
+
+newtype Args = Args
+  { ttl :: Int
+  }
+  deriving (Show)
+
+args :: Parser Args
+args = Args <$> option auto (long "ttl" <> help "how long to wait before dying when idle (in seconds)" <> showDefault <> value 60)
+
+opts :: ParserInfo Args
+opts =
+  info
+    (args <**> helper)
+    fullDesc
 
 main :: IO ()
 main = withSocketsDo $ do
+  as <- execParser opts
+  print as
+
   let addr = SockAddrInet 0 (tupleToHostAddress (127, 0, 0, 1))
   sock <- socket AF_INET Stream defaultProtocol
   bind sock addr
@@ -125,5 +143,5 @@ main = withSocketsDo $ do
   writeFile (constants ^. root </> "port") (show port)
 
   s <- newMVar =<< runReaderT (runStdoutLoggingT $ execStateT (ultraZoom context cabalCacheGet) emptyServerState) constants
-  _ <- forkIO $ selfKiller s
+  _ <- forkIO $ selfKiller s (ttl as)
   runSettingsSocket defaultSettings sock $ serve api (definitionH constants s :<|> pingH s)

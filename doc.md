@@ -20,10 +20,6 @@
 - ToJSON?
 
 - lru: either fork the library or find something with the following: in case entries were not touched for a long time (15 min?), just silently drop them
-- parallelize `cabal read`s if necessary
-- parallelize packages processing
-- parallelize modules processing
-- research haskell gc behaviour (haskell allocates more than it uses and it is even worse compared to Golang GOGC)
 - Prelude support
 -
 ```

@@ -13,7 +13,38 @@
     "onLanguage:haskell"
   ],
   "main": "./out/extension.js",
-  "contributes": {},
+  "contributes": {
+    "configuration": [
+      {
+        "title": "hs-gtd configuration",
+        "properties": {
+          "hs-gtd.server.root": {
+            "type": "string",
+            "default": "~/.local/share/haskell-gtd-extension-server-root"
+          },
+          "hs-gtd.server.path": {
+            "type": "string",
+            "default": "./haskell-gtd-server"
+          },
+          "hs-gtd.server.rts": {
+            "type": "array",
+            "default": ["-N", "-A128M"],
+            "description": "those options are default in `cabal` `ghc-options`, so just removing them won't help if you want 'default' Haskell behavior"
+          },
+          "hs-gtd.server.args": {
+            "type": "array",
+            "default": ["--ttl", "60s"]
+          }
+        }
+      }
+    ],
+    "commands": [
+      {
+        "command": "hs-gtd.server.restart",
+        "title": "Kill/stop backend server (it will be restarted automatically when a Haskell file is opened)"
+      }
+    ]
+  },
   "scripts": {
     "vscode:prepublish": "yarn run compile",
     "compile": "tsc -p ./",

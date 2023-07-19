@@ -8,11 +8,17 @@ import { SingleEntryPlugin } from 'webpack';
 
 
 const userHomeDir = homedir();
-const serverRoot = path.join(userHomeDir, "/.local/share/haskell-gtd-extension-server-root");
-const serverRepos = path.join(serverRoot, "repos");
-const serverExe = "haskell-gtd-server";
-const serverPidF = path.join(serverRoot, 'pid');
-const serverPortF = path.join(serverRoot, 'port');
+let serverRoot = path.join(userHomeDir, "/.local/share/haskell-gtd-extension-server-root");
+let serverExe = path.join(serverRoot, "haskell-gtd-server");
+let serverRepos = path.join(serverRoot, "repos");
+let serverPidF = path.join(serverRoot, 'pid');
+let serverPortF = path.join(serverRoot, 'port');
+
+function refreshSubPaths() {
+	serverRepos = path.join(serverRoot, "repos");
+	serverPidF = path.join(serverRoot, 'pid');
+	serverPortF = path.join(serverRoot, 'port');
+}
 
 let port = 0;
 let stdout: number | null = null, stderr: number | null = null;
@@ -57,15 +63,30 @@ async function startServerIfRequired() {
 	if (stderr != null) { fs.closeSync(stderr); stderr = null; }
 	if (server != null) { server.kill(); server = null; }
 
+	let conf = vscode.workspace.getConfiguration('haskell-gtd');
+	let as = conf.get<string[]>("server.args") ?? [];
+	let rts = conf.get<string[]>("server.rts") ?? [];
+
 	stdout = fs.openSync(path.join(serverRoot, 'stdout.log'), 'a');
 	stderr = fs.openSync(path.join(serverRoot, 'stderr.log'), 'a');
-	server = spawn(path.join(serverRoot, serverExe), {
-		detached: true,
-		stdio: ['ignore', stdout, stderr],
-	});
+	server = spawn(
+		serverExe,
+		[...as, "+RTS", ...rts, "-RTS"],
+		{
+			detached: true,
+			stdio: ['ignore', stdout, stderr],
+		}
+	);
 	server.unref();
 	await new Promise(r => setTimeout(r, 3000));
 	await sendHeartbeat();
+}
+
+async function stopServer() {
+	let pid: number = -1;
+	fs.readFile(serverPortF, "utf8", (err, data) => pid = parseInt(data, 10));
+	if (pid <= 0) return;
+	process.kill(pid);
 }
 
 class XDefinitionProvider implements vscode.DefinitionProvider {
@@ -153,9 +174,9 @@ export function activate(context: vscode.ExtensionContext) {
 			let symlink = path.join(workspacePath, "./.repos");
 
 			console.log("saved languageId=%s: %s", document.languageId, document.uri.fsPath);
-			if (isParentOf(symlink, document.uri.fsPath) || !(document.languageId == "haskell" || document.languageId == "cabal") || !isParentOf(workspacePath, document.uri.fsPath)) {
-				return;
-			}
+			if (isParentOf(symlink, document.uri.fsPath) ||
+				!(document.languageId == "haskell" || document.languageId == "cabal") ||
+				!isParentOf(workspacePath, document.uri.fsPath)) return;
 			console.log("resetting workspace extension cache");
 			fs.rmSync(path.join(workspacePath, "modules.json"), { recursive: false, force: true });
 			fs.rmSync(path.join(workspacePath, "exports.json"), { recursive: false, force: true });
@@ -168,6 +189,25 @@ export function activate(context: vscode.ExtensionContext) {
 			new XDefinitionProvider()
 		)
 	);
+
+	context.subscriptions.push(vscode.commands.registerCommand('hs-gtd.server.restart', stopServer));
+
+	vscode.workspace.onDidChangeConfiguration((e) => {
+		if (!e.affectsConfiguration('hs-gtd')) {
+			return;
+		}
+		let conf = vscode.workspace.getConfiguration('hs-gtd');
+		serverRoot = conf.get<string>('server.root') ?? path.join(userHomeDir, "/.local/share/haskell-gtd-extension-server-root");
+		serverExe = conf.get<string>('server.path') ?? "hs-gtd-server";
+		if (!path.isAbsolute(serverExe)) {
+			serverExe = path.normalize(path.join(serverRoot, serverExe));
+		}
+		refreshSubPaths();
+
+		if (e.affectsConfiguration("hs-gtd.server.rts") || e.affectsConfiguration("hs-gtd.server.args")) {
+			stopServer();
+		}
+	});
 
 	let intervalId = setInterval(sendHeartbeat, 30 * 1000);
 	context.subscriptions.push({ dispose: () => clearInterval(intervalId) });
