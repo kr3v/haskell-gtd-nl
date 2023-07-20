@@ -22,7 +22,7 @@ import qualified Data.Map as Map
 import Data.Maybe (catMaybes)
 import qualified Data.Set as Set
 import GHC.Generics (Generic)
-import GHC.Stats (getRTSStats)
+import GHC.Stats (getRTSStats, getRTSStatsEnabled)
 import GTD.Cabal (ModuleNameS)
 import qualified GTD.Cabal as Cabal
 import GTD.Configuration (GTDConfiguration (..))
@@ -166,8 +166,10 @@ definition (DefinitionRequest {workDir = wd, file = rf, word = w}) = do
   when ccGC $ do
     cabalCacheStore
 
-  stats <- liftIO getRTSStats
-  liftIO $ putStrLn $ "GCs: " ++ show stats
+  statsE <- liftIO getRTSStatsEnabled
+  when statsE $ do
+    stats <- liftIO getRTSStats
+    liftIO $ putStrLn $ "GCs: " ++ show stats
 
   ultraZoom cExports $ packageCachedAdaptSizeTo (toInteger $ 10 + length (Cabal._dependencies cPkg))
 

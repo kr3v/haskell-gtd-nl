@@ -57,6 +57,10 @@ hasNonEmptyOrig = (/= emptySourceSpan) . _declSrcOrig
 
 type Identifier = String
 
+name :: Name a -> String
+name (Ident _ n) = n
+name (Symbol _ n) = n
+
 identToDecl :: ModuleName SrcSpanInfo -> Name SrcSpanInfo -> Bool -> Declaration
 identToDecl m (Symbol l n) = identToDecl' m l n
 identToDecl m (Ident l n) = identToDecl' m l n

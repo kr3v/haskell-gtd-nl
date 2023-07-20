@@ -11,7 +11,7 @@ import Control.Monad.Trans.Writer (execWriterT)
 import Data.Either (partitionEithers)
 import qualified Data.Map as Map
 import GTD.Cabal (ModuleNameS)
-import GTD.Haskell.AST (ClassOrData (..), Declarations (..), Imports (..), haskellGetIdentifiers, haskellGetImports)
+import GTD.Haskell.AST (ClassOrData (..), Declarations (..), Imports (..))
 import qualified GTD.Haskell.AST as Declarations
 import GTD.Haskell.Declaration (Declaration (..), Identifier, hasNonEmptyOrig)
 import GTD.Haskell.Module (HsModule (..), HsModuleP (..))

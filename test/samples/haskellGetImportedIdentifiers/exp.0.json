@@ -11,13 +11,6 @@
           "sourceSpanFileName": "",
           "sourceSpanStartColumn": 0,
           "sourceSpanStartLine": 0
-        },
-        "_declSrcUsage": {
-          "sourceSpanEndColumn": 31,
-          "sourceSpanEndLine": 10,
-          "sourceSpanFileName": "./test/samples/haskellGetImportedIdentifiers/in.0.hs",
-          "sourceSpanStartColumn": 24,
-          "sourceSpanStartLine": 10
         }
       },
       "_eWildcard": true
@@ -33,13 +26,6 @@
           "sourceSpanFileName": "",
           "sourceSpanStartColumn": 0,
           "sourceSpanStartLine": 0
-        },
-        "_declSrcUsage": {
-          "sourceSpanEndColumn": 43,
-          "sourceSpanEndLine": 10,
-          "sourceSpanFileName": "./test/samples/haskellGetImportedIdentifiers/in.0.hs",
-          "sourceSpanStartColumn": 38,
-          "sourceSpanStartLine": 10
         }
       },
       "_eWildcard": false
@@ -55,13 +41,6 @@
           "sourceSpanFileName": "",
           "sourceSpanStartColumn": 0,
           "sourceSpanStartLine": 0
-        },
-        "_declSrcUsage": {
-          "sourceSpanEndColumn": 38,
-          "sourceSpanEndLine": 12,
-          "sourceSpanFileName": "./test/samples/haskellGetImportedIdentifiers/in.0.hs",
-          "sourceSpanStartColumn": 32,
-          "sourceSpanStartLine": 12
         }
       },
       "_eWildcard": false
@@ -77,15 +56,8 @@
         "sourceSpanFileName": "",
         "sourceSpanStartColumn": 0,
         "sourceSpanStartLine": 0
-      },
-      "_declSrcUsage": {
-        "sourceSpanEndColumn": 32,
-        "sourceSpanEndLine": 7,
-        "sourceSpanFileName": "./test/samples/haskellGetImportedIdentifiers/in.0.hs",
-        "sourceSpanStartColumn": 22,
-        "sourceSpanStartLine": 7
       }
     }
   ],
-  "importedModules": ["ScEaHs.Game.Renderable"]
+  "importedModules": ["ScEaHs.Game.Renderable", "Prelude"]
 }

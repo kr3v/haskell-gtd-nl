@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -14,12 +15,12 @@ import Control.Monad.Trans.Writer (WriterT (..), execWriterT)
 import Data.Either (partitionEithers)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (mapMaybe)
-import Distribution.ModuleName (fromString, toFilePath)
+import Distribution.ModuleName (fromString, toFilePath, validModuleComponent)
 import GTD.Cabal (ModuleNameS)
 import qualified GTD.Cabal as Cabal
-import GTD.Haskell.AST (ClassOrData (..), Declarations (..), Exports (..), Imports (..), allImportedModules, haskellGetExports, haskellGetIdentifiers, haskellGetImports)
+import GTD.Haskell.AST (ClassOrData (..), Declarations (..), Exports (..), Imports (..), allImportedModules)
 import GTD.Haskell.Declaration (Declaration (..))
-import GTD.Haskell.Module (HsModule (..), HsModuleData (..), HsModuleP (..), emptyHsModule, parseModule)
+import GTD.Haskell.Module (HsModule (..), HsModuleData (..), HsModuleP (..), HsModuleParams (..), emptyHsModule, parseModule)
 import qualified GTD.Haskell.Module as HsModule
 import GTD.Haskell.Utils (asDeclsMap)
 import GTD.Utils (logDebugNSS, logErrorNSS, mapFrom)
@@ -89,7 +90,7 @@ figureOutExports0 st m = do
   let logTag = "module prepare exports for " ++ _name m
   logDebugNSS logTag $ _name m
 
-  let isImplicitExportAll = _isImplicitExportAll . _info $ m
+  let (HsModuleParams {_isImplicitExportAll = isImplicitExportAll}) = _params m
       Exports {exportedVars = eV, exportedModules = eM, exportedCDs = eCD} = _exports0 . _info $ m
       Imports {importedDecls = iV, importedModules = iM, importedCDs = iCD} = _imports . _info $ m
       locals = _locals . _info $ m

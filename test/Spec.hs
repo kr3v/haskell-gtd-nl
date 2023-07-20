@@ -26,7 +26,8 @@ import Distribution.PackageDescription (emptyGenericPackageDescription, emptyPac
 import GHC.RTS.Flags (ProfFlags (descrSelector))
 import qualified GTD.Cabal as Cabal
 import GTD.Configuration (GTDConfiguration (_repos), prepareConstants)
-import GTD.Haskell.AST (Declarations (..), Exports, Imports, haskellGetExports, haskellGetIdentifiers, haskellGetImports, haskellParse)
+import GTD.Haskell.AST (Declarations (..), Exports, Imports)
+import qualified GTD.Haskell.AST as AST
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (Declaration (Declaration, _declName, _declSrcOrig), Identifier (..), SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine), emptySourceSpan)
 import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule)
@@ -90,11 +91,11 @@ haskellGetIdentifiersSpec = do
         expectedS <- BS.readFile expPath
         let expected :: Declarations = fromJust $ decode expectedS
 
-        let result = haskellParse srcPath src
+        let result = AST.parse srcPath src
         case result of
           Left e -> expectationFailure $ printf "failed to parse %s: %s" srcPath e
           Right m -> do
-            identifiers <- liftIO $ runStderrLoggingT $ execWriterT $ haskellGetIdentifiers m
+            identifiers <- liftIO $ runStderrLoggingT $ execWriterT $ AST.identifiers m
             BS.writeFile dstPath $ encode identifiers
             identifiers `shouldBe` expected
 
@@ -120,11 +121,11 @@ haskellGetExportsSpec = do
 
         let expected :: Exports = fromJust $ decode expectedS
 
-        let result = haskellParse srcPath src
+        let result = AST.parse srcPath src
         case result of
           Left e -> expectationFailure $ printf "failed to parse %s: %s" srcPath e
           Right m -> do
-            (isImplicitExportAll, identifiers) <- runWriterT $ runStderrLoggingT $ haskellGetExports m
+            (isImplicitExportAll, identifiers) <- runWriterT $ runStderrLoggingT $ AST.exports m
             BS.writeFile dstPath $ encode identifiers
             identifiers `shouldBe` expected
 
@@ -146,11 +147,11 @@ haskellGetImportsSpec = do
 
         let expected :: Imports = fromJust $ decode expectedS
 
-        let result = haskellParse srcPath src
+        let result = AST.parse srcPath src
         case result of
           Left e -> expectationFailure $ printf "failed to parse %s: %s" srcPath e
           Right m -> do
-            identifiers <- execWriterT $ runStderrLoggingT $ haskellGetImports m
+            identifiers <- execWriterT $ runStderrLoggingT $ AST.imports m
             BS.writeFile dstPath $ encode identifiers
             identifiers `shouldBe` expected
   describe descr $ do
@@ -237,6 +238,13 @@ definitionsSpec = do
     it "re-exported regular function" $ do
       join $ mstack evalStateT serverState $ do
         eval "mkStdGen" expectedMkStdGen
+
+    it "from prelude - function" $ do
+      join $ mstack evalStateT serverState $ do
+        eval "return" noDefErr
+    it "from prelude - data ctor" $ do
+      join $ mstack evalStateT serverState $ do
+        eval "Nothing" noDefErr
 
     it "re-exported throughout packages (?) class name" $ do
       join $ mstack evalStateT serverState $ do

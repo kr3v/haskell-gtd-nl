@@ -13,35 +13,43 @@ import Control.Monad.Cont (MonadIO)
 import Control.Monad.Except (MonadError, liftEither)
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.State (MonadIO (..))
-import Control.Monad.Trans.Writer
+import Control.Monad.Trans.Writer (WriterT (runWriterT), execWriterT)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Either.Combinators (mapLeft)
 import qualified Data.Map.Strict as Map
 import GHC.Generics (Generic)
 import GTD.Cabal (ModuleNameS, PackageNameS)
-import GTD.Haskell.AST (ClassOrData (_cdtName), Declarations (..), Exports (..), Imports (Imports, importedCDs, importedDecls, importedModules), haskellGetExports, haskellGetIdentifiers, haskellGetImports, haskellParse)
+import GTD.Haskell.AST (ClassOrData (_cdtName), Declarations (..), Exports (..), Imports (Imports, importedCDs, importedDecls, importedModules), parse, exports, imports, identifiers)
 import qualified GTD.Haskell.AST as Declarations
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (Declaration (_declModule, _declName))
 import GTD.Utils (logDebugNSS)
 import Language.Haskell.Exts (Module (Module), SrcSpan (..), SrcSpanInfo (..))
 
+newtype HsModuleParams = HsModuleParams
+  { _isImplicitExportAll :: Bool
+  }
+  deriving (Show, Eq, Generic)
+
+emptyParams :: HsModuleParams
+emptyParams = HsModuleParams {_isImplicitExportAll = False}
+
 data HsModuleData = HsModuleData
-  { _isImplicitExportAll :: Bool,
-    _exports0 :: Exports,
+  { _exports0 :: Exports,
     _imports :: Imports,
     _locals :: Declarations
   }
   deriving (Show, Eq, Generic)
 
 emptyData :: HsModuleData
-emptyData = HsModuleData {_isImplicitExportAll = False, _exports0 = Exports {exportedModules = [], exportedVars = [], exportedCDs = []}, _imports = Imports {importedModules = [], importedDecls = [], importedCDs = []}, _locals = Declarations {_decls = Map.empty, _dataTypes = Map.empty}}
+emptyData = HsModuleData {_exports0 = Exports {exportedModules = [], exportedVars = [], exportedCDs = []}, _imports = Imports {importedModules = [], importedDecls = [], importedCDs = []}, _locals = Declarations {_decls = Map.empty, _dataTypes = Map.empty}}
 
 data HsModule = HsModule
   { _package :: PackageNameS,
     _name :: ModuleNameS,
     _path :: FilePath,
-    _info :: HsModuleData
+    _info :: HsModuleData,
+    _params :: HsModuleParams
   }
   deriving (Show, Eq, Generic)
 
@@ -62,7 +70,8 @@ emptyHsModule =
     { _package = "",
       _name = "",
       _path = "",
-      _info = emptyData
+      _info = emptyData,
+      _params = emptyParams
     }
 
 parseModule :: HsModule -> (MonadLoggerIO m, MonadError String m) => m HsModule
@@ -73,13 +82,13 @@ parseModule cm = do
 
   src <- liftEither . mapLeft show =<< (liftIO (try $ readFile srcP) :: (MonadIO m) => m (Either IOException String))
   srcPostCpp <- haskellApplyCppHs srcP src
-  a <- liftEither $ haskellParse srcP srcPostCpp
+  a <- liftEither $ parse srcP srcPostCpp
 
-  (iiea, es) <- runWriterT $ haskellGetExports a
-  is <- execWriterT $ haskellGetImports a
-  locals <- execWriterT $ haskellGetIdentifiers a
+  (iiea, es) <- runWriterT $ exports a
+  is <- execWriterT $ imports a
+  locals <- execWriterT $ identifiers a
 
-  return $ cm {_info = HsModuleData {_isImplicitExportAll = iiea, _exports0 = es, _imports = is, _locals = locals}}
+  return $ cm {_info = HsModuleData {_exports0 = es, _imports = is, _locals = locals}, _params = HsModuleParams {_isImplicitExportAll = iiea}}
 
 ---
 
