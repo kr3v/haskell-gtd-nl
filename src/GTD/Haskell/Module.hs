@@ -19,10 +19,10 @@ import Data.Either.Combinators (mapLeft)
 import qualified Data.Map.Strict as Map
 import GHC.Generics (Generic)
 import GTD.Cabal (ModuleNameS, PackageNameS)
-import GTD.Haskell.AST (ClassOrData (_cdtName), Declarations (..), Exports (..), Imports (Imports, importedCDs, importedDecls, importedModules), parse, exports, imports, identifiers)
-import qualified GTD.Haskell.AST as Declarations
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
-import GTD.Haskell.Declaration (Declaration (_declModule, _declName))
+import GTD.Haskell.Declaration (ClassOrData (_cdtName), Declaration (_declModule, _declName), Declarations (..), Exports (..), Imports (..))
+import qualified GTD.Haskell.Declaration as Declarations
+import GTD.Haskell.Parser.HaskellSrcExts (exports, identifiers, imports, parse)
 import GTD.Utils (logDebugNSS)
 import Language.Haskell.Exts (Module (Module), SrcSpan (..), SrcSpanInfo (..))
 

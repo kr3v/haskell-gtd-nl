@@ -42,7 +42,7 @@ TemplateHaskell language extension is not enabled
 TypeFamilies language extension is not enabled
 TypeOperators language extension is not enabled
 ```
-- `cabal get` fetches multiple versions of the same package, yet, as far as I understand, only of them is actually used during the build
+- `cabal get` fetches multiple versions of the same package, yet, as far as I understand, only of theddm is actually used during the build
 - immutable via vs code on `.repos`
 
 ---

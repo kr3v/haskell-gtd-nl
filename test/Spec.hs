@@ -26,10 +26,9 @@ import Distribution.PackageDescription (emptyGenericPackageDescription, emptyPac
 import GHC.RTS.Flags (ProfFlags (descrSelector))
 import qualified GTD.Cabal as Cabal
 import GTD.Configuration (GTDConfiguration (_repos), prepareConstants)
-import GTD.Haskell.AST (Declarations (..), Exports, Imports)
 import qualified GTD.Haskell.AST as AST
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
-import GTD.Haskell.Declaration (Declaration (Declaration, _declName, _declSrcOrig), Identifier (..), SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine), emptySourceSpan)
+import GTD.Haskell.Declaration (Declaration (Declaration, _declName, _declSrcOrig), Declarations (..), Exports, Identifier (..), Imports, SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine), emptySourceSpan)
 import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule)
 import qualified GTD.Haskell.Module as HsModule
 import GTD.Resolution.State (emptyContext)
@@ -76,8 +75,6 @@ haskellApplyCppHsSpec = do
           writeFile dstPath result
           result `shouldBe` expected
 
--- TODO: `shouldBe` invocation should not rely on the order of declarations, as the fact that
---       declarations are ordered would not be required later
 haskellGetIdentifiersSpec :: Spec
 haskellGetIdentifiersSpec = do
   let descr = "haskellGetIdentifiers"
@@ -158,17 +155,7 @@ haskellGetImportsSpec = do
     it "extracts only function imports" $
       test 0
 
-emptyCabalPackage :: Cabal.Package
-emptyCabalPackage = Cabal.Package "" emptyPackageDescription
-
-cmGen mn0 dn0 mnE dnE fnE =
-  let d0 = Declaration emptySourceSpan mn0 dn0
-      lE = emptySourceSpan {sourceSpanFileName = fnE}
-      dE = d0 {_declSrcOrig = lE, _declName = dnE}
-      cmE = Map.fromList [(mnE, HsModuleP {HsModule._exports = Declarations {_decls = Map.fromList [(dnE, dE)], _dataTypes = Map.empty}})]
-   in (d0, dE, cmE)
-
-nothingWasExpected d0 d1 = expectationFailure $ printf "expected Nothing, got %s (== (%s) => %s)" (show d0) (show d1) (show (d0 == d1))
+---
 
 definitionsSpec :: Spec
 definitionsSpec = do
@@ -219,6 +206,21 @@ definitionsSpec = do
             expLineNo = 56
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 16, sourceSpanEndColumn = 21, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
          in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+  let expectedPreludeNothing =
+        let expFile = _repos consts </> "base-4.16.4.0/GHC/Maybe.hs"
+            expLineNo = 29
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 19, sourceSpanEndColumn = 26, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+  let expectedPicture =
+        let expFile = _repos consts </> "gloss-rendering-1.13.1.2/Graphics/Gloss/Internals/Data/Picture.hs"
+            expLineNo = 60
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 6, sourceSpanEndColumn = 13, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+  let expectedRunState =
+        let expFile = _repos consts </> "transformers-0.5.6.2/Control/Monad/Trans/State/Lazy.hs"
+            expLineNo = 109
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 9, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
   let noDefErr = Left "No definition found"
 
   let st0 = emptyContext
@@ -244,17 +246,17 @@ definitionsSpec = do
         eval "return" noDefErr
     it "from prelude - data ctor" $ do
       join $ mstack evalStateT serverState $ do
-        eval "Nothing" noDefErr
+        eval "Nothing" expectedPreludeNothing
 
     it "re-exported throughout packages (?) class name" $ do
       join $ mstack evalStateT serverState $ do
         eval "State" noDefErr
     it "cross-package module re-export" $ do
       join $ mstack evalStateT serverState $ do
-        eval "runState" noDefErr
+        eval "runState" expectedRunState
     it "(re-export)? data name" $ do
       join $ mstack evalStateT serverState $ do
-        eval "Picture" noDefErr
+        eval "Picture" expectedPicture
 
     it "data type name" $ do
       join $ mstack evalStateT serverState $ do
@@ -279,80 +281,9 @@ definitionsSpec = do
       join $ mstack evalStateT serverState $ do
         eval "view" expectedLensView
 
--- parsePackageSpec :: Spec
--- parsePackageSpec = do
---   let descr = "parsePackage"
---   describe descr $
---     it "for each dependency in the integration repo, it parses all its modules" $ do
---       let expPath = "./test/samples/" ++ descr ++ "/exp.0.json"
---       let dstPath = "./test/samples/" ++ descr ++ "/out.0.json"
-
---       let tWorkDir = "./test/integrationTestRepo/sc-ea-hs"
---       let mFile = tWorkDir </> "app/game/Main.hs"
-
---       consts <- prepareConstants
---       result <- flip evalStateT emptyServerState $ runFileLoggingT (tWorkDir </> descr ++ ".txt") $ flip runReaderT consts $ do
---         let req = DefinitionRequest {workDir = tWorkDir, file = mFile, word = ""}
---         x1 <- runExceptT $ definition req {word = "playIO"}
---         pkgM <- use $ context . ccFindAt . at tWorkDir
---         case pkgM of
---           Nothing -> error "package not found"
---           Just pkgR -> do
---             deps <- Cabal._dependencies <$> Cabal.full pkgR
---             depsF <- mapM Cabal.full deps
---             r <- forM depsF $ \dep -> do
---               modules <- Map.elems <$> ultraZoom context (Resolution.modules1 dep)
---               liftIO $ print (Cabal.nameF dep)
---               liftIO $ printf "\tmods=%s\n" (show $ HsModule._name . _m <$> modules)
---               return (Cabal.nameF dep, HsModule._name . _m <$> modules)
---             return $ Map.fromList r
-
---       expectedS <- BS.readFile expPath
---       let expected :: Map.Map PackageNameS [ModuleNameS] = fromJust $ decode expectedS
---       BS.writeFile dstPath $ encode result
-
---       -- explicitly verify that there are non-exported modules that were parsed
---       -- yet be aware of 'failed' modules, as some Cabal-exported modules might be missing from the returned value
---       result `shouldBe` expected
-
--- updateExportsSpec :: Spec
--- updateExportsSpec = do
---   let descr = "updateExports"
---   describe descr $
---     it "1" $ do
---       let dstPath m = "./test/samples/" ++ descr ++ "/" ++ m ++ ".json"
-
---       let tWorkDir = "./test/integrationTestRepo/sc-ea-hs"
---       let mFile = tWorkDir </> "app/game/Main.hs"
-
---       -- let lift3 = lift . lift . lift
-
---       consts <- prepareConstants
---       flip evalStateT emptyServerState $ runFileLoggingT (tWorkDir </> descr ++ ".txt") $ flip runReaderT consts $ do
---         let req = DefinitionRequest {workDir = tWorkDir, file = mFile, word = ""}
---         x1 <- runExceptT $ definition req {word = "playIO"}
-
---         pkg <- use $ context . ccpmodules . at "haskell-src-exts" . _Just
---         liftIO $ print $ Map.keys pkg
-
---         let m1 = "Language.Haskell.Exts.Extension"
---         liftIO $ BS.writeFile (dstPath m1) $ encode $ _exports $ fromJust $ Map.lookup m1 pkg
---         let m2 = "Language.Haskell.Exts"
---         liftIO $ BS.writeFile (dstPath m2) $ encode $ _exports $ fromJust $ Map.lookup m2 pkg
---         let m3 = "Language.Haskell.Exts.Syntax"
---         liftIO $ BS.writeFile (dstPath m3) $ encode $ _exports $ fromJust $ Map.lookup m3 pkg
-
---       True `shouldBe` True
-
----
-
 integrationTestsSpec :: Spec
 integrationTestsSpec = do
   definitionsSpec
-
--- parsePackageSpec
-
--- updateExportsSpec
 
 main :: IO ()
 main = hspecWith defaultConfig {configPrintCpuTime = False} $ do

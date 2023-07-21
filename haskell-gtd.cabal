@@ -44,6 +44,7 @@ executable haskell-gtd-server
         , async ^>= 2.2.4
         , monad-control ^>= 1.0.3.1
         , optparse-applicative ^>= 0.18.1.0
+        , ghc-lib-parser >= 9.6.2.20230523
 
     hs-source-dirs:   app/server
     default-language: Haskell2010
@@ -83,6 +84,7 @@ library haskell-gtd-lib
         , lifted-async ^>= 0.10.2.4
         , monad-control ^>= 1.0.3.1
         , lrucache ^>= 1.2.0.1
+        , ghc-lib-parser >= 9.6.2.20230523
     
     exposed-modules:
         GTD.Cabal
@@ -91,10 +93,10 @@ library haskell-gtd-lib
         GTD.Haskell.Cpphs
         GTD.Haskell.Declaration
         GTD.Haskell.Module
-        GTD.Haskell.Utils
+        GTD.Haskell.Parser.GhcLibParser
+        GTD.Haskell.Parser.HaskellSrcExts
         GTD.Resolution.Definition
         GTD.Resolution.Module
-        GTD.Resolution.Package
         GTD.Resolution.State
         GTD.Resolution.State.Caching.Cabal
         GTD.Resolution.State.Caching.Package
@@ -135,6 +137,7 @@ test-suite haskell-gtd-lib-test
             , transformers ^>= 0.5.6.2
             , unix ^>= 2.8.1.1
             , utf8-string ^>= 1.0.2
+            , ghc-lib-parser >= 9.6.2.20230523
     build-tool-depends: hspec-discover:hspec-discover
     default-language: Haskell2010
     ghc-options: -O2 -g1 -threaded

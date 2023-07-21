@@ -11,12 +11,10 @@ import Control.Monad.Trans.Writer (execWriterT)
 import Data.Either (partitionEithers)
 import qualified Data.Map as Map
 import GTD.Cabal (ModuleNameS)
-import GTD.Haskell.AST (ClassOrData (..), Declarations (..), Imports (..))
-import qualified GTD.Haskell.AST as Declarations
-import GTD.Haskell.Declaration (Declaration (..), Identifier, hasNonEmptyOrig)
+import qualified GTD.Haskell.Declaration as Declarations
+import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Identifier, Imports (..), asDeclsMap, hasNonEmptyOrig)
 import GTD.Haskell.Module (HsModule (..), HsModuleP (..))
 import qualified GTD.Haskell.Module as HsModule
-import GTD.Haskell.Utils (asDeclsMap)
 import GTD.Resolution.State (Package (Package, _modules))
 import qualified GTD.Resolution.State as Package
 import GTD.Utils (logErrorNSS, mapFrom)
