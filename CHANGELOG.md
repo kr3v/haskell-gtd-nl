@@ -1,5 +1,8 @@
 # Revision history for haskell-gtd
 
+## 0.0.2.5 -- 2023-07-21
+* More performance. Prelude support. Local cache is invalidated on file saved.
+
 ## 0.0.2.0 -- 2023-07-03
 
 * Cross-package re-exports. Caching. Still very slow (especially first initialization), but once a completion actually gets provided - works fast enough.

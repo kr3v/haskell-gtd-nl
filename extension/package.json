@@ -2,7 +2,7 @@
   "name": "hs-gtd",
   "displayName": "hs-gtd",
   "description": "",
-  "version": "0.2.0",
+  "version": "0.2.5",
   "engines": {
     "vscode": "^1.79.0"
   },

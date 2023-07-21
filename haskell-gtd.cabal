@@ -1,12 +1,11 @@
 cabal-version:      2.4
 name:               haskell-gtd
-version:            0.0.2.0
+version:            0.0.2.5
 author:             kr3v
 extra-source-files: CHANGELOG.md
 
 -- add the following line to `ghc-options` to enable profiling
 -- -fprof-auto -rtsopts "-with-rtsopts=-N -A16M -p -s -h -l -i0.1"
-
 
 executable haskell-gtd-server
     main-is:          Main.hs
