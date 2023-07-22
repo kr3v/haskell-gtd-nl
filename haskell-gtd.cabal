@@ -93,6 +93,7 @@ library haskell-gtd-lib
         GTD.Haskell.Declaration
         GTD.Haskell.Module
         GTD.Haskell.Parser.GhcLibParser
+        GTD.Haskell.Parser.GhcLibParser.Extension
         GTD.Haskell.Parser.HaskellSrcExts
         GTD.Resolution.Definition
         GTD.Resolution.Module

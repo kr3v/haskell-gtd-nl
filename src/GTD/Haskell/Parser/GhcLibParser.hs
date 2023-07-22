@@ -1,24 +1,44 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
+{-# OPTIONS_GHC -Wno-missing-fields #-}
 
 module GTD.Haskell.Parser.GhcLibParser where
 
 import Control.Monad (forM_)
+import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Logger (MonadLoggerIO)
+import Control.Monad.State (MonadState (..), evalStateT, execStateT, modify)
 import Control.Monad.Writer (MonadWriter (..))
+import Data.Maybe (mapMaybe)
 import qualified GHC.Data.EnumSet as EnumSet
 import GHC.Data.FastString (mkFastString, unpackFS)
 import GHC.Data.StringBuffer (stringToStringBuffer)
+import GHC.Driver.Config.Diagnostic (initDiagOpts)
+import GHC.Driver.Config.Parser (initParserOpts)
 import GHC.Driver.Errors.Types (DriverMessageOpts (psDiagnosticOpts))
+import GHC.Driver.Ppr (showSDoc)
+import GHC.Driver.Session (DynFlags (..), Language (..), PlatformMisc (..), Settings (..), defaultDynFlags, initDynFlags, parseDynamicFilePragma, supportedLanguagesAndExtensions)
+import GHC.Fingerprint (fingerprint0)
 import GHC.Hs (GhcPs, HsDecl (..), HsModule (..), Sig (..), SrcSpanAnn' (..))
+import GHC.LanguageExtensions (Extension (..))
 import GHC.Parser (parseModule)
 import GHC.Parser.Errors.Types (PsMessage (..))
-import GHC.Parser.Lexer (P (unP), PState (..), ParseResult (..), ParserOpts, initParserState, mkParserOpts)
-import GHC.Types.Error (DecoratedSDoc, Diagnostic (..))
-import GHC.Types.SrcLoc (GenLocated (..), RealSrcSpan (srcSpanFile), SrcSpan (..), mkRealSrcLoc, srcSpanStartLine, srcSpanEndLine, srcSpanEndCol, srcSpanStartCol)
-import GHC.Utils.Error (DiagOpts (..), pprMessages)
+import GHC.Parser.Header (getOptions)
+import GHC.Parser.Lexer (P (unP), PState (..), ParseResult (..), ParserOpts, getPsMessages, initParserState, mkParserOpts)
+import GHC.Platform (Arch (..), ArchOS (..), ByteOrder (..), OS (..), PlatformWordSize (..), genericPlatform)
+import GHC.Settings (FileSettings (..), GhcNameVersion (..), Platform (..), ToolSettings (..), sTopDir)
+import GHC.Settings.Config (cProjectVersion)
+import GHC.Types.Error (DecoratedSDoc, Diagnostic (..), Messages (getMessages))
+import GHC.Types.SourceError (handleSourceError, srcErrorMessages)
+import GHC.Types.SrcLoc (GenLocated (..), Located, RealSrcSpan (srcSpanFile), SrcSpan (..), mkRealSrcLoc, srcSpanEndCol, srcSpanEndLine, srcSpanStartCol, srcSpanStartLine)
+import GHC.Utils.Error (DiagOpts (..), pprMessages, pprMsgEnvelopeBagWithLocDefault)
 import GHC.Utils.Outputable (Outputable (..), SDocContext (..), defaultSDocContext, renderWithContext)
-import GTD.Haskell.Declaration (Declaration (..), Declarations (..), SourceSpan (..), asDeclsMap)
+import GHC.Utils.Panic (handleGhcException)
+import GTD.Haskell.Declaration (Declaration (..), Declarations (..), SourceSpan (..), asDeclsMap, name)
+import GTD.Haskell.Parser.GhcLibParser.Extension (readExtension)
+import GTD.Utils (modifyM)
+import qualified Language.Haskell.Exts as HSE
 
 showO :: Outputable a => a -> String
 showO = renderWithContext defaultSDocContext {sdocErrorSpans = True} . ppr
@@ -26,38 +46,53 @@ showO = renderWithContext defaultSDocContext {sdocErrorSpans = True} . ppr
 showS :: Outputable a => SrcSpanAnn' a -> String
 showS (SrcSpanAnn ann loc) = showO ann ++ " " ++ showO loc
 
-ghcParse :: FilePath -> ParserOpts -> String -> P a -> ParseResult a
-ghcParse filename opts str parser = unP parser parseState
+ghcParse :: FilePath -> ParserOpts -> String -> ParseResult (Located (HsModule GhcPs))
+ghcParse filename opts str = unP parseModule parseState
   where
     location = mkRealSrcLoc (mkFastString filename) 1 1
     buffer = stringToStringBuffer str
     parseState = initParserState opts buffer location
 
-parse :: FilePath -> IO (HsModule GhcPs)
-parse p = do
-  content <- readFile p
-  let diagOpts = DiagOpts EnumSet.empty EnumSet.empty False False Nothing defaultSDocContext
-      opts = mkParserOpts EnumSet.empty diagOpts [] False False False False
-      r = ghcParse p opts content parseModule
-  case r of
-    POk _ (L l e) -> return e
-    PFailed s -> do
-      fail (showO $ errors s)
+fakeSettings :: Settings
+fakeSettings =
+  Settings
+    { sGhcNameVersion = GhcNameVersion {ghcNameVersion_programName = "ghc", ghcNameVersion_projectVersion = cProjectVersion},
+      sFileSettings = FileSettings {},
+      sTargetPlatform = genericPlatform,
+      sPlatformMisc = PlatformMisc {},
+      sToolSettings = ToolSettings {toolSettings_opt_P_fingerprint = fingerprint0}
+    }
 
-data Definition = Definition
-  { definitionIdentifier :: FilePath,
-    definitionLocation :: SrcSpan
-  }
-  deriving (Show, Eq)
+parsePragmasIntoDynFlags :: DynFlags -> FilePath -> String -> IO (Maybe DynFlags)
+parsePragmasIntoDynFlags dynFlags p content = do
+  let (_, opts) = getOptions (initParserOpts dynFlags) (stringToStringBuffer content) p
+  (flags, _, _) <- parseDynamicFilePragma dynFlags opts
+  return $ Just flags
+
+parse :: FilePath -> String -> IO (Either String (HsModule GhcPs))
+parse p content = do
+  let dynFlags0 = defaultDynFlags fakeSettings
+  dynFlags <-
+    parsePragmasIntoDynFlags dynFlags0 p content >>= \case
+      Nothing -> return dynFlags0
+      Just flags -> return flags
+
+  let opts = initParserOpts dynFlags
+  let r = ghcParse p opts content
+
+  return $ case r of
+    POk _ (L l e) -> Right e
+    PFailed s -> Left $ showO $ errors s
 
 asSourceSpan :: SrcSpan -> SourceSpan
-asSourceSpan (RealSrcSpan r _) = SourceSpan {
-  sourceSpanFileName = unpackFS $ srcSpanFile r,
-  sourceSpanStartLine = srcSpanStartLine r,
-  sourceSpanStartColumn = srcSpanStartCol r,
-  sourceSpanEndLine = srcSpanEndLine r,
-  sourceSpanEndColumn = srcSpanEndCol r
-  }
+asSourceSpan (RealSrcSpan r _) =
+  SourceSpan
+    { sourceSpanFileName = unpackFS $ srcSpanFile r,
+      sourceSpanStartLine = srcSpanStartLine r,
+      sourceSpanStartColumn = srcSpanStartCol r,
+      sourceSpanEndLine = srcSpanEndLine r,
+      sourceSpanEndColumn = srcSpanEndCol r
+    }
 
 identifiers :: HsModule GhcPs -> (MonadWriter Declarations m, MonadLoggerIO m) => m ()
 identifiers m = do

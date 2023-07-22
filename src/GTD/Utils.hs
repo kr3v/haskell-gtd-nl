@@ -6,7 +6,7 @@ import Control.Lens (Lens', use, (.=))
 import Control.Monad.Except (ExceptT, MonadIO (liftIO))
 import Control.Monad.Logger (MonadLoggerIO, logDebugNS, logErrorNS, MonadLogger)
 import Control.Monad.RWS (MonadState)
-import Control.Monad.State (StateT (runStateT))
+import Control.Monad.State (StateT (..))
 import Control.Monad.Trans.Except (catchE, mapExceptT)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import qualified Data.Map.Strict as Map
@@ -68,3 +68,9 @@ peekM a m = do
   r <- m
   _ <- a r
   return r
+
+modifyM :: (Monad m) => (s -> m s) -> StateT s m ()
+modifyM f = StateT $ \ s -> do
+    s' <- f s
+    return ((), s')
+    

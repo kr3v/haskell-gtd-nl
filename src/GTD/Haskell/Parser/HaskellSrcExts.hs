@@ -47,7 +47,7 @@ parseAmbigousInfixOperators src content = do
       let operators = execWriter $ importedSymbols is
       let fixs = infix_ 0 operators
       case parseFileContentsWithMode defaultParseMode {parseFilename = src, baseLanguage = Haskell2010, extensions = [EnableExtension FlexibleContexts, EnableExtension StandaloneDeriving], fixities = Just fixs} content of
-        ParseOk m -> Right m
+        ParseOk m -> Right m 
         ParseFailed loc e -> Left $ printf "failed to parse %s: %s @ %s" src (take 512 e) (show loc)
 
 -- TODO: figure out #line pragmas
@@ -59,9 +59,7 @@ parse src content = case parseFileContentsWithMode defaultParseMode {parseFilena
     _ -> Left $ printf "failed to parse %s: %s @ %s" src (take 512 e) (show loc)
 
 ---
-
----
-
+ 
 qualConDeclAsDataC' :: QualConDecl a -> (Name a, [Name a])
 qualConDeclAsDataC' (QualConDecl _ _ _ (ConDecl _ n ts)) = (n, [])
 qualConDeclAsDataC' (QualConDecl _ _ _ (InfixConDecl _ _ n _)) = (n, [])

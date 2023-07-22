@@ -45,6 +45,8 @@ TypeOperators language extension is not enabled
 - `cabal get` fetches multiple versions of the same package, yet, as far as I understand, only of theddm is actually used during the build
 - immutable via vs code on `.repos`
 - cache invalidation
+- apply cpphs via command + allow specify 'defined' stuff
+- go to symbol command
 
 ---
 

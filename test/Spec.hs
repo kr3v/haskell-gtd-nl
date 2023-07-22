@@ -3,20 +3,20 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 import Control.Applicative (Alternative (empty), Applicative (liftA2))
-import Control.Exception (evaluate)
+import Control.Exception (IOException, evaluate, try)
 import Control.Lens (At (at), use)
 import Control.Lens.Prism (_Just)
 import Control.Monad.Logger (runStderrLoggingT)
 import Control.Monad.Logger.CallStack (runFileLoggingT)
 import Control.Monad.State (MonadTrans (lift), StateT (..), evalStateT, execStateT, forM)
-import Control.Monad.Trans.Except (runExceptT)
+import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
 import Control.Monad.Trans.Maybe (MaybeT (runMaybeT))
 import Control.Monad.Trans.Reader (ReaderT (..))
 import Control.Monad.Writer (MonadIO (liftIO), execWriterT, forM_, join, runWriterT)
 import Data.Aeson (FromJSON, ToJSON, decode, defaultOptions, encode, genericToJSON)
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.Map as Map
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, fromMaybe)
 import qualified Data.Set as Set
 import Data.Time.Clock (diffUTCTime)
 import Data.Time.Clock.POSIX (getCurrentTime)
@@ -31,11 +31,12 @@ import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (Declaration (Declaration, _declName, _declSrcOrig), Declarations (..), Exports, Identifier (..), Imports, SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine), emptySourceSpan)
 import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule)
 import qualified GTD.Haskell.Module as HsModule
+import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import GTD.Resolution.State (emptyContext)
 import GTD.Resolution.State.Caching.Cabal (cabalCacheGet, cabalCacheStore)
 import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), definition, noDefintionFoundError, noDefintionFoundErrorE)
 import GTD.Utils (logDebugNSS, ultraZoom)
-import Language.Haskell.Exts (Module (..), SrcSpan (..), SrcSpanInfo (..))
+import Language.Haskell.Exts (Module (..), Parseable (parse), SrcSpan (..), SrcSpanInfo (..))
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.FilePath ((</>))
 import Test.Hspec (Spec, describe, expectationFailure, it, runIO, shouldBe, shouldNotBe, shouldSatisfy)
@@ -78,31 +79,52 @@ haskellApplyCppHsSpec = do
 haskellGetIdentifiersSpec :: Spec
 haskellGetIdentifiersSpec = do
   let descr = "haskellGetIdentifiers"
-  let test i = do
+  let test n p i = do
         let iS = show i
             srcPath = "./test/samples/" ++ descr ++ "/in." ++ iS ++ ".hs"
-            dstPath = "./test/samples/" ++ descr ++ "/out." ++ iS ++ ".json"
+            dstPath = "./test/samples/" ++ descr ++ "/out." ++ n ++ "." ++ iS ++ ".json"
             expPath = "./test/samples/" ++ descr ++ "/exp." ++ iS ++ ".json"
 
         src <- readFile srcPath
-        expectedS <- BS.readFile expPath
-        let expected :: Declarations = fromJust $ decode expectedS
+        expectedS <- try (BS.readFile expPath) :: IO (Either IOException BS.ByteString)
+        let expected :: Declarations =
+              case expectedS of
+                Left _ -> mempty
+                Right s -> do
+                  let m :: Maybe Declarations = decode s
+                  fromMaybe mempty m
 
-        let result = AST.parse srcPath src
+        result <- liftIO $ p srcPath src
         case result of
           Left e -> expectationFailure $ printf "failed to parse %s: %s" srcPath e
-          Right m -> do
-            identifiers <- liftIO $ runStderrLoggingT $ execWriterT $ AST.identifiers m
+          Right identifiersM -> do
+            identifiers <- identifiersM
             BS.writeFile dstPath $ encode identifiers
             identifiers `shouldBe` expected
 
-  describe descr $ do
-    it "parses only function declarations" $
-      test 0
-    it "parses declarations of multiple functions with shared type signature" $
-      test 1
-    it "parses classes declarations" $
-      test 2
+  let hseP a b = do
+        let z = AST.parse a b
+        return $ case z of
+          Left l -> Left l
+          Right r -> Right $ runStderrLoggingT $ execWriterT $ AST.identifiers r
+  let -- ghcP :: FilePath -> String -> IO (Either String Declarations)
+      ghcP a b = do
+        z <- GHC.parse a b
+        return $ case z of
+          Left l -> Left l
+          Right r -> Right $ runStderrLoggingT $ execWriterT $ GHC.identifiers r
+
+  let parsers = [("haskell-src-exts", hseP), ("ghc-lib-parser", ghcP)]
+
+  forM_ parsers $ \(n, p) -> do
+    describe descr $ do
+      describe n $ do
+        it "parses only function declarations" $
+          test n p 0
+        it "parses declarations of multiple functions with shared type signature" $
+          test n p 1
+        it "parses classes declarations" $
+          test n p 2
 
 haskellGetExportsSpec :: Spec
 haskellGetExportsSpec = do
