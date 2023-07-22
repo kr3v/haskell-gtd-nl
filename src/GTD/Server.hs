@@ -8,7 +8,7 @@ module GTD.Server where
 
 import Control.Lens (over, use, (%=))
 import Control.Monad (forM_, mapAndUnzipM, when, (<=<), (>=>))
-import Control.Monad.Except (ExceptT, MonadError, MonadIO (..), liftEither, runExceptT)
+import Control.Monad.Except (ExceptT, MonadError (..), MonadIO (..), liftEither, runExceptT)
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (MonadReader (..), MonadState (..))
 import Control.Monad.State (evalStateT, execStateT, modify)
@@ -34,7 +34,7 @@ import GTD.Resolution.Module (figureOutExports, figureOutExports0, module'Depend
 import GTD.Resolution.State (Context (..), Package (Package, _cabalPackage, _modules), cExports, ccGet)
 import qualified GTD.Resolution.State as Package
 import GTD.Resolution.State.Caching.Cabal (cabalCacheStore, cabalFindAtCached, cabalFull)
-import GTD.Resolution.State.Caching.Package (packageCachedAdaptSizeTo, packageCachedGet, packageCachedGet', packageCachedPut, packagePersistenceGet, persistenceExists)
+import GTD.Resolution.State.Caching.Package (packageCachedAdaptSizeTo, packageCachedGet, packageCachedGet', packageCachedPut, packagePersistenceGet, persistenceExists, persistenceGet, packageCachedRemove)
 import GTD.Resolution.Utils (ParallelizedState (..), SchemeState (..), parallelized, scheme)
 import GTD.Utils (logDebugNSS, ultraZoom)
 import Text.Printf (printf)
@@ -157,7 +157,7 @@ definition ::
 definition (DefinitionRequest {workDir = wd, file = rf, word = w}) = do
   cPkg <- cabalFindAtCached wd
   pkgM <- package cPkg
-  pkg <- maybe noDefintionFoundErrorME return pkgM
+  pkg <- maybe (throwError "no package found?") return pkgM
 
   m <- parseModule emptyHsModule {_path = rf}
   m' <- resolution <$> evalStateT (enrich m) pkg
@@ -179,3 +179,21 @@ definition (DefinitionRequest {workDir = wd, file = rf, word = w}) = do
       if hasNonEmptyOrig d
         then return $ DefinitionResponse {srcSpan = Just $ _declSrcOrig d, err = Nothing}
         else noDefintionFoundErrorME
+
+---
+
+newtype DropCacheRequest = DropCacheRequest {dir :: FilePath}
+  deriving (Show, Generic)
+
+instance FromJSON DropCacheRequest
+
+instance ToJSON DropCacheRequest
+
+resetCache ::
+  DropCacheRequest ->
+  (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m, MonadError String m) => m String
+resetCache (DropCacheRequest {dir = d}) = do
+  cPkg <- cabalFindAtCached d
+  packageCachedRemove cPkg
+  cExports %= fst . LRU.delete (Cabal.nameVersionF cPkg)
+  return "OK"

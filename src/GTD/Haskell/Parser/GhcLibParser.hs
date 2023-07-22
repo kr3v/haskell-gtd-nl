@@ -20,7 +20,7 @@ import GHC.Driver.Errors.Types (DriverMessageOpts (psDiagnosticOpts))
 import GHC.Driver.Ppr (showSDoc)
 import GHC.Driver.Session (DynFlags (..), Language (..), PlatformMisc (..), Settings (..), defaultDynFlags, initDynFlags, parseDynamicFilePragma, supportedLanguagesAndExtensions)
 import GHC.Fingerprint (fingerprint0)
-import GHC.Hs (GhcPs, HsDecl (..), HsModule (..), Sig (..), SrcSpanAnn' (..))
+import GHC.Hs (GhcPs, HsDecl (..), HsModule (..), ModuleName (ModuleName), Sig (..), SrcSpanAnn' (..), TyClDecl (..))
 import GHC.LanguageExtensions (Extension (..))
 import GHC.Parser (parseModule)
 import GHC.Parser.Errors.Types (PsMessage (..))
@@ -53,6 +53,8 @@ ghcParse filename opts str = unP parseModule parseState
     buffer = stringToStringBuffer str
     parseState = initParserState opts buffer location
 
+---
+
 fakeSettings :: Settings
 fakeSettings =
   Settings
@@ -78,11 +80,16 @@ parse p content = do
       Just flags -> return flags
 
   let opts = initParserOpts dynFlags
-  let r = ghcParse p opts content
+      location = mkRealSrcLoc (mkFastString p) 1 1
+      buffer = stringToStringBuffer content
+      parseState = initParserState opts buffer location
+      r = unP parseModule parseState
 
   return $ case r of
     POk _ (L l e) -> Right e
     PFailed s -> Left $ showO $ errors s
+
+---
 
 asSourceSpan :: SrcSpan -> SourceSpan
 asSourceSpan (RealSrcSpan r _) =
@@ -95,13 +102,16 @@ asSourceSpan (RealSrcSpan r _) =
     }
 
 identifiers :: HsModule GhcPs -> (MonadWriter Declarations m, MonadLoggerIO m) => m ()
-identifiers m = do
-  forM_ (hsmodDecls m) $ \(L _ l) -> case l of
-    SigD _ s -> do
-      case s of
-        TypeSig _ h i -> do
-          forM_ h $ \(L (SrcSpanAnn ann loc) k) -> do
-            tell mempty {_decls = asDeclsMap [Declaration {_declSrcOrig = asSourceSpan loc, _declModule = "", _declName = showO k}]}
-        _ -> return ()
-    TyClD g h -> return ()
+identifiers m@(HsModule {hsmodName = Just (L _ (ModuleName nF))}) = do
+  let mN = unpackFS nF
+  forM_ (hsmodDecls m) $ \(L _ d) -> case d of
+    SigD _ s -> case s of
+      TypeSig _ h i -> do
+        forM_ h $ \(L (SrcSpanAnn ann loc) k) -> do
+          tell mempty {_decls = asDeclsMap [Declaration {_declSrcOrig = asSourceSpan loc, _declModule = mN, _declName = showO k}]}
+      _ -> return ()
+    TyClD _ tc -> case tc of
+      SynDecl _ h n _ _ -> return ()
+        -- tell mempty {_decls = asDeclsMap [Declaration {_declSrcOrig = asSourceSpan $ getLoc h, _declModule = mN, _declName = showO n}]}
     _ -> return ()
+identifiers _ = return ()

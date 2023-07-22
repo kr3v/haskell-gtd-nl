@@ -2,9 +2,11 @@
 
 module GTD.Utils where
 
+import Control.Concurrent (myThreadId)
+import Control.Exception (catch, throwIO)
 import Control.Lens (Lens', use, (.=))
 import Control.Monad.Except (ExceptT, MonadIO (liftIO))
-import Control.Monad.Logger (MonadLoggerIO, logDebugNS, logErrorNS, MonadLogger)
+import Control.Monad.Logger (MonadLogger, MonadLoggerIO, logDebugNS, logErrorNS)
 import Control.Monad.RWS (MonadState)
 import Control.Monad.State (StateT (..))
 import Control.Monad.Trans.Except (catchE, mapExceptT)
@@ -12,7 +14,8 @@ import Control.Monad.Trans.Maybe (MaybeT (..))
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
 import Data.Time.Clock.POSIX (getPOSIXTime)
-import Control.Concurrent (myThreadId)
+import System.Directory (removeFile)
+import System.IO.Error (isDoesNotExistError)
 import Text.Printf (printf)
 
 maybeToMaybeT :: Monad m => Maybe a -> MaybeT m a
@@ -31,7 +34,6 @@ logDebugNSS a b = do
   threadID <- liftIO myThreadId
   logDebugNS (T.pack a) (T.pack $ printf "%s (thread id=%s): %s" (show now) (show threadID) b)
 
-
 logDebugNSS' :: (MonadIO m, MonadLogger m) => String -> String -> m ()
 logDebugNSS' a b = do
   now <- liftIO getPOSIXTime
@@ -43,7 +45,6 @@ logErrorNSS a b = do
   now <- liftIO getPOSIXTime
   threadID <- liftIO myThreadId
   logErrorNS (T.pack a) (T.pack $ printf "%s (thread id=%s): %s" (show now) (show threadID) b)
-
 
 tryE :: Monad m => ExceptT e m a -> ExceptT e m (Either e a)
 tryE m = catchE (fmap Right m) (return . Left)
@@ -70,7 +71,13 @@ peekM a m = do
   return r
 
 modifyM :: (Monad m) => (s -> m s) -> StateT s m ()
-modifyM f = StateT $ \ s -> do
-    s' <- f s
-    return ((), s')
-    
+modifyM f = StateT $ \s -> do
+  s' <- f s
+  return ((), s')
+
+removeIfExists :: FilePath -> IO ()
+removeIfExists fileName = removeFile fileName `catch` handleExists
+  where
+    handleExists e
+      | isDoesNotExistError e = return ()
+      | otherwise = throwIO e

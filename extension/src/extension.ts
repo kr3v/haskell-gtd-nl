@@ -4,8 +4,7 @@ import path = require('path/posix');
 import fs = require('node:fs');
 import { ChildProcess, exec, spawn } from 'child_process';
 import { homedir } from 'os'
-import { SingleEntryPlugin } from 'webpack';
-
+import * as util from 'util';
 
 const userHomeDir = homedir();
 let serverRoot = path.join(userHomeDir, "/.local/share/haskell-gtd-extension-server-root");
@@ -13,6 +12,7 @@ let serverExe = path.join(serverRoot, "haskell-gtd-server");
 let serverRepos = path.join(serverRoot, "repos");
 let serverPidF = path.join(serverRoot, 'pid');
 let serverPortF = path.join(serverRoot, 'port');
+let outputChannel: vscode.OutputChannel;
 
 function refreshSubPaths() {
 	serverRepos = path.join(serverRoot, "repos");
@@ -33,7 +33,7 @@ async function createSymlink(src: string, dst: string) {
 	try {
 		await fs.promises.symlink(src, dst, 'file');
 	} catch (error) {
-		console.log('symlink %s -> %s failed: %s', src, dst, error);
+		outputChannel.appendLine(util.format('symlink %s -> %s failed: %s', src, dst, error));
 	}
 }
 
@@ -48,16 +48,16 @@ async function sendHeartbeat() {
 	let res = await axios.
 		post(`http://localhost:${port}/ping`, null).
 		catch(function (error) {
-			console.log(error);
+			outputChannel.appendLine(util.format(error));
 			return null;
 		});
-	console.log("heartbeat: %s", res);
+	outputChannel.appendLine(util.format("heartbeat: %s", res));
 	return res != null;
 }
 
 async function startServerIfRequired() {
 	if (await sendHeartbeat()) return;
-	console.log("starting server");
+	outputChannel.appendLine(util.format("starting server"));
 
 	if (stdout != null) { fs.closeSync(stdout); stdout = null; }
 	if (stderr != null) { fs.closeSync(stderr); stderr = null; }
@@ -98,7 +98,7 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 		let range = document.getWordRangeAtPosition(position);
 		let word = document.getText(range);
 
-		console.log("%s", word);
+		outputChannel.appendLine(util.format("%s", word));
 
 		if (!vscode.workspace.workspaceFolders) {
 			return Promise.resolve([]);
@@ -109,7 +109,7 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 		let docPath = document.uri.fsPath;
 
 		if (!isParentOf(workspacePath, docPath)) {
-			console.log("workspacePath is not parent of docPath, this case is broken right now");
+			outputChannel.appendLine(util.format("workspacePath is not parent of docPath, this case is broken right now"));
 			return Promise.resolve([]);
 		}
 
@@ -122,17 +122,20 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 		let res = await axios.
 			post(`http://localhost:${port}/definition`, body).
 			catch(function (error) {
-				console.log("for body {body}");
-				console.log(error);
+				outputChannel.appendLine(util.format("for body {body}"));
+				outputChannel.appendLine(util.format(error));
 				return { "data": {} };
 			});
 		let data = res.data;
-		console.log(data);
-		console.log(res);
 		if (data.err != "" && data.err != undefined) {
-			console.log("%s -> err:%s", word, data.err);
+			outputChannel.appendLine(util.format("%s -> err=%s (data=%s)", word, data.err, JSON.stringify(data)));
 			return Promise.resolve([]);
 		}
+		if (data.srcSpan == undefined) {
+			outputChannel.appendLine(util.format("%s -> no srcSpan (data=%s)", word, JSON.stringify(data)));
+			return Promise.resolve([]);
+		}
+		outputChannel.appendLine(util.format(data));
 
 		let symlink = path.join(workspacePath, "./.repos");
 		await createSymlink(serverRepos, symlink);
@@ -144,7 +147,7 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 		} else if (isParentOf(serverRepos, filePath)) {
 			filePathU = path.resolve(symlink, path.relative(serverRepos, filePath))
 		} else {
-			console.log("filePath is not parent of workspacePath or serverRepos");
+			outputChannel.appendLine(util.format("filePath is not parent of workspacePath or serverRepos"));
 			return Promise.resolve([]);
 		}
 		let fileUri = vscode.Uri.file(path.normalize(filePathU));
@@ -154,18 +157,18 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 		let definitionPosition = new vscode.Position(line, character);
 		let definitionLocation = new vscode.Location(fileUri, definitionPosition);
 
-		console.log("%s -> %s", filePath, filePathU);
+		outputChannel.appendLine(util.format("%s -> %s", filePath, filePathU));
 		return Promise.resolve(definitionLocation);
 	}
 }
 
 export function activate(context: vscode.ExtensionContext) {
-	console.log('Congratulations, your extension "hs-gtd" is now active!');
-	console.log(userHomeDir);
-
+	outputChannel = vscode.window.createOutputChannel("haskell-gtd");
+	
+	outputChannel.appendLine(userHomeDir);
 
 	context.subscriptions.push(
-		vscode.workspace.onDidSaveTextDocument((document: vscode.TextDocument) => {
+		vscode.workspace.onDidSaveTextDocument(async (document: vscode.TextDocument) => {
 			let workspaceFolders = vscode.workspace.workspaceFolders;
 			if (!workspaceFolders) {
 				return;
@@ -173,13 +176,16 @@ export function activate(context: vscode.ExtensionContext) {
 			let workspacePath = workspaceFolders[0].uri.fsPath;
 			let symlink = path.join(workspacePath, "./.repos");
 
-			console.log("saved languageId=%s: %s", document.languageId, document.uri.fsPath);
+			outputChannel.appendLine(util.format("saved languageId=%s: %s", document.languageId, document.uri.fsPath));
 			if (isParentOf(symlink, document.uri.fsPath) ||
 				!(document.languageId == "haskell" || document.languageId == "cabal") ||
 				!isParentOf(workspacePath, document.uri.fsPath)) return;
-			console.log("resetting workspace extension cache");
-			fs.rmSync(path.join(workspacePath, "modules.json"), { recursive: false, force: true });
-			fs.rmSync(path.join(workspacePath, "exports.json"), { recursive: false, force: true });
+			outputChannel.appendLine(util.format("resetting workspace extension cache"));
+
+			await startServerIfRequired();
+			let body = {dir: workspacePath};
+			let res = await axios.post(`http://localhost:${port}/dropcache`, body);
+			outputChannel.appendLine(util.format("resetting workspace extension cache: %s", res.data));
 		})
 	);
 
@@ -210,8 +216,12 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	let intervalId = setInterval(sendHeartbeat, 30 * 1000);
-	context.subscriptions.push({ dispose: () => clearInterval(intervalId) });
+	context.subscriptions.push({
+		dispose: () => {
+			clearInterval(intervalId);
+			outputChannel.show();
+		}
+	});
 }
 
-// This method is called when your extension is deactivated
 export async function deactivate() { }

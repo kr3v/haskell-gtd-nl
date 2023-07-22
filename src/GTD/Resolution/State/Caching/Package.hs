@@ -20,7 +20,7 @@ import qualified GTD.Cabal as Cabal
 import GTD.Configuration (GTDConfiguration (..))
 import GTD.Resolution.State (Context, Package (..), cExports)
 import qualified GTD.Resolution.State as Package
-import GTD.Utils (logDebugNSS, ultraZoom)
+import GTD.Utils (logDebugNSS, ultraZoom, removeIfExists)
 import System.Directory (doesFileExist)
 import System.FilePath.Posix ((</>))
 import Text.Printf (printf)
@@ -50,6 +50,17 @@ packagePersistenceGet cPkg = do
   let p = Package cPkg <$> modulesJ <*> exportsJ
   logDebugNSS "package cached get" $ printf "%s -> %s" (show $ Cabal.nameVersionF cPkg) (show $ isJust p)
   return p
+
+packageCachedRemove ::
+  Cabal.PackageFull ->
+  (MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m) => m ()
+packageCachedRemove cPkg = do
+  let root = Cabal._path . Cabal._fpackage $ cPkg
+      modulesP = root </> "modules.json"
+      exportsP = root </> "exports.json"
+  liftIO $ removeIfExists modulesP
+  liftIO $ removeIfExists exportsP
+  logDebugNSS "package cached remove" $ printf "%s" (show $ Cabal.nameVersionF cPkg)
 
 packageCachedPut ::
   Cabal.PackageFull ->

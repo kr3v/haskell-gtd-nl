@@ -11,29 +11,32 @@ module Main where
 
 import Control.Concurrent (MVar, forkIO, modifyMVar_, newMVar, putMVar, readMVar, takeMVar, threadDelay)
 import Control.Lens (makeLenses, (<+=), (^.))
-import Control.Monad.Cont (MonadIO (..))
-import Control.Monad.Except (runExceptT)
-import Control.Monad.Logger (LogLevel (LevelDebug), filterLogger, runFileLoggingT, runStdoutLoggingT)
-import Control.Monad.Reader (ReaderT (runReaderT))
-import Control.Monad.State (StateT (runStateT), execStateT)
+import Control.Monad.Except (MonadError, runExceptT)
+import Control.Monad.Logger (LogLevel (LevelDebug), MonadLoggerIO, filterLogger, runFileLoggingT, runStdoutLoggingT)
+import Control.Monad.Reader (MonadReader, ReaderT (runReaderT))
+import Control.Monad.State (MonadState, StateT (runStateT), execStateT)
 import Control.Monad.State.Lazy (evalStateT)
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Proxy (Proxy (..))
 import GHC.TypeLits (KnownSymbol)
 import GTD.Configuration (GTDConfiguration (_logs), prepareConstants, root)
 import GTD.Resolution.State (Context, emptyContext)
 import GTD.Resolution.State.Caching.Cabal (cabalCacheGet)
-import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), definition)
-import GTD.Utils (logDebugNSS, peekM, ultraZoom)
+import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), DropCacheRequest, definition, resetCache)
+import GTD.Utils (ultraZoom)
 import Network.Socket (Family (AF_INET), SockAddr (SockAddrInet), SocketType (Stream), bind, defaultProtocol, listen, socket, socketPort, tupleToHostAddress, withSocketsDo)
 import Network.Wai.Handler.Warp (defaultSettings, runSettingsSocket)
-import Options.Applicative
+import Options.Applicative (Parser, ParserInfo, auto, execParser, fullDesc, help, helper, info, long, option, showDefault, value, (<**>))
 import Servant (Header, Headers, JSON, Post, ReqBody, addHeader, (:<|>) (..), (:>))
 import Servant.Server (Handler, serve)
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.Exit (ExitCode (..))
 import System.FilePath ((</>))
+import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
 import System.Posix (exitImmediately, getProcessID)
 import Text.Printf (printf)
+import Control.Monad.IO.Class (liftIO, MonadIO)
+import Control.Monad.Trans.Class (lift)
 
 data ServerState = ServerState
   { _context :: Context,
@@ -54,6 +57,9 @@ type API =
     :> Post '[JSON] (Headers '[Header "X-Request-ID" String] DefinitionResponse)
     :<|> "ping"
       :> Post '[JSON] String
+    :<|> "dropcache"
+      :> ReqBody '[JSON] DropCacheRequest
+      :> Post '[JSON] String
 
 api :: Proxy API
 api = Proxy
@@ -65,13 +71,9 @@ type ServerStateC = MVar ServerState
 nt :: ServerStateC -> AppM a -> Handler a
 nt s x = liftIO (evalStateT x s)
 
-definitionH ::
-  KnownSymbol h =>
-  GTDConfiguration ->
-  MVar ServerState ->
-  DefinitionRequest ->
-  Handler (Headers '[Header h String] DefinitionResponse)
-definitionH c m req = do
+---
+
+h c m respP1 respP2 req = do
   s <- liftIO $ takeMVar m
   (r, s') <- flip runStateT s $ do
     rq <- reqId <+= 1
@@ -79,18 +81,38 @@ definitionH c m req = do
     let logP = _logs c </> (reqId ++ ".log")
     liftIO $ putStrLn $ "Got request with ID:" ++ show reqId
 
-    let peekF r = logDebugNSS "definition" $ printf "%s@%s -> %s" (word req) (file req) (show r)
-    r' <- ultraZoom context $ runFileLoggingT logP $ filterLogger (\_ l -> l /= LevelDebug) $ peekM peekF $ runReaderT (runExceptT $ definition req) c
-    case r' of
-      Left e -> return $ addHeader reqId DefinitionResponse {srcSpan = Nothing, err = Just e}
-      Right r -> return $ addHeader reqId r
+    r' <- ultraZoom context $ runFileLoggingT logP $ filterLogger (\_ l -> l /= LevelDebug) $ flip runReaderT c $ runExceptT $ respP1 req
+    return $ respP2 reqId r'
   liftIO $ putMVar m s'
   return r
+
+---
+
+definitionH ::
+  KnownSymbol hs =>
+  GTDConfiguration ->
+  MVar ServerState ->
+  DefinitionRequest ->
+  Handler (Headers '[Header hs String] DefinitionResponse)
+definitionH c m req = do
+  let defH = either (\e -> DefinitionResponse {err = Just e, srcSpan = Nothing}) id
+  h c m definition (\r e -> addHeader r $ defH e) req
 
 pingH :: MVar ServerState -> Handler String
 pingH m = do
   liftIO $ modifyMVar_ m $ \s -> return s {_reqId = _reqId s + 1}
   return "pong"
+
+dropCacheH ::
+  GTDConfiguration ->
+  MVar ServerState ->
+  DropCacheRequest ->
+  Handler String
+dropCacheH c m req = do
+  let defH = either id id
+  h c m resetCache (\_ e -> defH e) req
+
+---
 
 selfKiller :: MVar ServerState -> Int -> IO ()
 selfKiller m ttl = do
@@ -122,6 +144,9 @@ opts =
 
 main :: IO ()
 main = withSocketsDo $ do
+  hSetBuffering stdout LineBuffering
+  hSetBuffering stderr LineBuffering
+
   as <- execParser opts
   print as
 
@@ -144,4 +169,4 @@ main = withSocketsDo $ do
 
   s <- newMVar =<< runReaderT (runStdoutLoggingT $ execStateT (ultraZoom context cabalCacheGet) emptyServerState) constants
   _ <- forkIO $ selfKiller s (ttl as)
-  runSettingsSocket defaultSettings sock $ serve api (definitionH constants s :<|> pingH s)
+  runSettingsSocket defaultSettings sock $ serve api (definitionH constants s :<|> pingH s :<|> dropCacheH constants s)
