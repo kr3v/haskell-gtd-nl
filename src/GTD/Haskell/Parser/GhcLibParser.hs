@@ -10,6 +10,7 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.State (MonadState (..), evalStateT, execStateT, modify)
 import Control.Monad.Writer (MonadWriter (..))
+import qualified Data.Map.Strict as Map
 import Data.Maybe (mapMaybe)
 import qualified GHC.Data.EnumSet as EnumSet
 import GHC.Data.FastString (mkFastString, unpackFS)
@@ -20,7 +21,7 @@ import GHC.Driver.Errors.Types (DriverMessageOpts (psDiagnosticOpts))
 import GHC.Driver.Ppr (showSDoc)
 import GHC.Driver.Session (DynFlags (..), Language (..), PlatformMisc (..), Settings (..), defaultDynFlags, initDynFlags, parseDynamicFilePragma, supportedLanguagesAndExtensions)
 import GHC.Fingerprint (fingerprint0)
-import GHC.Hs (GhcPs, HsDecl (..), HsModule (..), ModuleName (ModuleName), Sig (..), SrcSpanAnn' (..), TyClDecl (..))
+import GHC.Hs (ConDecl (..), ConDeclField (..), DataDefnCons (..), FamilyDecl (..), FieldOcc (..), GhcPs, HsConDetails (..), HsDataDefn (..), HsDecl (..), HsModule (..), ModuleName (ModuleName), Sig (..), SrcSpanAnn' (..), TyClDecl (..))
 import GHC.LanguageExtensions (Extension (..))
 import GHC.Parser (parseModule)
 import GHC.Parser.Errors.Types (PsMessage (..))
@@ -35,7 +36,7 @@ import GHC.Types.SrcLoc (GenLocated (..), Located, RealSrcSpan (srcSpanFile), Sr
 import GHC.Utils.Error (DiagOpts (..), pprMessages, pprMsgEnvelopeBagWithLocDefault)
 import GHC.Utils.Outputable (Outputable (..), SDocContext (..), defaultSDocContext, renderWithContext)
 import GHC.Utils.Panic (handleGhcException)
-import GTD.Haskell.Declaration (Declaration (..), Declarations (..), SourceSpan (..), asDeclsMap, name)
+import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), SourceSpan (..), asDeclsMap, name)
 import GTD.Haskell.Parser.GhcLibParser.Extension (readExtension)
 import GTD.Utils (modifyM)
 import qualified Language.Haskell.Exts as HSE
@@ -104,14 +105,37 @@ asSourceSpan (RealSrcSpan r _) =
 identifiers :: HsModule GhcPs -> (MonadWriter Declarations m, MonadLoggerIO m) => m ()
 identifiers m@(HsModule {hsmodName = Just (L _ (ModuleName nF))}) = do
   let mN = unpackFS nF
+  let decl loc k = Declaration {_declSrcOrig = asSourceSpan loc, _declModule = mN, _declName = showO k}
+  let tellD loc k = tell mempty {_decls = asDeclsMap [decl loc k]}
+
   forM_ (hsmodDecls m) $ \(L _ d) -> case d of
     SigD _ s -> case s of
-      TypeSig _ h i -> do
-        forM_ h $ \(L (SrcSpanAnn ann loc) k) -> do
-          tell mempty {_decls = asDeclsMap [Declaration {_declSrcOrig = asSourceSpan loc, _declModule = mN, _declName = showO k}]}
+      TypeSig _ names _ -> do
+        forM_ names $ \(L (SrcSpanAnn ann loc) k) -> tellD loc k
       _ -> return ()
     TyClD _ tc -> case tc of
-      SynDecl _ h n _ _ -> return ()
-        -- tell mempty {_decls = asDeclsMap [Declaration {_declSrcOrig = asSourceSpan $ getLoc h, _declModule = mN, _declName = showO n}]}
+      FamDecl {tcdFam = FamilyDecl {fdLName = (L (SrcSpanAnn ann loc) k)}} -> tellD loc k -- TODO: add more stuff?
+      SynDecl {tcdLName = (L (SrcSpanAnn ann loc) k)} -> tellD loc k
+      DataDecl {tcdLName = (L (SrcSpanAnn ann loc) k), tcdDataDefn = (HsDataDefn _ _ _ _ ctorsD _)} -> do
+        let ctors = case ctorsD of
+              NewTypeCon a -> [a]
+              DataTypeCons _ as -> as
+        let fs = flip concatMap ctors $ \(L _ ctor) -> case ctor of
+              ConDeclH98 {con_name = (L (SrcSpanAnn ann loc1) k1), con_args = ctor1} -> do
+                let fields = case ctor1 of
+                      PrefixCon pc1 pc2 -> []
+                      InfixCon ic1 ic2 -> []
+                      RecCon (L _ fs1) -> flip concatMap fs1 $ \(L _ (ConDeclField _ fs2 _ _)) ->
+                        flip fmap fs2 $ \(L _ (FieldOcc _ (L (SrcSpanAnn ann loc2) k2))) ->
+                          decl loc2 k2
+                fields ++ [decl loc1 k1]
+              _ -> []
+        tell mempty {_dataTypes = Map.singleton (showO k) ClassOrData {_cdtName = decl loc k, _cdtFields = asDeclsMap fs, _eWildcard = False}}
+      ClassDecl {tcdLName = (L (SrcSpanAnn ann loc) k), tcdSigs = ms} -> do
+        let fs = flip concatMap ms $ \(L _ m) -> case m of
+              TypeSig _ names _ -> flip fmap names $ \(L (SrcSpanAnn ann loc) k) -> decl loc k
+              ClassOpSig _ _ names _ -> flip fmap names $ \(L (SrcSpanAnn ann loc) k) -> decl loc k
+              _ -> []
+        tell mempty {_dataTypes = Map.singleton (showO k) ClassOrData {_cdtName = decl loc k, _cdtFields = asDeclsMap fs, _eWildcard = False}}
     _ -> return ()
 identifiers _ = return ()
