@@ -4,13 +4,14 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module GTD.Haskell.Module where
 
 import Control.Exception (IOException, try)
 import Control.Lens (makeLenses)
 import Control.Monad.Cont (MonadIO)
-import Control.Monad.Except (MonadError, liftEither)
+import Control.Monad.Except (MonadError (..), liftEither)
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.State (MonadIO (..))
 import Control.Monad.Trans.Writer (WriterT (runWriterT), execWriterT)
@@ -22,6 +23,7 @@ import GTD.Cabal (ModuleNameS, PackageNameS)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (ClassOrData (_cdtName), Declaration (_declModule, _declName), Declarations (..), Exports (..), Imports (..))
 import qualified GTD.Haskell.Declaration as Declarations
+import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import GTD.Haskell.Parser.HaskellSrcExts (exports, identifiers, imports, parse)
 import GTD.Utils (logDebugNSS)
 import Language.Haskell.Exts (Module (Module), SrcSpan (..), SrcSpanInfo (..))
@@ -82,13 +84,15 @@ parseModule cm = do
 
   src <- liftEither . mapLeft show =<< (liftIO (try $ readFile srcP) :: (MonadIO m) => m (Either IOException String))
   srcPostCpp <- haskellApplyCppHs srcP src
-  a <- liftEither $ parse srcP srcPostCpp
 
-  (iiea, es) <- runWriterT $ exports a
-  is <- execWriterT $ imports a
-  locals <- execWriterT $ identifiers a
-
-  return $ cm {_info = HsModuleData {_exports0 = es, _imports = is, _locals = locals}, _params = HsModuleParams {_isImplicitExportAll = iiea}}
+  a <- liftIO $ GHC.parse srcP srcPostCpp
+  case a of 
+    Left err -> throwError err
+    Right a -> do
+      (iiea, es) <- runWriterT $ GHC.exports a
+      is <- execWriterT $ GHC.imports a
+      locals <- execWriterT $ GHC.identifiers a
+      return $ cm {_info = HsModuleData {_exports0 = es, _imports = is, _locals = locals}, _params = HsModuleParams {_isImplicitExportAll = iiea}}
 
 ---
 

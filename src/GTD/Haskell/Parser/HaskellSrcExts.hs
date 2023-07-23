@@ -47,7 +47,7 @@ parseAmbigousInfixOperators src content = do
       let operators = execWriter $ importedSymbols is
       let fixs = infix_ 0 operators
       case parseFileContentsWithMode defaultParseMode {parseFilename = src, baseLanguage = Haskell2010, extensions = [EnableExtension FlexibleContexts, EnableExtension StandaloneDeriving], fixities = Just fixs} content of
-        ParseOk m -> Right m 
+        ParseOk m -> Right m
         ParseFailed loc e -> Left $ printf "failed to parse %s: %s @ %s" src (take 512 e) (show loc)
 
 -- TODO: figure out #line pragmas
@@ -59,7 +59,7 @@ parse src content = case parseFileContentsWithMode defaultParseMode {parseFilena
     _ -> Left $ printf "failed to parse %s: %s @ %s" src (take 512 e) (show loc)
 
 ---
- 
+
 qualConDeclAsDataC' :: QualConDecl a -> (Name a, [Name a])
 qualConDeclAsDataC' (QualConDecl _ _ _ (ConDecl _ n ts)) = (n, [])
 qualConDeclAsDataC' (QualConDecl _ _ _ (InfixConDecl _ _ n _)) = (n, [])
@@ -157,6 +157,11 @@ importsE (Module _ _ _ is _) = do
       Nothing -> tell mempty {importedModules = [imn]}
 importsE m = logDebugNSS "get imports" $ printf "not yet handled: :t m = %s" (showConstr . toConstr $ m)
 
+isNoImplicitPrelude :: Module SrcSpanInfo -> Bool
+isNoImplicitPrelude (Module _ _ ps _ _) = flip any ps $ \case
+  LanguagePragma _ ns -> any (\n -> name n == "NoImplicitPrelude") ns
+  _ -> False
+
 importsP :: Module SrcSpanInfo -> (MonadWriter Imports m, MonadLoggerIO m) => m ()
 importsP m = unless (isNoImplicitPrelude m) $ do
   tell mempty {importedModules = ["Prelude"]}
@@ -165,8 +170,3 @@ imports :: Module SrcSpanInfo -> (MonadWriter Imports m, MonadLoggerIO m) => m (
 imports m = do
   importsE m
   importsP m
-
-isNoImplicitPrelude :: Module SrcSpanInfo -> Bool
-isNoImplicitPrelude (Module _ _ ps _ _) = flip any ps $ \case
-  LanguagePragma _ ns -> any (\n -> name n == "NoImplicitPrelude") ns
-  _ -> False

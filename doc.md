@@ -47,6 +47,8 @@ TypeOperators language extension is not enabled
 - cache invalidation
 - apply cpphs via command + allow specify 'defined' stuff
 - go to symbol command
+- print parsing status
+- add 'usage cases'
 
 ---
 

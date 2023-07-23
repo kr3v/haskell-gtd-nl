@@ -152,10 +152,10 @@ haskellGetExportsSpec = do
 haskellGetImportsSpec :: Spec
 haskellGetImportsSpec = do
   let descr = "haskellGetImportedIdentifiers"
-  let test i = do
+  let test n p i = do
         let iS = show i
             srcPath = "./test/samples/" ++ descr ++ "/in." ++ iS ++ ".hs"
-            dstPath = "./test/samples/" ++ descr ++ "/out." ++ iS ++ ".json"
+            dstPath = "./test/samples/" ++ descr ++ "/out." ++ n ++ "." ++ iS ++ ".json"
             expPath = "./test/samples/" ++ descr ++ "/exp." ++ iS ++ ".json"
 
         src <- readFile srcPath
@@ -163,16 +163,23 @@ haskellGetImportsSpec = do
 
         let expected :: Imports = fromJust $ decode expectedS
 
-        let result = AST.parse srcPath src
+        result <- liftIO $ p srcPath src
         case result of
           Left e -> expectationFailure $ printf "failed to parse %s: %s" srcPath e
-          Right m -> do
-            identifiers <- execWriterT $ runStderrLoggingT $ AST.imports m
+          Right identifiersM -> do
+            identifiers <- identifiersM
             BS.writeFile dstPath $ encode identifiers
             identifiers `shouldBe` expected
-  describe descr $ do
-    it "extracts only function imports" $
-      test 0
+
+  let hseP a b = return $ mapRight (runStderrLoggingT . execWriterT . AST.imports) $ AST.parse a b
+  let ghcP a b = mapRight (runStderrLoggingT . execWriterT . GHC.imports) <$> GHC.parse a b
+  let parsers = [("haskell-src-exts", hseP), ("ghc-lib-parser", ghcP)]
+
+  forM_ parsers $ \(n, p) -> do
+    describe descr $ do
+      describe n $ do
+        it "extracts only function imports" $
+          test n p 0
 
 ---
 

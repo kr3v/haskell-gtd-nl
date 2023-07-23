@@ -1,16 +1,16 @@
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module GTD.Haskell.Declaration where
 
 import Control.Lens (makeLenses)
 import Data.Aeson (FromJSON, ToJSON)
+import qualified Data.Map.Strict as Map
 import GHC.Generics (Generic)
 import GTD.Cabal (ModuleNameS)
-import Language.Haskell.Exts (ModuleName (..), Name (..), SrcSpan (..), SrcSpanInfo (srcInfoSpan))
-import qualified Data.Map.Strict as Map
 import GTD.Utils (deduplicate)
+import Language.Haskell.Exts (ModuleName (..), Name (..), SrcSpan (..), SrcSpanInfo (srcInfoSpan))
 
 data SourceSpan = SourceSpan
   { sourceSpanFileName :: FilePath,
@@ -58,8 +58,8 @@ hasNonEmptyOrig = (/= emptySourceSpan) . _declSrcOrig
 
 ---
 
-
 type Identifier = String
+
 name :: Name a -> String
 name (Ident _ n) = n
 name (Symbol _ n) = n
@@ -126,9 +126,43 @@ asResolutionMap Declarations {_decls = ds, _dataTypes = dts} =
       dts' = concatMap (\cd -> [_cdtName cd] <> Map.elems (_cdtFields cd)) (Map.elems dts)
    in asDeclsMap $ ds' <> dts'
 
-
 asDeclsMap :: [Declaration] -> Map.Map Identifier Declaration
 asDeclsMap ds = Map.fromList $ (\d -> (_declName d, d)) <$> ds
+
+---
+
+data ExportsOrImports = ExportsOrImports
+  { _eoiDecls :: [Declaration],
+    _eoiModules :: [ModuleNameS],
+    _eoiCDs :: [ClassOrData]
+  }
+  deriving (Show, Generic, Eq)
+
+$(makeLenses ''ExportsOrImports)
+
+instance Semigroup ExportsOrImports where
+  (<>) :: ExportsOrImports -> ExportsOrImports -> ExportsOrImports
+  (<>) (ExportsOrImports es1 rs1 ed1) (ExportsOrImports es2 rs2 ed2) = ExportsOrImports (es1 <> es2) (rs1 <> rs2) (ed1 <> ed2)
+
+instance Monoid ExportsOrImports where
+  mempty :: ExportsOrImports
+  mempty = ExportsOrImports [] [] []
+
+asExports :: ExportsOrImports -> Exports
+asExports ExportsOrImports {_eoiDecls = ds, _eoiModules = ms, _eoiCDs = cds} =
+  Exports
+    { exportedVars = ds,
+      exportedModules = ms,
+      exportedCDs = cds
+    }
+
+asImports :: ExportsOrImports -> Imports
+asImports ExportsOrImports {_eoiDecls = ds, _eoiModules = ms, _eoiCDs = cds} =
+  Imports
+    { importedDecls = ds,
+      importedModules = ms,
+      importedCDs = cds
+    }
 
 ---
 
