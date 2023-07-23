@@ -43,6 +43,7 @@ import Test.Hspec (Spec, describe, expectationFailure, it, runIO, shouldBe, shou
 import Test.Hspec.Runner (Config (configPrintCpuTime), defaultConfig, hspecWith)
 import Test.QuickCheck (Testable (..), forAll, (==>))
 import Text.Printf (printf)
+import Data.Either.Combinators (mapRight)
 
 haskellApplyCppHsSpec :: Spec
 haskellApplyCppHsSpec = do
@@ -102,18 +103,8 @@ haskellGetIdentifiersSpec = do
             BS.writeFile dstPath $ encode identifiers
             identifiers `shouldBe` expected
 
-  let hseP a b = do
-        let z = AST.parse a b
-        return $ case z of
-          Left l -> Left l
-          Right r -> Right $ runStderrLoggingT $ execWriterT $ AST.identifiers r
-  let -- ghcP :: FilePath -> String -> IO (Either String Declarations)
-      ghcP a b = do
-        z <- GHC.parse a b
-        return $ case z of
-          Left l -> Left l
-          Right r -> Right $ runStderrLoggingT $ execWriterT $ GHC.identifiers r
-
+  let hseP a b = return $ mapRight (runStderrLoggingT . execWriterT . AST.identifiers) $ AST.parse a b
+  let ghcP a b = mapRight (runStderrLoggingT . execWriterT . GHC.identifiers) <$> GHC.parse a b
   let parsers = [("haskell-src-exts", hseP), ("ghc-lib-parser", ghcP)]
 
   forM_ parsers $ \(n, p) -> do
@@ -129,10 +120,10 @@ haskellGetIdentifiersSpec = do
 haskellGetExportsSpec :: Spec
 haskellGetExportsSpec = do
   let descr = "haskellGetExportedIdentifiers"
-  let test i = do
+  let test n p i = do
         let iS = show i
             srcPath = "./test/samples/" ++ descr ++ "/in." ++ iS ++ ".hs"
-            dstPath = "./test/samples/" ++ descr ++ "/out." ++ iS ++ ".json"
+            dstPath = "./test/samples/" ++ descr ++ "/out." ++ n ++ "." ++ iS ++ ".json"
             expPath = "./test/samples/" ++ descr ++ "/exp." ++ iS ++ ".json"
 
         src <- readFile srcPath
@@ -140,17 +131,23 @@ haskellGetExportsSpec = do
 
         let expected :: Exports = fromJust $ decode expectedS
 
-        let result = AST.parse srcPath src
+        result <- liftIO $ p srcPath src
         case result of
           Left e -> expectationFailure $ printf "failed to parse %s: %s" srcPath e
-          Right m -> do
-            (isImplicitExportAll, identifiers) <- runWriterT $ runStderrLoggingT $ AST.exports m
+          Right identifiersM -> do
+            identifiers <- identifiersM
             BS.writeFile dstPath $ encode identifiers
             identifiers `shouldBe` expected
 
-  describe descr $ do
-    it "parses a file with an explicit list of exported functions" $
-      test 0
+  let hseP a b = return $ mapRight (runStderrLoggingT . execWriterT . AST.exports) $ AST.parse a b
+  let ghcP a b = mapRight (runStderrLoggingT . execWriterT . GHC.exports) <$> GHC.parse a b
+  let parsers = [("haskell-src-exts", hseP), ("ghc-lib-parser", ghcP)]
+
+  forM_ parsers $ \(n, p) -> do
+    describe descr $ do
+      describe n $ do
+        it "parses a file with an explicit list of exported functions" $
+          test n p 0
 
 haskellGetImportsSpec :: Spec
 haskellGetImportsSpec = do

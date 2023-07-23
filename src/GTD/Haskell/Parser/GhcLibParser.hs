@@ -2,16 +2,18 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# OPTIONS_GHC -Wno-missing-fields #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module GTD.Haskell.Parser.GhcLibParser where
 
-import Control.Monad (forM_)
+import Control.Monad (forM_, forM)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.State (MonadState (..), evalStateT, execStateT, modify)
 import Control.Monad.Writer (MonadWriter (..))
+import Data.Data (Data (..), showConstr)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (mapMaybe)
+import Data.Maybe (mapMaybe, catMaybes)
 import qualified GHC.Data.EnumSet as EnumSet
 import GHC.Data.FastString (mkFastString, unpackFS)
 import GHC.Data.StringBuffer (stringToStringBuffer)
@@ -21,7 +23,7 @@ import GHC.Driver.Errors.Types (DriverMessageOpts (psDiagnosticOpts))
 import GHC.Driver.Ppr (showSDoc)
 import GHC.Driver.Session (DynFlags (..), Language (..), PlatformMisc (..), Settings (..), defaultDynFlags, initDynFlags, parseDynamicFilePragma, supportedLanguagesAndExtensions)
 import GHC.Fingerprint (fingerprint0)
-import GHC.Hs (ConDecl (..), ConDeclField (..), DataDefnCons (..), FamilyDecl (..), FieldOcc (..), GhcPs, HsConDetails (..), HsDataDefn (..), HsDecl (..), HsModule (..), ModuleName (ModuleName), Sig (..), SrcSpanAnn' (..), TyClDecl (..))
+import GHC.Hs (ConDecl (..), ConDeclField (..), DataDefnCons (..), FamilyDecl (..), FieldOcc (..), GhcPs, HsConDetails (..), HsDataDefn (..), HsDecl (..), HsModule (..), IE (..), IEWrappedName (..), LIdP, ModuleName (ModuleName), Sig (..), SrcSpanAnn' (..), TyClDecl (..))
 import GHC.LanguageExtensions (Extension (..))
 import GHC.Parser (parseModule)
 import GHC.Parser.Errors.Types (PsMessage (..))
@@ -36,10 +38,12 @@ import GHC.Types.SrcLoc (GenLocated (..), Located, RealSrcSpan (srcSpanFile), Sr
 import GHC.Utils.Error (DiagOpts (..), pprMessages, pprMsgEnvelopeBagWithLocDefault)
 import GHC.Utils.Outputable (Outputable (..), SDocContext (..), defaultSDocContext, renderWithContext)
 import GHC.Utils.Panic (handleGhcException)
-import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), SourceSpan (..), asDeclsMap, name)
+import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Exports (..), SourceSpan (..), asDeclsMap, emptySourceSpan, name)
+import GTD.Haskell.Module (emptySrcSpan)
 import GTD.Haskell.Parser.GhcLibParser.Extension (readExtension)
-import GTD.Utils (modifyM)
+import GTD.Utils (logDebugNSS, modifyM)
 import qualified Language.Haskell.Exts as HSE
+import Text.Printf (printf)
 
 showO :: Outputable a => a -> String
 showO = renderWithContext defaultSDocContext {sdocErrorSpans = True} . ppr
@@ -102,13 +106,19 @@ asSourceSpan (RealSrcSpan r _) =
       sourceSpanEndColumn = srcSpanEndCol r
     }
 
+declM :: String -> SrcSpan -> (Outputable a) => a -> Declaration
+declM m loc k = Declaration {_declSrcOrig = asSourceSpan loc, _declModule = m, _declName = showO k}
+
+declME :: String -> (Outputable a) => a -> Declaration
+declME m k = Declaration {_declSrcOrig = emptySourceSpan, _declModule = m, _declName = showO k}
+
 identifiers :: HsModule GhcPs -> (MonadWriter Declarations m, MonadLoggerIO m) => m ()
-identifiers m@(HsModule {hsmodName = Just (L _ (ModuleName nF))}) = do
+identifiers (HsModule {hsmodName = Just (L _ (ModuleName nF)), hsmodDecls = decls}) = do
   let mN = unpackFS nF
-  let decl loc k = Declaration {_declSrcOrig = asSourceSpan loc, _declModule = mN, _declName = showO k}
+  let decl = declM mN
   let tellD loc k = tell mempty {_decls = asDeclsMap [decl loc k]}
 
-  forM_ (hsmodDecls m) $ \(L _ d) -> case d of
+  forM_ decls $ \(L _ d) -> case d of
     SigD _ s -> case s of
       TypeSig _ names _ -> do
         forM_ names $ \(L (SrcSpanAnn ann loc) k) -> tellD loc k
@@ -139,3 +149,37 @@ identifiers m@(HsModule {hsmodName = Just (L _ (ModuleName nF))}) = do
         tell mempty {_dataTypes = Map.singleton (showO k) ClassOrData {_cdtName = decl loc k, _cdtFields = asDeclsMap fs, _eWildcard = False}}
     _ -> return ()
 identifiers _ = return ()
+
+asName :: IEWrappedName GhcPs -> (MonadLoggerIO m) => m (Maybe (LIdP GhcPs))
+asName (IEName _ n) = return $ Just n
+asName (IEType _ n) = return $ Just n
+asName n = do
+  logDebugNSS "asName" $ printf "not yet handled :t %s" (showConstr . toConstr $ n)
+  return Nothing
+
+exports :: HsModule GhcPs -> (MonadWriter Exports m, MonadLoggerIO m) => m Bool
+exports (HsModule {hsmodName = Just (L _ (ModuleName nF)), hsmodExports = Just (L _ es)}) = do
+  let mN = unpackFS nF
+  let decl  = declME mN
+
+  forM_ es $ \(L _ e) -> case e of
+    IEModuleContents _ (L _ mn) -> tell mempty {exportedModules = [showO mn]}
+    IEVar _ (L _ n) -> do
+      n1 <- asName n
+      forM_ n1 $ \(L _ n2) -> tell mempty {exportedVars = [decl n2]}
+    IEThingAbs _ (L _ n) -> do
+      n1 <- asName n
+      forM_ n1 $ \(L _ n2) ->
+        tell mempty {exportedCDs = [ClassOrData {_cdtName = decl n2, _cdtFields = mempty, _eWildcard = False}]}
+    IEThingAll _ (L _ n) -> do
+      n1 <- asName n
+      forM_ n1 $ \(L _ n2) ->
+        tell mempty {exportedCDs = [ClassOrData {_cdtName = decl n2, _cdtFields = mempty, _eWildcard = True}]}
+    IEThingWith _ (L _ n) wc ns -> do
+      n1 <- asName n
+      ns1 <- catMaybes <$> forM ns (\(L _ x) -> asName x)
+      forM_ n1 $ \(L _ n2) ->
+        tell mempty {exportedCDs = [ClassOrData {_cdtName = decl n2, _cdtFields = asDeclsMap $ decl . (\(L _ x) -> x) <$> ns1, _eWildcard = False}]}
+    _ -> return ()
+  return False
+exports (HsModule {hsmodExports = Nothing}) = return True
