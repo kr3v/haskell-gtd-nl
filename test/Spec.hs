@@ -33,7 +33,7 @@ import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule)
 import qualified GTD.Haskell.Module as HsModule
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import GTD.Resolution.State (emptyContext)
-import GTD.Resolution.State.Caching.Cabal (cabalCacheGet, cabalCacheStore)
+import GTD.Resolution.State.Caching.Cabal (cabalCacheFetch, cabalCacheStore)
 import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), definition, noDefintionFoundError, noDefintionFoundErrorE)
 import GTD.Utils (logDebugNSS, ultraZoom)
 import Language.Haskell.Exts (Module (..), Parseable (parse), SrcSpan (..), SrcSpanInfo (..))
@@ -250,7 +250,7 @@ definitionsSpec = do
   let noDefErr = Left "No definition found"
 
   let st0 = emptyContext
-  st1 <- runIO $ mstack execStateT st0 cabalCacheGet
+  st1 <- runIO $ mstack execStateT st0 cabalCacheFetch
   (a, serverState) <- runIO $ mstack runStateT st1 $ eval0 "playIO"
   runIO $ print a
   runIO $ mstack execStateT serverState cabalCacheStore

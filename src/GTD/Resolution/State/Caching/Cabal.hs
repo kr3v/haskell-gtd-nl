@@ -50,12 +50,12 @@ cabalFull pkg = do
 
 ---
 
-cabalCacheGet :: (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m) => m ()
-cabalCacheGet = do
+cabalCacheFetch :: (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m) => m ()
+cabalCacheFetch = do
   cfgP <- asks _ccGetPath
   cE :: Either IOError BS.ByteString <- liftIO $ try (BS.readFile cfgP)
   case cE of
-    Left e -> logErrorNSS "cabalCacheGet" $ printf "readFile %s -> %s" cfgP (show e)
+    Left e -> logErrorNSS "cabalCacheFetch" $ printf "readFile %s -> %s" cfgP (show e)
     Right c -> forM_ (decode c) (ccGet .=)
 
 cabalCacheStore :: (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m) => m ()

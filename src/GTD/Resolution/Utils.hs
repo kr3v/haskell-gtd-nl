@@ -36,7 +36,7 @@ $(makeLenses ''SchemeState)
 -- | `scheme` recursively figures out dependencies for a given root set;
 -- |          it is safe in terms of cyclic dependencies - `a` is called at most once for a given key
 _scheme ::
-  (Ord k, Monad m) =>
+  (Ord k, MonadLoggerIO m) =>
   (b -> m (Maybe a)) ->
   (b -> k) ->
   (a -> m [b]) ->
@@ -57,7 +57,7 @@ _scheme a k p ks = do
     else _scheme a k p (Map.elems ds')
 
 scheme ::
-  (Ord k, Monad m) =>
+  (Ord k, MonadLoggerIO m) =>
   (b -> m (Maybe a)) ->
   (a -> k) ->
   (b -> k) ->
@@ -75,7 +75,7 @@ scheme a ka kb p ks = do
       iF i ds = jF i <$> filter (`Map.member` iNModules) ds
   edges <- lift $ concat <$> mapM (\(i, m) -> iF i <$> ((kb <$>) <$> p m)) (Map.assocs iModules)
   let graph = Graph.buildG (1, Map.size as) edges
-  let graphS = Graph.reverseTopSort graph
+  let graphS = concatMap (foldr (:) []) (Graph.scc graph)
 
   return $ fromJust . (`Map.lookup` iModules) <$> graphS
 

@@ -11,17 +11,16 @@ module Main where
 
 import Control.Concurrent (MVar, forkIO, modifyMVar_, newMVar, putMVar, readMVar, takeMVar, threadDelay)
 import Control.Lens (makeLenses, (<+=), (^.))
-import Control.Monad.Except (MonadError, runExceptT)
-import Control.Monad.Logger (LogLevel (LevelDebug), MonadLoggerIO, filterLogger, runFileLoggingT, runStdoutLoggingT)
-import Control.Monad.Reader (MonadReader, ReaderT (runReaderT))
-import Control.Monad.State (MonadState, StateT (runStateT), execStateT)
+import Control.Monad.Except (runExceptT)
+import Control.Monad.Logger (LogLevel (LevelDebug), filterLogger, runFileLoggingT, runStdoutLoggingT)
+import Control.Monad.Reader (ReaderT (runReaderT))
+import Control.Monad.State (StateT (runStateT), execStateT)
 import Control.Monad.State.Lazy (evalStateT)
-import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Proxy (Proxy (..))
 import GHC.TypeLits (KnownSymbol)
-import GTD.Configuration (GTDConfiguration (_logs), prepareConstants, root)
+import GTD.Configuration (GTDConfiguration (..), prepareConstants, root)
 import GTD.Resolution.State (Context, emptyContext)
-import GTD.Resolution.State.Caching.Cabal (cabalCacheGet)
+import GTD.Resolution.State.Caching.Cabal (cabalCacheFetch)
 import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), DropCacheRequest, definition, resetCache)
 import GTD.Utils (ultraZoom)
 import Network.Socket (Family (AF_INET), SockAddr (SockAddrInet), SocketType (Stream), bind, defaultProtocol, listen, socket, socketPort, tupleToHostAddress, withSocketsDo)
@@ -35,8 +34,7 @@ import System.FilePath ((</>))
 import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
 import System.Posix (exitImmediately, getProcessID)
 import Text.Printf (printf)
-import Control.Monad.IO.Class (liftIO, MonadIO)
-import Control.Monad.Trans.Class (lift)
+import Control.Monad.IO.Class (liftIO)
 
 data ServerState = ServerState
   { _context :: Context,
@@ -77,11 +75,11 @@ h c m respP1 respP2 req = do
   s <- liftIO $ takeMVar m
   (r, s') <- flip runStateT s $ do
     rq <- reqId <+= 1
-    let reqId = printf "%06d" rq
-    let logP = _logs c </> (reqId ++ ".log")
+    let reqId :: String = printf "%06d" rq
+    let logP = _root c </> "server.log"
     liftIO $ putStrLn $ "Got request with ID:" ++ show reqId
 
-    r' <- ultraZoom context $ runFileLoggingT logP $ filterLogger (\_ l -> l /= LevelDebug) $ flip runReaderT c $ runExceptT $ respP1 req
+    r' <- ultraZoom context $ runFileLoggingT logP $ flip runReaderT c $ runExceptT $ respP1 req
     return $ respP2 reqId r'
   liftIO $ putMVar m s'
   return r
@@ -167,6 +165,6 @@ main = withSocketsDo $ do
   writeFile (constants ^. root </> "pid") (show pid)
   writeFile (constants ^. root </> "port") (show port)
 
-  s <- newMVar =<< runReaderT (runStdoutLoggingT $ execStateT (ultraZoom context cabalCacheGet) emptyServerState) constants
+  s <- newMVar =<< runReaderT (runStdoutLoggingT $ execStateT (ultraZoom context cabalCacheFetch) emptyServerState) constants
   _ <- forkIO $ selfKiller s (ttl as)
   runSettingsSocket defaultSettings sock $ serve api (definitionH constants s :<|> pingH s :<|> dropCacheH constants s)

@@ -154,7 +154,7 @@ __exports pkg = do
 __dependencies :: Package -> (MonadBaseControl IO m, MonadLoggerIO m, MonadState GetCache m, MonadReader GTDConfiguration m) => m [Package]
 __dependencies pkg = do
   let c = view cabal pkg
-  logDebugNSS "cabal fetch" (prettyShow $ packageName c)
+  logDebugNSS "cabal fetch" $ prettyShow $ packageName c
   let deps = concatMap targetBuildDepends $ allBuildInfo c
   let names = deduplicate $ (\(Dependency n v _) -> (unPackageName n, prettyShow v)) <$> deps
   logDebugNSS "cabal fetch" $ "dependencies: " ++ show names

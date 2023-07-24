@@ -7,43 +7,83 @@ extra-source-files: CHANGELOG.md
 -- add the following line to `ghc-options` to enable profiling
 -- -fprof-auto -rtsopts "-with-rtsopts=-N -A16M -p -s -h -l -i0.1"
 
+executable haskell-gtd-debug
+    main-is:          Main.hs
+
+    build-depends:
+        base ^>= 4.16.4.0
+        , haskell-gtd-lib ^>= 0.0.2.5
+        , graphviz ^>= 2999.20.1.0
+
+        , optparse-applicative ^>= 0.18.1.0
+
+        , containers ^>= 0.6.7
+
+        , either ^>= 5.0.2
+        , lens ^>= 5.2.2
+        , monad-logger ^>= 0.3.40
+        , mtl ^>= 2.2.2
+        , random ^>= 1.2.1.1
+        , safe-exceptions ^>= 0.1.7.3
+        , time ^>= 1.12.2
+        , transformers ^>= 0.5.6.2
+
+        , aeson ^>= 2.1.2.1
+        , text ^>= 2.0.2
+        , bytestring ^>= 0.11.4.0
+        , utf8-string ^>= 1.0.2
+        , regex ^>= 1.1.0.2
+        , regex-posix ^>= 0.96.0.1
+
+        , directory ^>= 1.3.8.1
+        , filepath ^>= 1.4.100.3
+        , process ^>= 1.6.17.0
+        , unix ^>= 2.8.1.1
+
+    hs-source-dirs:   app/debug
+    default-language: Haskell2010
+
+    ghc-options: -O2 -g1 -threaded -Wall -rtsopts "-with-rtsopts=-N -A128M -T"
+
 executable haskell-gtd-server
     main-is:          Main.hs
 
     build-depends:
         base ^>=4.16.4.0
-        , Cabal ^>= 3.10.1.0
-        , aeson ^>= 2.1.2.1
-        , bytestring ^>= 0.11.4.0
-        , containers ^>= 0.6.7
-        , cpphs ^>= 1.20.9.1
-        , directory ^>= 1.3.6.2
-        , either ^>= 5.0.2
-        , filepath ^>= 1.4.100.3
-        , haskell-gtd-lib ^>= 0.0.1.0
-        , haskell-src-exts ^>= 1.23.1
-        , hspec ^>= 2.11.1
-        , lens ^>= 5.2.2
+        , haskell-gtd-lib ^>= 0.0.2.5
+        
+        , optparse-applicative ^>= 0.18.1.0
+
         , monad-logger ^>= 0.3.40
-        , mtl ^>= 2.2.2
-        , network ^>= 3.1.4.0
-        , process ^>= 1.6.17.0
-        , random ^>= 1.2.1.1
-        , regex ^>= 1.1.0.2
-        , regex-posix ^>= 0.96.0.1
-        , servant ^>= 0.19.1
-        , servant-server ^>= 0.19.2
-        , text ^>= 2.0.2
-        , time ^>= 1.12.2
-        , transformers ^>= 0.5.6.2
-        , unix ^>= 2.8.1.1
-        , utf8-string ^>= 1.0.2
-        , warp ^>= 3.3.27
         , lifted-async ^>= 0.10.2.4
         , async ^>= 2.2.4
         , monad-control ^>= 1.0.3.1
-        , optparse-applicative ^>= 0.18.1.0
-        , ghc-lib-parser >= 9.6.2.20230523
+
+        , directory ^>= 1.3.8.1
+        , filepath ^>= 1.4.100.3
+        , process ^>= 1.6.17.0
+        , unix ^>= 2.8.1.1
+
+        , either ^>= 5.0.2
+        , lens ^>= 5.2.2
+        , monad-logger ^>= 0.3.40
+        , mtl ^>= 2.2.2
+        , random ^>= 1.2.1.1
+        , safe-exceptions ^>= 0.1.7.3
+        , time ^>= 1.12.2
+        , transformers ^>= 0.5.6.2
+
+        , aeson ^>= 2.1.2.1
+        , text ^>= 2.0.2
+        , bytestring ^>= 0.11.4.0
+        , utf8-string ^>= 1.0.2
+        , regex ^>= 1.1.0.2
+        , regex-posix ^>= 0.96.0.1
+
+        , network ^>= 3.1.4.0
+        , servant ^>= 0.19.1
+        , servant-server ^>= 0.19.2
+        , warp ^>= 3.3.27
 
     hs-source-dirs:   app/server
     default-language: Haskell2010
@@ -55,35 +95,39 @@ library haskell-gtd-lib
     default-language: Haskell2010
     build-depends:
         base ^>=4.16.4.0
-        , Cabal ^>= 3.10.1.0
+
         , aeson ^>= 2.1.2.1
+        , text ^>= 2.0.2
         , bytestring ^>= 0.11.4.0
-        , containers ^>= 0.6.7
-        , cpphs ^>= 1.20.9.1
-        , directory ^>= 1.3.8.1
-        , either ^>= 5.0.2
-        , filepath ^>= 1.4.100.3
-        , haskell-src-exts ^>= 1.23.1
-        , hspec ^>= 2.11.1
-        , lens ^>= 5.2.2
-        , monad-logger ^>= 0.3.40
-        , mtl ^>= 2.2.2
-        , network ^>= 3.1.4.0
-        , process ^>= 1.6.17.0
-        , random ^>= 1.2.1.1
+        , utf8-string ^>= 1.0.2
         , regex ^>= 1.1.0.2
         , regex-posix ^>= 0.96.0.1
-        , safe-exceptions ^>= 0.1.7.3
-        , text ^>= 2.0.2
-        , time ^>= 1.12.2
-        , transformers ^>= 0.5.6.2
-        , unix ^>= 2.8.1.1
-        , utf8-string ^>= 1.0.2
+        
         , async ^>= 2.2.4
         , lifted-async ^>= 0.10.2.4
         , monad-control ^>= 1.0.3.1
+
+        , containers ^>= 0.6.7
         , lrucache ^>= 1.2.0.1
-        , ghc-lib-parser >= 9.6.2.20230523
+
+        , either ^>= 5.0.2
+        , lens ^>= 5.2.2
+        , monad-logger ^>= 0.3.40
+        , mtl ^>= 2.2.2
+        , random ^>= 1.2.1.1
+        , safe-exceptions ^>= 0.1.7.3
+        , time ^>= 1.12.2
+        , transformers ^>= 0.5.6.2
+
+        , directory ^>= 1.3.8.1
+        , filepath ^>= 1.4.100.3
+        , process ^>= 1.6.17.0
+        , unix ^>= 2.8.1.1
+
+        , Cabal ^>= 3.10.1.0
+        , cpphs ^>= 1.20.9.1
+        , ghc-lib-parser ^>= 9.6.2.20230523
+        , haskell-src-exts ^>= 1.23.1
     
     exposed-modules:
         GTD.Cabal
@@ -111,33 +155,44 @@ test-suite haskell-gtd-lib-test
     hs-source-dirs: test
     main-is: Spec.hs
     build-depends:
-            base ^>=4.16.4.0
-            , Cabal ^>= 3.10.1.0
-            , QuickCheck ^>= 2.14.3
-            , aeson ^>= 2.1.2.1
-            , aeson ^>= 2.1.2.1
-            , bytestring ^>= 0.11.4.0
-            , containers ^>= 0.6.7
-            , cpphs ^>= 1.20.9.1
-            , directory ^>= 1.3.8.1
-            , either ^>= 5.0.2
-            , filepath ^>= 1.4.100.3
-            , haskell-gtd-lib
-            , haskell-src-exts ^>= 1.23.1
-            , hspec ^>= 2.11.1
-            , lens ^>= 5.2.2
-            , monad-logger ^>= 0.3.40
-            , mtl ^>= 2.2.2
-            , network ^>= 3.1.4.0
-            , process ^>= 1.6.17.0
-            , random ^>= 1.2.1.1
-            , regex ^>= 1.1.0.2
-            , regex-posix ^>= 0.96.0.1
-            , time ^>= 1.12.2
-            , transformers ^>= 0.5.6.2
-            , unix ^>= 2.8.1.1
-            , utf8-string ^>= 1.0.2
-            , ghc-lib-parser >= 9.6.2.20230523
+        base ^>=4.16.4.0
+        , haskell-gtd-lib ^>= 0.0.2.5
+
+        , QuickCheck ^>= 2.14.3
+        , hspec ^>= 2.11.1
+
+        , aeson ^>= 2.1.2.1
+        , text ^>= 2.0.2
+        , bytestring ^>= 0.11.4.0
+        , utf8-string ^>= 1.0.2
+        , regex ^>= 1.1.0.2
+        , regex-posix ^>= 0.96.0.1
+        
+        , async ^>= 2.2.4
+        , lifted-async ^>= 0.10.2.4
+        , monad-control ^>= 1.0.3.1
+
+        , containers ^>= 0.6.7
+        , lrucache ^>= 1.2.0.1
+
+        , either ^>= 5.0.2
+        , lens ^>= 5.2.2
+        , monad-logger ^>= 0.3.40
+        , mtl ^>= 2.2.2
+        , random ^>= 1.2.1.1
+        , safe-exceptions ^>= 0.1.7.3
+        , time ^>= 1.12.2
+        , transformers ^>= 0.5.6.2
+
+        , directory ^>= 1.3.8.1
+        , filepath ^>= 1.4.100.3
+        , process ^>= 1.6.17.0
+        , unix ^>= 2.8.1.1
+
+        , Cabal ^>= 3.10.1.0
+        , cpphs ^>= 1.20.9.1
+        , ghc-lib-parser ^>= 9.6.2.20230523
+        , haskell-src-exts ^>= 1.23.1
     build-tool-depends: hspec-discover:hspec-discover
     default-language: Haskell2010
     ghc-options: -O2 -g1 -threaded

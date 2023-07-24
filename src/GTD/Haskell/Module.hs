@@ -92,7 +92,11 @@ parseModule cm = do
       (iiea, es) <- runWriterT $ GHC.exports a
       is <- execWriterT $ GHC.imports a
       locals <- execWriterT $ GHC.identifiers a
-      return $ cm {_info = HsModuleData {_exports0 = es, _imports = is, _locals = locals}, _params = HsModuleParams {_isImplicitExportAll = iiea}}
+      return $ cm {
+        _info = HsModuleData {_exports0 = es, _imports = is, _locals = locals},
+        _params = HsModuleParams {_isImplicitExportAll = iiea},
+        _name = GHC.name a
+      }
 
 ---
 

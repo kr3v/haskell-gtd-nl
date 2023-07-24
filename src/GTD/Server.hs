@@ -34,7 +34,7 @@ import GTD.Resolution.Module (figureOutExports, figureOutExports0, module'Depend
 import GTD.Resolution.State (Context (..), Package (Package, _cabalPackage, _modules), cExports, ccGet)
 import qualified GTD.Resolution.State as Package
 import GTD.Resolution.State.Caching.Cabal (cabalCacheStore, cabalFindAtCached, cabalFull)
-import GTD.Resolution.State.Caching.Package (packageCachedAdaptSizeTo, packageCachedGet, packageCachedGet', packageCachedPut, packagePersistenceGet, persistenceExists, persistenceGet, packageCachedRemove)
+import GTD.Resolution.State.Caching.Package (packageCachedAdaptSizeTo, packageCachedGet, packageCachedGet', packageCachedPut, packageCachedRemove, packagePersistenceGet, persistenceExists, persistenceGet)
 import GTD.Resolution.Utils (ParallelizedState (..), SchemeState (..), parallelized, scheme)
 import GTD.Utils (logDebugNSS, ultraZoom)
 import Text.Printf (printf)
@@ -76,15 +76,17 @@ modules pkg@Package {_cabalPackage = c} = do
   mods <- modules1 pkg c
   return pkg {Package._exports = Map.restrictKeys mods (Cabal._exports . Cabal._modules $ c), Package._modules = mods}
 
+modulesOrdered :: Cabal.PackageFull -> (MonadBaseControl IO m, MonadLoggerIO m) => m [HsModule]
+modulesOrdered c = do
+  flip runReaderT c $ flip evalStateT (SchemeState Map.empty Map.empty) $ do
+    scheme moduleR HsModule._name id (return . module'Dependencies) (Set.toList . Cabal._exports . Cabal._modules $ c)
+
 modules1 ::
   Package ->
   Cabal.PackageFull ->
   (MonadBaseControl IO m, MonadLoggerIO m) => m (Map.Map ModuleNameS HsModuleP)
 modules1 pkg c = do
-  modsO <- flip runReaderT c $ flip evalStateT (SchemeState Map.empty Map.empty) $ do
-    scheme moduleR HsModule._name id (return . module'Dependencies) (Set.toList . Cabal._exports . Cabal._modules $ c)
-  -- execStateT (forM_ modsO figureOutExports) (_modules pkg)
-
+  modsO <- modulesOrdered c
   let st = ParallelizedState modsO Map.empty Map.empty (_modules pkg)
   parallelized st (Cabal.nameVersionF c) figureOutExports0 (const "tbd") HsModule._name (return . module'Dependencies)
 
@@ -128,6 +130,13 @@ simpleShowContext c =
     (show $ Map.keys $ Cabal._vs . _ccGet $ c)
     (show $ fst <$> LRU.toList (_cExports c))
 
+packageDepsOrdered ::
+  Cabal.PackageFull ->
+  (MonadBaseControl IO m, MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m) => m [Cabal.PackageFull]
+packageDepsOrdered cPkg0 = do
+  flip evalStateT (SchemeState Map.empty Map.empty) $ do
+    scheme (\cPkg -> do b <- persistenceExists cPkg; if b then return Nothing else ((Just <$>) . cabalFull) cPkg) Cabal.nameVersionF Cabal.nameVersionP (return . Cabal._dependencies) (Cabal._dependencies cPkg0)
+
 package ::
   Cabal.PackageFull ->
   (MonadBaseControl IO m, MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m) => m (Maybe Package)
@@ -136,10 +145,7 @@ package cPkg0 = do
   case m of
     Just p -> return $ Just p
     Nothing -> do
-      pkgsO <- flip evalStateT (SchemeState Map.empty Map.empty) $ do
-        scheme (\cPkg -> do b <- persistenceExists cPkg; if b then return Nothing else ((Just <$>) . cabalFull) cPkg) Cabal.nameVersionF Cabal.nameVersionP (return . Cabal._dependencies) (Cabal._dependencies cPkg0)
-
-      -- forM_ pkgsO package0
+      pkgsO <- packageDepsOrdered cPkg0
 
       stC0 <- get
       let st = ParallelizedState pkgsO Map.empty Map.empty stC0
@@ -159,7 +165,7 @@ definition (DefinitionRequest {workDir = wd, file = rf, word = w}) = do
   pkgM <- package cPkg
   pkg <- maybe (throwError "no package found?") return pkgM
 
-  m <- parseModule emptyHsModule {_path = rf}
+  m <- parseModule emptyHsModule {_path = rf, HsModule._package = Cabal.nameF cPkg}
   m' <- resolution <$> evalStateT (enrich m) pkg
 
   ccGC <- use $ ccGet . Cabal.changed

@@ -48,7 +48,8 @@ TypeOperators language extension is not enabled
 - apply cpphs via command + allow specify 'defined' stuff
 - go to symbol command
 - print parsing status
-- add 'usage cases'
+- add 'usage cases' (reverse go to definition)
+- Prelude: why no Maybe? print dependencies graph
 
 ---
 

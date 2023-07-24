@@ -75,11 +75,17 @@ parsePragmasIntoDynFlags dynFlags p content = do
 
 data HsModuleX = HsModuleX {_mod :: HsModule GhcPs, _languagePragmas :: [String]}
 
+name :: HsModuleX -> String
+name (HsModuleX HsModule {hsmodName = Just (L _ (ModuleName n))} _) = unpackFS n
+name _ = ""
+
 parse :: FilePath -> String -> IO (Either String HsModuleX)
 parse p content = do
   let dynFlags0 = defaultDynFlags fakeSettings
   fM <- try (parsePragmasIntoDynFlags dynFlags0 p content) :: IO (Either SourceError (Maybe (DynFlags, [String])))
   let (dynFlags, languagePragmas) = fromMaybe (dynFlags0, []) $ fromRight Nothing fM
+  
+  printf "language pragmas: module %s -> %s\n" p (show languagePragmas)
 
   let opts = initParserOpts dynFlags
       location = mkRealSrcLoc (mkFastString p) 1 1
@@ -211,5 +217,6 @@ imports :: HsModuleX -> (MonadWriter Imports m, MonadLoggerIO m) => m ()
 imports m@(HsModuleX _ ps) = do
   (a, b) <- runWriterT $ imports0 m
   tell $ asImports b
-  unless ("NoImplicitPrelude" `elem` ps) $ tell mempty {importedModules = ["Prelude"]}
+  unless ("-XNoImplicitPrelude" `elem` ps) $
+    tell mempty {importedModules = ["Prelude"]}
   return a

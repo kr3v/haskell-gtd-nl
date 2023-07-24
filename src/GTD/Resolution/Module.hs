@@ -19,11 +19,12 @@ import Distribution.ModuleName (fromString, toFilePath, validModuleComponent)
 import GTD.Cabal (ModuleNameS)
 import qualified GTD.Cabal as Cabal
 import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Exports (..), Imports (..), allImportedModules, asDeclsMap)
-import GTD.Haskell.Module (HsModule (..), HsModuleData (..), HsModuleP (..), HsModuleParams (..), emptyHsModule, parseModule)
+import GTD.Haskell.Module (HsModule (..), HsModuleData (..), HsModuleP (..), HsModuleParams (..), emptyHsModule, parseModule, exports)
 import qualified GTD.Haskell.Module as HsModule
 import GTD.Utils (logDebugNSS, logErrorNSS, mapFrom)
 import System.FilePath (normalise, (</>))
 import Text.Printf (printf)
+import Control.Lens (over)
 
 ---
 
@@ -33,7 +34,7 @@ resolve repoRoot srcDir moduleName = normalise $ repoRoot </> srcDir </> ((toFil
 ---
 
 module'Dependencies :: HsModule -> [ModuleNameS]
-module'Dependencies m = exportedModules (_exports0 . _info $ m) ++ allImportedModules (_imports . _info $ m)
+module'Dependencies m = filter (_name m /=) ((exportedModules . _exports0 . _info $ m) ++ (allImportedModules . _imports . _info $ m))
 
 module'2 :: Cabal.PackageFull -> ModuleNameS -> (MonadLoggerIO m) => m [Either (FilePath, ModuleNameS, String) HsModule]
 module'2 p m = do
@@ -86,12 +87,13 @@ figureOutExports0 ::
   (MonadLoggerIO m) => m (HsModuleP, Map.Map ModuleNameS HsModuleP -> Map.Map ModuleNameS HsModuleP)
 figureOutExports0 st m = do
   let logTag = "module prepare exports for " ++ _name m
-  logDebugNSS logTag $ _name m
 
   let (HsModuleParams {_isImplicitExportAll = isImplicitExportAll}) = _params m
       Exports {exportedVars = eV, exportedModules = eM, exportedCDs = eCD} = _exports0 . _info $ m
       Imports {importedDecls = iV, importedModules = iM, importedCDs = iCD} = _imports . _info $ m
       locals = _locals . _info $ m
+
+  logDebugNSS logTag $ printf "eM=%s, iM=%s" (show eM) (show iM)
 
   let m' =
         if isImplicitExportAll
@@ -109,5 +111,8 @@ figureOutExports0 st m = do
             let eCD' = mapFrom (_declName . _cdtName) eCD
             let eV' = asDeclsMap eV
 
-            HsModuleP {HsModule._exports = Declarations {_decls = eVR <> Map.intersection liV eV', _dataTypes = eCDR <> Map.intersection liCD eCD'}}
+            let r = HsModuleP {HsModule._exports = Declarations {_decls = eVR <> Map.intersection liV eV', _dataTypes = eCDR <> Map.intersection liCD eCD'}}
+            if _name m `elem` eM
+              then over exports (<> locals) r
+              else r
   return (m', Map.insert (_name m) m')
