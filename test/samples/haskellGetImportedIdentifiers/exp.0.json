@@ -59,5 +59,51 @@
       }
     }
   ],
-  "importedModules": ["ScEaHs.Game.Renderable", "Prelude"]
+  "importedModules": [
+    {
+      "_hidingCDs": [],
+      "_hidingDecls": [],
+      "_modName": "ScEaHs.Game.Renderable"
+    },
+    {
+      "_hidingCDs": [],
+      "_hidingDecls": [
+        {
+          "_declModule": "ScEaHs.Game.Surface.Generator",
+          "_declName": "maxHeight",
+          "_declSrcOrig": {
+            "sourceSpanEndColumn": 0,
+            "sourceSpanEndLine": 0,
+            "sourceSpanFileName": "",
+            "sourceSpanStartColumn": 0,
+            "sourceSpanStartLine": 0
+          }
+        },
+        {
+          "_declModule": "ScEaHs.Game.Surface.Generator",
+          "_declName": "width",
+          "_declSrcOrig": {
+            "sourceSpanEndColumn": 0,
+            "sourceSpanEndLine": 0,
+            "sourceSpanFileName": "",
+            "sourceSpanStartColumn": 0,
+            "sourceSpanStartLine": 0
+          }
+        },
+        {
+          "_declModule": "ScEaHs.Game.Surface.Generator",
+          "_declName": "heights",
+          "_declSrcOrig": {
+            "sourceSpanEndColumn": 0,
+            "sourceSpanEndLine": 0,
+            "sourceSpanFileName": "",
+            "sourceSpanStartColumn": 0,
+            "sourceSpanStartLine": 0
+          }
+        }
+      ],
+      "_modName": "ScEaHs.Game.Surface.Generator"
+    },
+    { "_hidingCDs": [], "_hidingDecls": [], "_modName": "Prelude" }
+  ]
 }

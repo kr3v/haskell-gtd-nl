@@ -131,9 +131,32 @@ asDeclsMap ds = Map.fromList $ (\d -> (_declName d, d)) <$> ds
 
 ---
 
+data Module = Module
+  { _modName :: String,
+    _hidingDecls :: [Declaration],
+    _hidingCDs :: [ClassOrData]
+  }
+  deriving (Show, Generic, Eq)
+
+$(makeLenses ''Module)
+
+instance FromJSON Module
+
+instance ToJSON Module
+
+instance Semigroup Module where
+  (<>) :: Module -> Module -> Module
+  (<>) (Module n1 hd1 hcd1) (Module n2 hd2 hcd2) = Module (n1 <> n2) (hd1 <> hd2) (hcd1 <> hcd2)
+
+instance Monoid Module where
+  mempty :: Module
+  mempty = Module "" [] []
+
+---
+
 data ExportsOrImports = ExportsOrImports
   { _eoiDecls :: [Declaration],
-    _eoiModules :: [ModuleNameS],
+    _eoiModules :: [Module],
     _eoiCDs :: [ClassOrData]
   }
   deriving (Show, Generic, Eq)
@@ -152,7 +175,7 @@ asExports :: ExportsOrImports -> Exports
 asExports ExportsOrImports {_eoiDecls = ds, _eoiModules = ms, _eoiCDs = cds} =
   Exports
     { exportedVars = ds,
-      exportedModules = ms,
+      exportedModules = _modName <$> ms,
       exportedCDs = cds
     }
 
@@ -189,7 +212,7 @@ instance Monoid Exports where
 
 data Imports = Imports
   { importedDecls :: [Declaration],
-    importedModules :: [ModuleNameS],
+    importedModules :: [Module],
     importedCDs :: [ClassOrData]
   }
   deriving (Show, Generic, Eq)
@@ -207,4 +230,4 @@ instance Monoid Imports where
   mempty = Imports [] [] []
 
 allImportedModules :: Imports -> [ModuleNameS]
-allImportedModules (Imports ids ims icds) = deduplicate $ ims <> (_declModule <$> ids) <> (_declModule . _cdtName <$> icds)
+allImportedModules (Imports ids ims icds) = deduplicate $ (_modName <$> ims) <> (_declModule <$> ids) <> (_declModule . _cdtName <$> icds)

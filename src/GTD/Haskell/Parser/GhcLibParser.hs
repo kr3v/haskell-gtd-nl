@@ -10,7 +10,7 @@ import Control.Monad (forM, forM_, unless, when)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.State (MonadState (..), evalStateT, execStateT, modify)
-import Control.Monad.Writer (MonadWriter (..), WriterT (..), mapWriterT)
+import Control.Monad.Writer (MonadWriter (..), WriterT (..), execWriterT, mapWriterT)
 import Data.Data (Data (..), showConstr)
 import Data.Either (fromRight)
 import qualified Data.Functor
@@ -41,7 +41,7 @@ import GHC.Types.SrcLoc (GenLocated (..), Located, RealSrcSpan (srcSpanFile), Sr
 import GHC.Utils.Error (DiagOpts (..), pprMessages, pprMsgEnvelopeBagWithLocDefault)
 import GHC.Utils.Outputable (Outputable (..), SDocContext (..), defaultSDocContext, renderWithContext)
 import GHC.Utils.Panic (handleGhcException)
-import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Exports (..), ExportsOrImports (..), Imports (..), SourceSpan (..), asDeclsMap, asExports, asImports, emptySourceSpan, name)
+import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Exports (..), ExportsOrImports (..), Imports (..), Module (..), SourceSpan (..), asDeclsMap, asExports, asImports, emptySourceSpan, name)
 import GTD.Haskell.Parser.GhcLibParser.Extension (readExtension)
 import GTD.Utils (logDebugNSS, modifyM)
 import qualified Language.Haskell.Exts as HSE
@@ -84,7 +84,7 @@ parse p content = do
   let dynFlags0 = defaultDynFlags fakeSettings
   fM <- try (parsePragmasIntoDynFlags dynFlags0 p content) :: IO (Either SourceError (Maybe (DynFlags, [String])))
   let (dynFlags, languagePragmas) = fromMaybe (dynFlags0, []) $ fromRight Nothing fM
-  
+
   printf "language pragmas: module %s -> %s\n" p (show languagePragmas)
 
   let opts = initParserOpts dynFlags
@@ -164,7 +164,7 @@ importsOrExports :: String -> IE GhcPs -> (MonadWriter ExportsOrImports m, Monad
 importsOrExports mN e = do
   let decl = declME mN
   case e of
-    IEModuleContents _ (L _ mn) -> tell mempty {_eoiModules = [showO mn]}
+    IEModuleContents _ (L _ mn) -> tell mempty {_eoiModules = [mempty {_modName = showO mn}]}
     IEVar _ (L _ n) -> do
       n1 <- asName n
       forM_ n1 $ \(L _ n2) -> tell mempty {_eoiDecls = [decl n2]}
@@ -208,15 +208,18 @@ imports0 m@(HsModuleX HsModule {hsmodImports = is} _) = do
               Just _ -> return ()
               Nothing -> do
                 case iIL of
-                  Nothing -> tell mempty {_eoiModules = [iMNS]}
+                  Nothing -> tell mempty {_eoiModules = [mempty {_modName = iMNS}]}
                   Just (Exactly, L _ iis) -> do
                     forM_ iis $ \(L _ ii) -> importsOrExports iMNS ii
-                  _ -> return ()
+                  Just (EverythingBut, L _ iis) -> do
+                    r <- execWriterT $ forM_ iis $ \(L _ ii) -> importsOrExports iMNS ii
+                    tell mempty {_eoiModules = [mempty {_modName = iMNS, _hidingCDs = _eoiCDs r, _hidingDecls = _eoiDecls r}]}
+                    return ()
 
 imports :: HsModuleX -> (MonadWriter Imports m, MonadLoggerIO m) => m ()
 imports m@(HsModuleX _ ps) = do
   (a, b) <- runWriterT $ imports0 m
   tell $ asImports b
   unless ("-XNoImplicitPrelude" `elem` ps) $
-    tell mempty {importedModules = ["Prelude"]}
+    tell mempty {importedModules = [mempty {_modName = "Prelude"}]}
   return a

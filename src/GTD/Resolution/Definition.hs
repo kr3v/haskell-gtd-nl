@@ -34,7 +34,7 @@ getAllImports m' = do
   let logTag = "get all imports for " <> show (_name m')
   let Imports {importedDecls = iD, importedModules = iM, importedCDs = iCD} = HsModule._imports . _info $ m'
   ctx <- get
-  let (errorsM, importsM) = partitionEithers $ getExportedModule ctx <$> iM
+  let (errorsM, importsM) = partitionEithers $ getExportedModule ctx . Declarations._modName <$> iM
   forM_ errorsM (logErrorNSS logTag)
   return $
     Declarations

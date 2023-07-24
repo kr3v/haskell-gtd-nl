@@ -6,6 +6,7 @@
 
 module GTD.Resolution.Module where
 
+import Control.Lens (over)
 import Control.Monad.Cont (forM, forM_)
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (MonadReader (ask))
@@ -19,12 +20,12 @@ import Distribution.ModuleName (fromString, toFilePath, validModuleComponent)
 import GTD.Cabal (ModuleNameS)
 import qualified GTD.Cabal as Cabal
 import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Exports (..), Imports (..), allImportedModules, asDeclsMap)
-import GTD.Haskell.Module (HsModule (..), HsModuleData (..), HsModuleP (..), HsModuleParams (..), emptyHsModule, parseModule, exports)
+import qualified GTD.Haskell.Declaration as Declarations
+import GTD.Haskell.Module (HsModule (..), HsModuleData (..), HsModuleP (..), HsModuleParams (..), emptyHsModule, exports, parseModule)
 import qualified GTD.Haskell.Module as HsModule
 import GTD.Utils (logDebugNSS, logErrorNSS, mapFrom)
 import System.FilePath (normalise, (</>))
 import Text.Printf (printf)
-import Control.Lens (over)
 
 ---
 
@@ -99,14 +100,21 @@ figureOutExports0 st m = do
         if isImplicitExportAll
           then HsModuleP {HsModule._exports = locals}
           else do
-            let eM' = Map.fromList $ mapMaybe (\n -> (n,) <$> Map.lookup n st) eM
-            let iM' = Map.fromList $ mapMaybe (\n -> (n,) <$> Map.lookup n st) iM
+            let eM' = HsModule._exports <$> mapMaybe (`Map.lookup` st) eM
+            let iM' = flip mapMaybe iM $ \m -> do
+                  let imn = Declarations._modName m
+                      ihcds = Declarations._hidingCDs m
+                      ihds = Declarations._hidingDecls m
+                  let de = over Declarations.decls (`Map.withoutKeys` (Map.keysSet $ asDeclsMap ihds))
+                      dt = over Declarations.dataTypes (`Map.withoutKeys` (Map.keysSet $ mapFrom (_declName . _cdtName) ihcds))
+                      hide = de . dt
+                  hide . HsModule._exports <$> (imn `Map.lookup` st)
 
-            let liCD = mapFrom (_declName . _cdtName) $ mapMaybe (HsModule.resolveCDT st) iCD <> Map.elems (_dataTypes locals) <> concatMap (Map.elems . _dataTypes . HsModule._exports) (Map.elems iM')
-            let liV = asDeclsMap $ Map.elems (_decls locals) <> mapMaybe (HsModule.resolve st) iV <> concatMap (Map.elems . _decls . HsModule._exports) (Map.elems iM')
+            let liCD = mapFrom (_declName . _cdtName) $ mapMaybe (HsModule.resolveCDT st) iCD <> Map.elems (_dataTypes locals) <> concatMap (Map.elems . _dataTypes) iM'
+            let liV = asDeclsMap $ Map.elems (_decls locals) <> mapMaybe (HsModule.resolve st) iV <> concatMap (Map.elems . _decls) iM'
 
-            let eCDR = mapFrom (_declName . _cdtName) $ concatMap (Map.elems . _dataTypes . HsModule._exports) (Map.elems eM')
-            let eVR = asDeclsMap $ concatMap (Map.elems . _decls . HsModule._exports) (Map.elems eM')
+            let eCDR = mapFrom (_declName . _cdtName) $ concatMap (Map.elems . _dataTypes) eM'
+            let eVR = asDeclsMap $ concatMap (Map.elems . _decls) eM'
 
             let eCD' = mapFrom (_declName . _cdtName) eCD
             let eV' = asDeclsMap eV

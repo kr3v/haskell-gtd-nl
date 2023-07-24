@@ -14,6 +14,7 @@ import Data.Maybe (isJust, isNothing, maybeToList)
 import GHC.Generics (Generic)
 import GTD.Cabal (ModuleNameS)
 import GTD.Haskell.Declaration (ClassOrData (ClassOrData), Declaration (_declName), Declarations (_dataTypes, _decls), Exports (exportedCDs, exportedModules, exportedVars), Imports (importedCDs, importedDecls, importedModules), asDeclsMap, identToDecl, name)
+import qualified GTD.Haskell.Declaration as Declarations
 import GTD.Utils (deduplicate, logDebugNSS)
 import Language.Haskell.Exts (ClassDecl (ClsDecl), Decl (..), DeclHead (..), EWildcard (..), ExportSpec (..), ExportSpecList (ExportSpecList), FieldDecl (..), ImportDecl (..), ImportSpec (..), ImportSpecList (ImportSpecList), KnownExtension (..), Language (Haskell2010), Module (Module), ModuleHead (ModuleHead), ModuleHeadAndImports (..), ModuleName (ModuleName), ModulePragma (..), Name (..), NonGreedy (..), ParseMode (..), ParseResult (ParseFailed, ParseOk), Parseable (..), QName (UnQual), QualConDecl (..), SrcSpan (..), SrcSpanInfo (..), defaultParseMode, infix_, parseFileContentsWithMode)
 import qualified Language.Haskell.Exts as Exts
@@ -154,7 +155,7 @@ importsE (Module _ _ _ is _) = do
             IThingAll _ n -> tell mempty {importedCDs = [classOrDataE im n [] True]}
             IThingWith _ n cs -> tell mempty {importedCDs = [classOrDataE im n cs False]}
       Just (ImportSpecList _ True _) -> logDebugNSS logTag $ printf "not yet handled: isHidden is `True`"
-      Nothing -> tell mempty {importedModules = [imn]}
+      Nothing -> tell mempty {importedModules = [mempty {Declarations._modName = imn}]}
 importsE m = logDebugNSS "get imports" $ printf "not yet handled: :t m = %s" (showConstr . toConstr $ m)
 
 isNoImplicitPrelude :: Module SrcSpanInfo -> Bool
@@ -164,7 +165,7 @@ isNoImplicitPrelude (Module _ _ ps _ _) = flip any ps $ \case
 
 importsP :: Module SrcSpanInfo -> (MonadWriter Imports m, MonadLoggerIO m) => m ()
 importsP m = unless (isNoImplicitPrelude m) $ do
-  tell mempty {importedModules = ["Prelude"]}
+  tell mempty {importedModules = [mempty {Declarations._modName = "Prelude"}]}
 
 imports :: Module SrcSpanInfo -> (MonadWriter Imports m, MonadLoggerIO m) => m ()
 imports m = do

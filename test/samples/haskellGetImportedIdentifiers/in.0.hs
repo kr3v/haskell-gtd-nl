@@ -10,6 +10,7 @@ import qualified Data.Map.Strict as Map
 import Graphics.Gloss (Picture (..), Point)
 import ScEaHs.Game.Renderable
 import System.Random.Stateful (StdGen)
+import ScEaHs.Game.Surface.Generator hiding (maxHeight, width, heights)
 
 data Surface = Surface
   { _maxHeight :: Int,
