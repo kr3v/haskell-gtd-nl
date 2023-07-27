@@ -12,7 +12,7 @@ module Main where
 import Control.Concurrent (MVar, forkIO, modifyMVar_, newMVar, putMVar, readMVar, takeMVar, threadDelay)
 import Control.Lens (makeLenses, (<+=), (^.))
 import Control.Monad.Except (runExceptT)
-import Control.Monad.Logger (LogLevel (LevelDebug), filterLogger, runFileLoggingT, runStdoutLoggingT)
+import Control.Monad.Logger (runFileLoggingT, runStdoutLoggingT)
 import Control.Monad.Reader (ReaderT (runReaderT))
 import Control.Monad.State (StateT (runStateT), execStateT)
 import Control.Monad.State.Lazy (evalStateT)

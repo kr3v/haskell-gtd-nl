@@ -133,21 +133,23 @@ get pkg pkgVerPredicate = do
 
 data PackageModules = PackageModules
   { _srcDirs :: [FilePath],
-    _exports :: Set.Set ModuleNameS
+    _exports :: Set.Set ModuleNameS,
+    _reExports :: Set.Set ModuleNameS
   }
   deriving (Eq, Show, Generic)
 
 $(makeLenses ''PackageModules)
 
 emptyPackageModules :: PackageModules
-emptyPackageModules = PackageModules [] Set.empty
+emptyPackageModules = PackageModules [] Set.empty Set.empty
 
 __exports :: PackageDescription -> Maybe PackageModules
 __exports pkg = do
   lib <- library pkg
   let es = Set.fromList $ prettyShow <$> exposedModules lib
+  let res = Set.fromList $ prettyShow <$> reexportedModules lib
   let srcDirs = getSymbolicPath <$> (hsSourceDirs . libBuildInfo) lib
-  return $ PackageModules srcDirs es
+  return $ PackageModules srcDirs es res
 
 ---
 

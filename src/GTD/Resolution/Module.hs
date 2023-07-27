@@ -7,19 +7,22 @@
 module GTD.Resolution.Module where
 
 import Control.Lens (over)
-import Control.Monad.Cont (forM, forM_)
+import Control.Monad.Cont (forM, forM_, when)
 import Control.Monad.Logger (MonadLoggerIO)
-import Control.Monad.RWS (MonadReader (ask))
-import Control.Monad.State.Lazy (MonadState (..), modify)
+import Control.Monad.RWS (MonadReader (ask), MonadWriter (..))
+import Control.Monad.State.Lazy (MonadState (..), evalStateT, execStateT, modify)
 import Control.Monad.Trans.Except (runExceptT, withExceptT)
 import Control.Monad.Trans.Writer (WriterT (..), execWriterT)
+import Data.Aeson (FromJSON, ToJSON)
 import Data.Either (partitionEithers)
+import Data.Foldable (Foldable (..))
 import qualified Data.Map.Strict as Map
 import Data.Maybe (mapMaybe)
 import Distribution.ModuleName (fromString, toFilePath, validModuleComponent)
+import GHC.Generics (Generic)
 import GTD.Cabal (ModuleNameS)
 import qualified GTD.Cabal as Cabal
-import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Exports (..), Imports (..), allImportedModules, asDeclsMap)
+import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Exports (..), Imports (..), Module (..), ModuleImportType (..), allImportedModules, asDeclsMap)
 import qualified GTD.Haskell.Declaration as Declarations
 import GTD.Haskell.Module (HsModule (..), HsModuleData (..), HsModuleP (..), HsModuleParams (..), emptyHsModule, exports, parseModule)
 import qualified GTD.Haskell.Module as HsModule
@@ -34,8 +37,11 @@ resolve repoRoot srcDir moduleName = normalise $ repoRoot </> srcDir </> ((toFil
 
 ---
 
+-- this set of functions is responsible for parsing a single module (no inter-module resolution happens here) in a given Cabal package
+-- its main purpose is to accumulate errors atm
+
 module'Dependencies :: HsModule -> [ModuleNameS]
-module'Dependencies m = filter (_name m /=) ((exportedModules . _exports0 . _info $ m) ++ (allImportedModules . _imports . _info $ m))
+module'Dependencies m = filter (_name m /=) (allImportedModules . _imports . _info $ m)
 
 module'2 :: Cabal.PackageFull -> ModuleNameS -> (MonadLoggerIO m) => m [Either (FilePath, ModuleNameS, String) HsModule]
 module'2 p m = do
@@ -73,54 +79,59 @@ moduleR m = do
 
 ---
 
+resolution :: Map.Map ModuleNameS HsModuleP -> HsModule -> (MonadLoggerIO m) => m (Map.Map ModuleNameS Declarations)
+resolution sM m = flip execStateT Map.empty $ do
+  let locals = _locals . _info $ m
+      name = _name m
+
+  forM_ (_imports . _info $ m) $ \i@(Module {_mName = k, _mType = mt, _mAllowNoQualifier = mnq, _mQualifier = mq, _mDecls = md, _mCDs = mc}) -> do
+    forM_ (Map.lookup k sM) $ \c -> do
+      let stuff = case mt of
+            All -> _exports c
+            EverythingBut -> Declarations {_decls = Map.withoutKeys (_decls $ _exports c) (Map.keysSet $ asDeclsMap md), _dataTypes = Map.withoutKeys (_dataTypes $ _exports c) (Map.keysSet $ mapFrom (_declName . _cdtName) mc)}
+            Exactly -> Declarations {_decls = Map.intersection (_decls $ _exports c) (asDeclsMap md), _dataTypes = Map.intersection (_dataTypes $ _exports c) (mapFrom (_declName . _cdtName) mc)}
+      modify $ Map.insertWith (<>) mq stuff
+      when mnq $ modify $ Map.insertWith (<>) "" stuff
+  modify $ Map.insertWith (<>) name locals
+  modify $ Map.insertWith (<>) "" locals
+
+---
+
 figureOutExports ::
   HsModule ->
   (MonadLoggerIO m, MonadState (Map.Map ModuleNameS HsModuleP) m) => m HsModuleP
 figureOutExports m = do
   st <- get
-  (r, s) <- figureOutExports0 st m
+  (r, s, _) <- figureOutExports0 st m
   modify s
   return r
+
+figureOutExports1 ::
+  Map.Map ModuleNameS HsModuleP ->
+  HsModule ->
+  (MonadLoggerIO m) => m (HsModuleP, Map.Map ModuleNameS HsModuleP -> Map.Map ModuleNameS HsModuleP)
+figureOutExports1 sM m = do
+  (r, s, _) <- figureOutExports0 sM m
+  return (r, s)
 
 figureOutExports0 ::
   Map.Map ModuleNameS HsModuleP ->
   HsModule ->
-  (MonadLoggerIO m) => m (HsModuleP, Map.Map ModuleNameS HsModuleP -> Map.Map ModuleNameS HsModuleP)
-figureOutExports0 st m = do
-  let logTag = "module prepare exports for " ++ _name m
+  (MonadLoggerIO m) => m (HsModuleP, Map.Map ModuleNameS HsModuleP -> Map.Map ModuleNameS HsModuleP, Map.Map ModuleNameS Declarations)
+figureOutExports0 sM m = do
+  liM <- resolution sM m
+  r <- execWriterT $ do
+    if _isImplicitExportAll . _params $ m
+      then tell $ _locals . _info $ m
+      else forM_ (Map.toList $ _exports0 . _info $ m) $ \(k, e) -> do
+        let n = _name m
+        if _mType e == All
+          then
+            if k == n
+              then tell $ _locals . _info $ m
+              else forM_ (Map.lookup k sM) $ \c -> tell (_exports c)
+          else forM_ (Map.lookup k liM) $ \c -> do
+            let eD = Declarations {_decls = Map.intersection (_decls c) (asDeclsMap $ _mDecls e), _dataTypes = Map.intersection (_dataTypes c) (mapFrom (_declName . _cdtName) $ _mCDs e)}
+            tell eD
 
-  let (HsModuleParams {_isImplicitExportAll = isImplicitExportAll}) = _params m
-      Exports {exportedVars = eV, exportedModules = eM, exportedCDs = eCD} = _exports0 . _info $ m
-      Imports {importedDecls = iV, importedModules = iM, importedCDs = iCD} = _imports . _info $ m
-      locals = _locals . _info $ m
-
-  logDebugNSS logTag $ printf "eM=%s, iM=%s" (show eM) (show iM)
-
-  let m' =
-        if isImplicitExportAll
-          then HsModuleP {HsModule._exports = locals}
-          else do
-            let eM' = HsModule._exports <$> mapMaybe (`Map.lookup` st) eM
-            let iM' = flip mapMaybe iM $ \m -> do
-                  let imn = Declarations._modName m
-                      ihcds = Declarations._hidingCDs m
-                      ihds = Declarations._hidingDecls m
-                  let de = over Declarations.decls (`Map.withoutKeys` (Map.keysSet $ asDeclsMap ihds))
-                      dt = over Declarations.dataTypes (`Map.withoutKeys` (Map.keysSet $ mapFrom (_declName . _cdtName) ihcds))
-                      hide = de . dt
-                  hide . HsModule._exports <$> (imn `Map.lookup` st)
-
-            let liCD = mapFrom (_declName . _cdtName) $ mapMaybe (HsModule.resolveCDT st) iCD <> Map.elems (_dataTypes locals) <> concatMap (Map.elems . _dataTypes) iM'
-            let liV = asDeclsMap $ Map.elems (_decls locals) <> mapMaybe (HsModule.resolve st) iV <> concatMap (Map.elems . _decls) iM'
-
-            let eCDR = mapFrom (_declName . _cdtName) $ concatMap (Map.elems . _dataTypes) eM'
-            let eVR = asDeclsMap $ concatMap (Map.elems . _decls) eM'
-
-            let eCD' = mapFrom (_declName . _cdtName) eCD
-            let eV' = asDeclsMap eV
-
-            let r = HsModuleP {HsModule._exports = Declarations {_decls = eVR <> Map.intersection liV eV', _dataTypes = eCDR <> Map.intersection liCD eCD'}}
-            if _name m `elem` eM
-              then over exports (<> locals) r
-              else r
-  return (m', Map.insert (_name m) m')
+  return (HsModuleP {HsModule._exports = r}, Map.insert (_name m) (HsModuleP {_exports = r}), liM)

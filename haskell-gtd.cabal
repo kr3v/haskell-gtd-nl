@@ -132,13 +132,10 @@ library haskell-gtd-lib
     exposed-modules:
         GTD.Cabal
         GTD.Configuration
-        GTD.Haskell.AST
         GTD.Haskell.Cpphs
         GTD.Haskell.Declaration
         GTD.Haskell.Module
         GTD.Haskell.Parser.GhcLibParser
-        GTD.Haskell.Parser.GhcLibParser.Extension
-        GTD.Haskell.Parser.HaskellSrcExts
         GTD.Resolution.Definition
         GTD.Resolution.Module
         GTD.Resolution.State
@@ -195,4 +192,4 @@ test-suite haskell-gtd-lib-test
         , haskell-src-exts ^>= 1.23.1
     build-tool-depends: hspec-discover:hspec-discover
     default-language: Haskell2010
-    ghc-options: -O2 -g1 -threaded
+    ghc-options: -O2 -g1

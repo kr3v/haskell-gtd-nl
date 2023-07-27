@@ -10,13 +10,6 @@
         "sourceSpanFileName": "./test/samples/haskellGetIdentifiers/in.1.hs",
         "sourceSpanStartColumn": 1,
         "sourceSpanStartLine": 3
-      },
-      "_declSrcUsage": {
-        "sourceSpanEndColumn": 0,
-        "sourceSpanEndLine": 0,
-        "sourceSpanFileName": "",
-        "sourceSpanStartColumn": 0,
-        "sourceSpanStartLine": 0
       }
     },
     "g": {
@@ -28,13 +21,6 @@
         "sourceSpanFileName": "./test/samples/haskellGetIdentifiers/in.1.hs",
         "sourceSpanStartColumn": 4,
         "sourceSpanStartLine": 3
-      },
-      "_declSrcUsage": {
-        "sourceSpanEndColumn": 0,
-        "sourceSpanEndLine": 0,
-        "sourceSpanFileName": "",
-        "sourceSpanStartColumn": 0,
-        "sourceSpanStartLine": 0
       }
     }
   }

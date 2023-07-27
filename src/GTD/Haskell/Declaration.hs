@@ -87,7 +87,7 @@ identToDecl' (ModuleName _ mn) l n isDeclaration =
 
 data ClassOrData = ClassOrData
   { _cdtName :: Declaration,
-    _cdtFields :: Map.Map Identifier Declaration,
+    _cdtFields :: Map.Map String Declaration,
     _eWildcard :: Bool
   }
   deriving (Show, Generic, Eq)
@@ -101,8 +101,8 @@ instance ToJSON ClassOrData
 ---
 
 data Declarations = Declarations
-  { _decls :: Map.Map Identifier Declaration,
-    _dataTypes :: Map.Map Identifier ClassOrData
+  { _decls :: Map.Map String Declaration,
+    _dataTypes :: Map.Map String ClassOrData
   }
   deriving (Show, Generic, Eq)
 
@@ -131,10 +131,19 @@ asDeclsMap ds = Map.fromList $ (\d -> (_declName d, d)) <$> ds
 
 ---
 
+data ModuleImportType = All | Exactly | EverythingBut deriving (Show, Generic, Eq)
+
+instance ToJSON ModuleImportType
+
+instance FromJSON ModuleImportType
+
 data Module = Module
-  { _modName :: String,
-    _hidingDecls :: [Declaration],
-    _hidingCDs :: [ClassOrData]
+  { _mName :: ModuleNameS,
+    _mQualifier :: String,
+    _mAllowNoQualifier :: Bool,
+    _mType :: ModuleImportType,
+    _mDecls :: [Declaration],
+    _mCDs :: [ClassOrData]
   }
   deriving (Show, Generic, Eq)
 
@@ -146,11 +155,12 @@ instance ToJSON Module
 
 instance Semigroup Module where
   (<>) :: Module -> Module -> Module
-  (<>) (Module n1 hd1 hcd1) (Module n2 hd2 hcd2) = Module (n1 <> n2) (hd1 <> hd2) (hcd1 <> hcd2)
+  (<>) (Module mn1 q1 aq1 t1 ds1 cds1) (Module mn2 q2 aq2 t2 ds2 cds2) =
+    Module mn1 q1 (aq1 && aq2) t1 (ds1 <> ds2) (cds1 <> cds2)
 
 instance Monoid Module where
   mempty :: Module
-  mempty = Module "" [] []
+  mempty = Module "" "" True All [] []
 
 ---
 
@@ -171,63 +181,11 @@ instance Monoid ExportsOrImports where
   mempty :: ExportsOrImports
   mempty = ExportsOrImports [] [] []
 
-asExports :: ExportsOrImports -> Exports
-asExports ExportsOrImports {_eoiDecls = ds, _eoiModules = ms, _eoiCDs = cds} =
-  Exports
-    { exportedVars = ds,
-      exportedModules = _modName <$> ms,
-      exportedCDs = cds
-    }
-
-asImports :: ExportsOrImports -> Imports
-asImports ExportsOrImports {_eoiDecls = ds, _eoiModules = ms, _eoiCDs = cds} =
-  Imports
-    { importedDecls = ds,
-      importedModules = ms,
-      importedCDs = cds
-    }
-
 ---
 
-data Exports = Exports
-  { exportedVars :: [Declaration],
-    exportedModules :: [ModuleNameS],
-    exportedCDs :: [ClassOrData]
-  }
-  deriving (Show, Generic, Eq)
+type Exports = Map.Map ModuleNameS Module
 
-instance FromJSON Exports
-
-instance ToJSON Exports
-
-instance Semigroup Exports where
-  (<>) :: Exports -> Exports -> Exports
-  (<>) (Exports es1 rs1 ed1) (Exports es2 rs2 ed2) = Exports (es1 <> es2) (rs1 <> rs2) (ed1 <> ed2)
-
-instance Monoid Exports where
-  mempty :: Exports
-  mempty = Exports [] [] []
-
----
-
-data Imports = Imports
-  { importedDecls :: [Declaration],
-    importedModules :: [Module],
-    importedCDs :: [ClassOrData]
-  }
-  deriving (Show, Generic, Eq)
-
-instance FromJSON Imports
-
-instance ToJSON Imports
-
-instance Semigroup Imports where
-  (<>) :: Imports -> Imports -> Imports
-  (<>) (Imports is1 ims1 icd1) (Imports is2 ims2 icd2) = Imports (is1 <> is2) (ims1 <> ims2) (icd1 <> icd2)
-
-instance Monoid Imports where
-  mempty :: Imports
-  mempty = Imports [] [] []
+type Imports = Map.Map ModuleNameS Module
 
 allImportedModules :: Imports -> [ModuleNameS]
-allImportedModules (Imports ids ims icds) = deduplicate $ (_modName <$> ims) <> (_declModule <$> ids) <> (_declModule . _cdtName <$> icds)
+allImportedModules = Map.keys

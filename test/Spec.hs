@@ -1,22 +1,26 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 
 import Control.Applicative (Alternative (empty), Applicative (liftA2))
 import Control.Exception (IOException, evaluate, try)
 import Control.Lens (At (at), use)
 import Control.Lens.Prism (_Just)
-import Control.Monad.Logger (runStderrLoggingT)
+import Control.Monad.Logger (NoLoggingT (runNoLoggingT), runStderrLoggingT, runStdoutLoggingT)
 import Control.Monad.Logger.CallStack (runFileLoggingT)
-import Control.Monad.State (MonadTrans (lift), StateT (..), evalStateT, execStateT, forM)
+import Control.Monad.State (MonadState (..), MonadTrans (lift), StateT (..), evalStateT, execStateT, forM)
 import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
 import Control.Monad.Trans.Maybe (MaybeT (runMaybeT))
 import Control.Monad.Trans.Reader (ReaderT (..))
 import Control.Monad.Writer (MonadIO (liftIO), execWriterT, forM_, join, runWriterT)
 import Data.Aeson (FromJSON, ToJSON, decode, defaultOptions, encode, genericToJSON)
 import qualified Data.ByteString.Lazy as BS
+import Data.Either (partitionEithers)
+import Data.Either.Combinators (mapLeft, mapRight)
+import Data.List (isPrefixOf, isSuffixOf)
 import qualified Data.Map as Map
-import Data.Maybe (fromJust, fromMaybe)
+import Data.Maybe (catMaybes, fromJust, fromMaybe)
 import qualified Data.Set as Set
 import Data.Time.Clock (diffUTCTime)
 import Data.Time.Clock.POSIX (getCurrentTime)
@@ -26,24 +30,24 @@ import Distribution.PackageDescription (emptyGenericPackageDescription, emptyPac
 import GHC.RTS.Flags (ProfFlags (descrSelector))
 import qualified GTD.Cabal as Cabal
 import GTD.Configuration (GTDConfiguration (_repos), prepareConstants)
-import qualified GTD.Haskell.AST as AST
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (Declaration (Declaration, _declName, _declSrcOrig), Declarations (..), Exports, Identifier (..), Imports, SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine), emptySourceSpan)
-import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule)
+import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule, parseModule)
 import qualified GTD.Haskell.Module as HsModule
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
+import GTD.Resolution.Module (figureOutExports, figureOutExports0)
 import GTD.Resolution.State (emptyContext)
 import GTD.Resolution.State.Caching.Cabal (cabalCacheFetch, cabalCacheStore)
 import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), definition, noDefintionFoundError, noDefintionFoundErrorE)
 import GTD.Utils (logDebugNSS, ultraZoom)
 import Language.Haskell.Exts (Module (..), Parseable (parse), SrcSpan (..), SrcSpanInfo (..))
-import System.Directory (getCurrentDirectory, setCurrentDirectory)
+import System.Directory (getCurrentDirectory, listDirectory, setCurrentDirectory)
 import System.FilePath ((</>))
+import System.IO
 import Test.Hspec (Spec, describe, expectationFailure, it, runIO, shouldBe, shouldNotBe, shouldSatisfy)
 import Test.Hspec.Runner (Config (configPrintCpuTime), defaultConfig, hspecWith)
 import Test.QuickCheck (Testable (..), forAll, (==>))
 import Text.Printf (printf)
-import Data.Either.Combinators (mapRight)
 
 haskellApplyCppHsSpec :: Spec
 haskellApplyCppHsSpec = do
@@ -103,9 +107,8 @@ haskellGetIdentifiersSpec = do
             BS.writeFile dstPath $ encode identifiers
             identifiers `shouldBe` expected
 
-  let hseP a b = return $ mapRight (runStderrLoggingT . execWriterT . AST.identifiers) $ AST.parse a b
   let ghcP a b = mapRight (runStderrLoggingT . execWriterT . GHC.identifiers) <$> GHC.parse a b
-  let parsers = [("haskell-src-exts", hseP), ("ghc-lib-parser", ghcP)]
+  let parsers = [("ghc-lib-parser", ghcP)]
 
   forM_ parsers $ \(n, p) -> do
     describe descr $ do
@@ -128,7 +131,6 @@ haskellGetExportsSpec = do
 
         src <- readFile srcPath
         expectedS <- BS.readFile expPath
-
         let expected :: Exports = fromJust $ decode expectedS
 
         result <- liftIO $ p srcPath src
@@ -139,9 +141,8 @@ haskellGetExportsSpec = do
             BS.writeFile dstPath $ encode identifiers
             identifiers `shouldBe` expected
 
-  let hseP a b = return $ mapRight (runStderrLoggingT . execWriterT . AST.exports) $ AST.parse a b
-  let ghcP a b = mapRight (runStderrLoggingT . execWriterT . GHC.exports) <$> GHC.parse a b
-  let parsers = [("haskell-src-exts", hseP), ("ghc-lib-parser", ghcP)]
+  let ghcP a b = mapRight (runStderrLoggingT . flip execStateT Map.empty . GHC.exports) <$> GHC.parse a b
+  let parsers = [("ghc-lib-parser", ghcP)]
 
   forM_ parsers $ \(n, p) -> do
     describe descr $ do
@@ -171,15 +172,59 @@ haskellGetImportsSpec = do
             BS.writeFile dstPath $ encode identifiers
             identifiers `shouldBe` expected
 
-  let hseP a b = return $ mapRight (runStderrLoggingT . execWriterT . AST.imports) $ AST.parse a b
   let ghcP a b = mapRight (runStderrLoggingT . execWriterT . GHC.imports) <$> GHC.parse a b
-  let parsers = [("haskell-src-exts", hseP), ("ghc-lib-parser", ghcP)]
+  let parsers = [("ghc-lib-parser", ghcP)]
 
   forM_ parsers $ \(n, p) -> do
     describe descr $ do
       describe n $ do
         it "extracts only function imports" $
           test n p 0
+
+---
+
+figureOutExportsTest :: Spec
+figureOutExportsTest = do
+  let descr = "figureOutExports"
+      root = "./test/samples/" </> descr
+  tests <- runIO $ listDirectory root
+  describe descr $ do
+    forM_ tests $ \test -> do
+      it test $ do
+        let mainFileP = root </> test </> "main.hs"
+        let outRP = root </> test </> "result.out.json"
+        let expRP = root </> test </> "result.exp.json"
+        let outMP = root </> test </> "module.out.json"
+        let outS0P = root </> test </> "state0.out.json"
+        let outDP = root </> test </> "debug.out.json"
+
+        expectedRS <- liftIO $ BS.readFile expRP
+        let expectedR :: HsModuleP = fromJust $ decode expectedRS
+
+        importsFs <- liftIO $ listDirectory $ root </> test
+        let importsP = filter (isSuffixOf ".hs") $ filter (isPrefixOf "import.") importsFs
+
+        importsE <- runStdoutLoggingT $ forM importsP \f -> do
+          let p = root </> test </> f
+          mapRight (p,) . mapLeft (printf "failed to parse %s: %s" p) <$> runExceptT (parseModule emptyHsModule {_path = p})
+        let (errors :: [String], importedModules :: [(String, HsModule)]) = partitionEithers importsE
+        liftIO $ print errors
+
+        mainModuleE <- runStdoutLoggingT $ runExceptT $ parseModule emptyHsModule {_path = mainFileP}
+        join $ case mainModuleE of
+          Left err -> return $ expectationFailure $ printf "failed to parse %s: %s" mainFileP err
+          Right mainModule -> do
+            liftIO $ runStdoutLoggingT $ flip evalStateT Map.empty $ do
+              forM_ importedModules $ \(p, m) -> do
+                figureOutExports m
+                liftIO $ BS.writeFile (p ++ ".out.json") $ encode m
+              st0 <- get
+              liftIO $ BS.writeFile outS0P $ encode st0
+              (result, _, debugInfo) <- figureOutExports0 st0 mainModule
+              liftIO $ BS.writeFile outDP $ encode debugInfo
+              liftIO $ BS.writeFile outMP $ encode mainModule
+              liftIO $ BS.writeFile outRP $ encode result
+              return $ result `shouldBe` expectedR
 
 ---
 
@@ -247,6 +292,11 @@ definitionsSpec = do
             expLineNo = 109
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 9, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
          in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+  let expectedPreludeReturn =
+        let expFile = _repos consts </> "base-4.16.4.0/GHC/Base.hs"
+            expLineNo = 862
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 5, sourceSpanEndColumn = 11, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
   let noDefErr = Left "No definition found"
 
   let st0 = emptyContext
@@ -267,9 +317,10 @@ definitionsSpec = do
       join $ mstack evalStateT serverState $ do
         eval "mkStdGen" expectedMkStdGen
 
+    -- if `return` is broken, then it is possible that `module X (module X) where ...` case is broken
     it "from prelude - function" $ do
       join $ mstack evalStateT serverState $ do
-        eval "return" noDefErr
+        eval "return" expectedPreludeReturn
     it "from prelude - data ctor" $ do
       join $ mstack evalStateT serverState $ do
         eval "Nothing" expectedPreludeNothing
@@ -312,9 +363,14 @@ integrationTestsSpec = do
   definitionsSpec
 
 main :: IO ()
-main = hspecWith defaultConfig {configPrintCpuTime = False} $ do
-  haskellApplyCppHsSpec
-  haskellGetIdentifiersSpec
-  haskellGetExportsSpec
-  haskellGetImportsSpec
-  integrationTestsSpec
+main = do
+  hSetBuffering stdout LineBuffering
+  hSetBuffering stderr LineBuffering
+
+  hspecWith defaultConfig {configPrintCpuTime = False} $ do
+    haskellApplyCppHsSpec
+    haskellGetIdentifiersSpec
+    haskellGetExportsSpec
+    haskellGetImportsSpec
+    integrationTestsSpec
+    figureOutExportsTest

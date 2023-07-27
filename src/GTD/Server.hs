@@ -26,11 +26,11 @@ import GHC.Stats (getRTSStats, getRTSStatsEnabled)
 import GTD.Cabal (ModuleNameS)
 import qualified GTD.Cabal as Cabal
 import GTD.Configuration (GTDConfiguration (..))
-import GTD.Haskell.Declaration (Declaration (..), SourceSpan, hasNonEmptyOrig)
+import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Identifier, SourceSpan, asDeclsMap, hasNonEmptyOrig)
 import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule, parseModule)
 import qualified GTD.Haskell.Module as HsModule
-import GTD.Resolution.Definition (enrich, resolution)
-import GTD.Resolution.Module (figureOutExports, figureOutExports0, module'Dependencies, moduleR)
+import GTD.Resolution.Module (figureOutExports, figureOutExports0, figureOutExports1, module'Dependencies, moduleR)
+import qualified GTD.Resolution.Module as Module
 import GTD.Resolution.State (Context (..), Package (Package, _cabalPackage, _modules), cExports, ccGet)
 import qualified GTD.Resolution.State as Package
 import GTD.Resolution.State.Caching.Cabal (cabalCacheStore, cabalFindAtCached, cabalFull)
@@ -76,11 +76,13 @@ modules pkg@Package {_cabalPackage = c} = do
   mods <- modules1 pkg c
   return pkg {Package._exports = Map.restrictKeys mods (Cabal._exports . Cabal._modules $ c), Package._modules = mods}
 
+-- for a given Cabal package, it returns a list of modules in the order they should be processed
 modulesOrdered :: Cabal.PackageFull -> (MonadBaseControl IO m, MonadLoggerIO m) => m [HsModule]
 modulesOrdered c = do
   flip runReaderT c $ flip evalStateT (SchemeState Map.empty Map.empty) $ do
     scheme moduleR HsModule._name id (return . module'Dependencies) (Set.toList . Cabal._exports . Cabal._modules $ c)
 
+-- for a given Cabal package and list of its modules in the 'right' order, concurrently parses all the modules
 modules1 ::
   Package ->
   Cabal.PackageFull ->
@@ -88,7 +90,7 @@ modules1 ::
 modules1 pkg c = do
   modsO <- modulesOrdered c
   let st = ParallelizedState modsO Map.empty Map.empty (_modules pkg)
-  parallelized st (Cabal.nameVersionF c) figureOutExports0 (const "tbd") HsModule._name (return . module'Dependencies)
+  parallelized st (Cabal.nameVersionF c) figureOutExports1 (const "tbd") HsModule._name (return . module'Dependencies)
 
 ---
 
@@ -157,6 +159,12 @@ package cPkg0 = do
 
 ---
 
+resolution :: Declarations -> Map.Map Identifier Declaration
+resolution Declarations {_decls = ds, _dataTypes = dts} =
+  let ds' = Map.elems ds
+      dts' = concatMap (\cd -> [_cdtName cd] <> Map.elems (_cdtFields cd)) (Map.elems dts)
+   in asDeclsMap $ ds' <> dts'
+
 definition ::
   DefinitionRequest ->
   (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m, MonadError String m) => m DefinitionResponse
@@ -166,7 +174,7 @@ definition (DefinitionRequest {workDir = wd, file = rf, word = w}) = do
   pkg <- maybe (throwError "no package found?") return pkgM
 
   m <- parseModule emptyHsModule {_path = rf, HsModule._package = Cabal.nameF cPkg}
-  m' <- resolution <$> evalStateT (enrich m) pkg
+  m' <- Module.resolution (_modules pkg) m
 
   ccGC <- use $ ccGet . Cabal.changed
   when ccGC $ do
@@ -179,12 +187,15 @@ definition (DefinitionRequest {workDir = wd, file = rf, word = w}) = do
 
   ultraZoom cExports $ packageCachedAdaptSizeTo (toInteger $ 10 + length (Cabal._dependencies cPkg))
 
-  case w `Map.lookup` m' of
+  case "" `Map.lookup` m' of
     Nothing -> noDefintionFoundErrorME
-    Just d ->
-      if hasNonEmptyOrig d
-        then return $ DefinitionResponse {srcSpan = Just $ _declSrcOrig d, err = Nothing}
-        else noDefintionFoundErrorME
+    Just m'' ->
+      case w `Map.lookup` resolution m'' of
+        Nothing -> noDefintionFoundErrorME
+        Just d ->
+          if hasNonEmptyOrig d
+            then return $ DefinitionResponse {srcSpan = Just $ _declSrcOrig d, err = Nothing}
+            else noDefintionFoundErrorME
 
 ---
 

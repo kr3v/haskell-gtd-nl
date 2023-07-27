@@ -2,9 +2,9 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 
 module GTD.Haskell.Module where
 
@@ -13,7 +13,7 @@ import Control.Lens (makeLenses)
 import Control.Monad.Cont (MonadIO)
 import Control.Monad.Except (MonadError (..), liftEither)
 import Control.Monad.Logger (MonadLoggerIO)
-import Control.Monad.State (MonadIO (..))
+import Control.Monad.State (MonadIO (..), execStateT, StateT (runStateT))
 import Control.Monad.Trans.Writer (WriterT (runWriterT), execWriterT)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Either.Combinators (mapLeft)
@@ -24,7 +24,6 @@ import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (ClassOrData (_cdtName), Declaration (_declModule, _declName), Declarations (..), Exports (..), Imports (..))
 import qualified GTD.Haskell.Declaration as Declarations
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
-import GTD.Haskell.Parser.HaskellSrcExts (exports, identifiers, imports, parse)
 import GTD.Utils (logDebugNSS)
 import Language.Haskell.Exts (Module (Module), SrcSpan (..), SrcSpanInfo (..))
 
@@ -36,6 +35,10 @@ newtype HsModuleParams = HsModuleParams
 emptyParams :: HsModuleParams
 emptyParams = HsModuleParams {_isImplicitExportAll = False}
 
+instance FromJSON HsModuleParams
+
+instance ToJSON HsModuleParams
+
 data HsModuleData = HsModuleData
   { _exports0 :: Exports,
     _imports :: Imports,
@@ -43,8 +46,12 @@ data HsModuleData = HsModuleData
   }
   deriving (Show, Eq, Generic)
 
+instance FromJSON HsModuleData
+
+instance ToJSON HsModuleData
+
 emptyData :: HsModuleData
-emptyData = HsModuleData {_exports0 = Exports {exportedModules = [], exportedVars = [], exportedCDs = []}, _imports = Imports {importedModules = [], importedDecls = [], importedCDs = []}, _locals = Declarations {_decls = Map.empty, _dataTypes = Map.empty}}
+emptyData = HsModuleData {_exports0 = Map.empty, _imports = Map.empty, _locals = Declarations {_decls = Map.empty, _dataTypes = Map.empty}}
 
 data HsModule = HsModule
   { _package :: PackageNameS,
@@ -56,6 +63,10 @@ data HsModule = HsModule
   deriving (Show, Eq, Generic)
 
 $(makeLenses ''HsModule)
+
+instance FromJSON HsModule
+
+instance ToJSON HsModule
 
 emptySrcSpan :: SrcSpan
 emptySrcSpan = SrcSpan {srcSpanFilename = "", srcSpanStartLine = 0, srcSpanStartColumn = 0, srcSpanEndLine = 0, srcSpanEndColumn = 0}
@@ -86,17 +97,18 @@ parseModule cm = do
   srcPostCpp <- haskellApplyCppHs srcP src
 
   a <- liftIO $ GHC.parse srcP srcPostCpp
-  case a of 
+  case a of
     Left err -> throwError err
     Right a -> do
-      (iiea, es) <- runWriterT $ GHC.exports a
+      (iiea, es) <- runStateT (GHC.exports a) Map.empty
       is <- execWriterT $ GHC.imports a
       locals <- execWriterT $ GHC.identifiers a
-      return $ cm {
-        _info = HsModuleData {_exports0 = es, _imports = is, _locals = locals},
-        _params = HsModuleParams {_isImplicitExportAll = iiea},
-        _name = GHC.name a
-      }
+      return $
+        cm
+          { _info = HsModuleData {_exports0 = es, _imports = is, _locals = locals},
+            _params = HsModuleParams {_isImplicitExportAll = iiea},
+            _name = GHC.name a
+          }
 
 ---
 

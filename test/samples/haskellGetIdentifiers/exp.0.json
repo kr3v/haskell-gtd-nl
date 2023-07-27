@@ -11,13 +11,6 @@
             "sourceSpanFileName": "./test/samples/haskellGetIdentifiers/in.0.hs",
             "sourceSpanStartColumn": 16,
             "sourceSpanStartLine": 12
-          },
-          "_declSrcUsage": {
-            "sourceSpanEndColumn": 0,
-            "sourceSpanEndLine": 0,
-            "sourceSpanFileName": "",
-            "sourceSpanStartColumn": 0,
-            "sourceSpanStartLine": 0
           }
         },
         "_heights": {
@@ -29,13 +22,6 @@
             "sourceSpanFileName": "./test/samples/haskellGetIdentifiers/in.0.hs",
             "sourceSpanStartColumn": 5,
             "sourceSpanStartLine": 15
-          },
-          "_declSrcUsage": {
-            "sourceSpanEndColumn": 0,
-            "sourceSpanEndLine": 0,
-            "sourceSpanFileName": "",
-            "sourceSpanStartColumn": 0,
-            "sourceSpanStartLine": 0
           }
         },
         "_maxHeight": {
@@ -47,13 +33,6 @@
             "sourceSpanFileName": "./test/samples/haskellGetIdentifiers/in.0.hs",
             "sourceSpanStartColumn": 5,
             "sourceSpanStartLine": 13
-          },
-          "_declSrcUsage": {
-            "sourceSpanEndColumn": 0,
-            "sourceSpanEndLine": 0,
-            "sourceSpanFileName": "",
-            "sourceSpanStartColumn": 0,
-            "sourceSpanStartLine": 0
           }
         },
         "_width": {
@@ -65,13 +44,6 @@
             "sourceSpanFileName": "./test/samples/haskellGetIdentifiers/in.0.hs",
             "sourceSpanStartColumn": 5,
             "sourceSpanStartLine": 14
-          },
-          "_declSrcUsage": {
-            "sourceSpanEndColumn": 0,
-            "sourceSpanEndLine": 0,
-            "sourceSpanFileName": "",
-            "sourceSpanStartColumn": 0,
-            "sourceSpanStartLine": 0
           }
         }
       },
@@ -84,13 +56,6 @@
           "sourceSpanFileName": "./test/samples/haskellGetIdentifiers/in.0.hs",
           "sourceSpanStartColumn": 6,
           "sourceSpanStartLine": 12
-        },
-        "_declSrcUsage": {
-          "sourceSpanEndColumn": 0,
-          "sourceSpanEndLine": 0,
-          "sourceSpanFileName": "",
-          "sourceSpanStartColumn": 0,
-          "sourceSpanStartLine": 0
         }
       },
       "_eWildcard": false
@@ -106,13 +71,6 @@
         "sourceSpanFileName": "./test/samples/haskellGetIdentifiers/in.0.hs",
         "sourceSpanStartColumn": 1,
         "sourceSpanStartLine": 31
-      },
-      "_declSrcUsage": {
-        "sourceSpanEndColumn": 0,
-        "sourceSpanEndLine": 0,
-        "sourceSpanFileName": "",
-        "sourceSpanStartColumn": 0,
-        "sourceSpanStartLine": 0
       }
     },
     "putOn": {
@@ -124,13 +82,6 @@
         "sourceSpanFileName": "./test/samples/haskellGetIdentifiers/in.0.hs",
         "sourceSpanStartColumn": 1,
         "sourceSpanStartLine": 25
-      },
-      "_declSrcUsage": {
-        "sourceSpanEndColumn": 0,
-        "sourceSpanEndLine": 0,
-        "sourceSpanFileName": "",
-        "sourceSpanStartColumn": 0,
-        "sourceSpanStartLine": 0
       }
     },
     "putOn'": {
@@ -142,13 +93,6 @@
         "sourceSpanFileName": "./test/samples/haskellGetIdentifiers/in.0.hs",
         "sourceSpanStartColumn": 1,
         "sourceSpanStartLine": 28
-      },
-      "_declSrcUsage": {
-        "sourceSpanEndColumn": 0,
-        "sourceSpanEndLine": 0,
-        "sourceSpanFileName": "",
-        "sourceSpanStartColumn": 0,
-        "sourceSpanStartLine": 0
       }
     }
   }

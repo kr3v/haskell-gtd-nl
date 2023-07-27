@@ -17,18 +17,6 @@ import Data.Time.Clock (diffUTCTime)
 import Data.Time.Clock.POSIX (getCurrentTime)
 import Distribution.PackageDescription (emptyGenericPackageDescription, emptyPackageDescription)
 import GHC.RTS.Flags (ProfFlags (descrSelector))
-import GTD.Cabal
-import GTD.Configuration (GTDConfiguration (_repos), prepareConstants)
-import GTD.Haskell.AST
-import GTD.Haskell.Cpphs
-import GTD.Haskell.Declaration
-import GTD.Haskell.Enrich
-import GTD.Haskell.Package
-import GTD.Haskell.Module
-import GTD.Haskell.Resolution
-import GTD.Haskell.Utils
-import GTD.Server
-import GTD.Utils
 import Language.Haskell.Exts
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.FilePath ((</>))
@@ -37,6 +25,28 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import qualified Distribution.ModuleName as Cabal
 import qualified Distribution.ModuleName as ModuleName
+
+import GTD.Cabal
+import GTD.Configuration
+import GTD.Haskell.AST
+import GTD.Haskell.Cpphs
+import GTD.Haskell.Declaration
+import GTD.Haskell.Module
+import GTD.Haskell.Parser.GhcLibParser
+import GTD.Haskell.Parser.GhcLibParser.Extension
+import GTD.Haskell.Parser.HaskellSrcExts
+import GTD.Resolution.Definition
+import GTD.Resolution.Module
+import GTD.Resolution.State
+import GTD.Resolution.State.Caching.Cabal
+import GTD.Resolution.State.Caching.Package
+import GTD.Resolution.Utils
+import GTD.Server
+import GTD.Utils
+
+import qualified GTD.Cabal as Cabal
+import qualified GTD.Haskell.Declaration as Declarations
+import qualified GTD.Haskell.Module as HsModule
 
 :set -XRankNTypes
 :set -XFlexibleContexts
@@ -62,6 +72,8 @@ st1 <- esS0 st0 contextFetchGetCache
 (a, b) <- rS st1 $ definition DefinitionRequest {workDir = tWorkDir, file = mFile, word = "playIO"}
 
 Just x = Map.lookup (PackageWithVersion "gloss" "1.13.2.2") (_packages b)
+
+packageCachedGet
 
 let modules = _ccpmodules $ _context b
 let cabalDeps = _dependencies $ _context b
