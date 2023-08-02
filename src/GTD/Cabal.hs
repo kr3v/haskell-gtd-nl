@@ -30,10 +30,11 @@ import Data.Maybe (catMaybes, fromMaybe)
 import qualified Data.Set as Set
 import Distribution.Compat.Prelude (Generic)
 import Distribution.Package (PackageIdentifier (..), packageName)
-import Distribution.PackageDescription (BuildInfo (..), Dependency (Dependency), Library (..), PackageDescription (..), allBuildInfo, unPackageName)
+import Distribution.PackageDescription (BuildInfo (..), Dependency (Dependency), Library (..), PackageDescription (..), allBuildInfo, enabledBuildDepends, unPackageName)
 import Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import Distribution.PackageDescription.Parsec (parseGenericPackageDescription, runParseResult)
 import Distribution.Pretty (prettyShow)
+import Distribution.Types.ComponentRequestedSpec
 import Distribution.Utils.Path (getSymbolicPath)
 import GTD.Configuration (GTDConfiguration (..), repos)
 import GTD.Utils (deduplicate, logDebugNSS, logDebugNSS', logErrorNSS)
@@ -104,7 +105,6 @@ instance Monoid GetCache where
   mempty :: GetCache
   mempty = GetCache mempty False
 
-
 -- executes `cabal get` on given `pkg + pkgVerPredicate`
 get :: String -> String -> (MonadIO m, MonadLogger m, MonadState GetCache m, MonadReader GTDConfiguration m) => MaybeT m FilePath
 get pkg pkgVerPredicate = do
@@ -157,7 +157,7 @@ __dependencies :: Package -> (MonadBaseControl IO m, MonadLoggerIO m, MonadState
 __dependencies pkg = do
   let c = view cabal pkg
   logDebugNSS "cabal fetch" $ prettyShow $ packageName c
-  let deps = concatMap targetBuildDepends $ allBuildInfo c
+  let deps = enabledBuildDepends c ComponentRequestedSpec {testsRequested = False, benchmarksRequested = False}
   let names = deduplicate $ (\(Dependency n v _) -> (unPackageName n, prettyShow v)) <$> deps
   logDebugNSS "cabal fetch" $ "dependencies: " ++ show names
   st <- State.get
@@ -212,6 +212,9 @@ nameVersionP p = PackageWithVersion (nameP p) (prettyShow $ pkgVersion $ package
 
 nameVersionF :: PackageFull -> PackageWithVersion
 nameVersionF = nameVersionP . _fpackage
+
+tuple :: PackageWithVersion -> (String, String)
+tuple (PackageWithVersion n v) = (n, v)
 
 ---
 

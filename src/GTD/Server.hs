@@ -99,15 +99,25 @@ packageK ::
   Cabal.PackageFull ->
   (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m) => m (Maybe Package, Context -> Context)
 packageK c cPkg = do
+  let logTag = "packageK " ++ show (Cabal.nameVersionF cPkg)
   (pkgM, f) <- packageCachedGet' c cPkg
   case pkgM of
     Just x -> return (Just x, f)
     Nothing -> do
       (depsC, m) <- bimap catMaybes (foldr (.) id) <$> mapAndUnzipM (packageCachedGet' c <=< (flip evalStateT c . cabalFull)) (Cabal._dependencies cPkg)
       let deps = foldr (<>) Map.empty $ Package._exports <$> depsC
-      pkg <- modules $ Package {_cabalPackage = cPkg, Package._modules = deps, Package._exports = Map.empty}
+      pkgWORE <- modules $ Package {_cabalPackage = cPkg, Package._modules = deps, Package._exports = Map.empty}
+      let reexports = Map.restrictKeys deps $ Cabal._reExports . Cabal._modules $ cPkg
+      let pkg = pkgWORE {Package._exports = Package._exports pkgWORE <> reexports}
       packageCachedPut cPkg pkg
-      logDebugNSS "packageK" $ printf "packageK: I do want to insert %s into `cExports`" (show $ Cabal.nameVersionF cPkg)
+      logDebugNSS logTag $ printf "given\ndeps=%s\ndepsF=%s\ndepsM=%s\nexports=%s\nreexports=%s\nPRODUCING\nexports=%s\nreexports=%s\n"
+        (show $ Cabal.nameVersionP <$> Cabal._dependencies cPkg)
+        (show $ Cabal.nameVersionF . _cabalPackage <$> depsC)
+        (show $ Map.keys deps)
+        (show $ Cabal._exports . Cabal._modules $ cPkg)
+        (show $ Cabal._reExports . Cabal._modules $ cPkg)
+        (show $ Map.keys $ Package._exports pkgWORE)
+        (show $ Map.keys $ reexports)
       return (Just pkg, over cExports (LRU.insert (Cabal.nameVersionF cPkg) (Package._exports pkg)) . m . f)
 
 package0 ::
@@ -132,12 +142,21 @@ simpleShowContext c =
     (show $ Map.keys $ Cabal._vs . _ccGet $ c)
     (show $ fst <$> LRU.toList (_cExports c))
 
-packageDepsOrdered ::
+packageOrderedF1 :: (Monad m, MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m, MonadBaseControl IO m) => Cabal.Package -> m (Maybe Cabal.PackageFull)
+packageOrderedF1 cPkg = do b <- persistenceExists cPkg; if b then return Nothing else ((Just <$>) . cabalFull) cPkg
+
+
+packageOrderedF2 :: (Monad m, MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m, MonadBaseControl IO m) => Cabal.Package -> m (Maybe Cabal.PackageFull)
+packageOrderedF2 = (Just <$>) . cabalFull
+
+packagesOrdered ::
   Cabal.PackageFull ->
-  (MonadBaseControl IO m, MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m) => m [Cabal.PackageFull]
-packageDepsOrdered cPkg0 = do
+  (MonadBaseControl IO m, MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m) =>
+  (Cabal.Package -> m (Maybe Cabal.PackageFull)) ->
+  m [Cabal.PackageFull]
+packagesOrdered cPkg0 f = do
   flip evalStateT (SchemeState Map.empty Map.empty) $ do
-    scheme (\cPkg -> do b <- persistenceExists cPkg; if b then return Nothing else ((Just <$>) . cabalFull) cPkg) Cabal.nameVersionF Cabal.nameVersionP (return . Cabal._dependencies) (Cabal._dependencies cPkg0)
+    scheme f Cabal.nameVersionF Cabal.nameVersionP (return . Cabal._dependencies) [Cabal._fpackage cPkg0]
 
 package ::
   Cabal.PackageFull ->
@@ -147,7 +166,7 @@ package cPkg0 = do
   case m of
     Just p -> return $ Just p
     Nothing -> do
-      pkgsO <- packageDepsOrdered cPkg0
+      pkgsO <- packagesOrdered cPkg0 packageOrderedF1
 
       stC0 <- get
       let st = ParallelizedState pkgsO Map.empty Map.empty stC0

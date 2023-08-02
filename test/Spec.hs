@@ -354,9 +354,14 @@ definitionsSpec = do
       join $ mstack evalStateT serverState $ do
         eval "(^.)" noDefErr
         eval "(%=)" noDefErr
-    it "in-package module re-export + function" $ do
+    it "`view`: in-package module re-export + function" $ do
       join $ mstack evalStateT serverState $ do
         eval "view" expectedLensView
+
+    -- often failed ones
+    it "printf" $ do
+      join $ mstack evalStateT serverState $ do
+        eval "printf" noDefErr
 
 integrationTestsSpec :: Spec
 integrationTestsSpec = do
