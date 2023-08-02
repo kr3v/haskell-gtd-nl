@@ -38,6 +38,7 @@ import GTD.Resolution.State.Caching.Package (packageCachedAdaptSizeTo, packageCa
 import GTD.Resolution.Utils (ParallelizedState (..), SchemeState (..), parallelized, scheme)
 import GTD.Utils (logDebugNSS, ultraZoom)
 import Text.Printf (printf)
+import qualified Data.Graph as Graph
 
 data DefinitionRequest = DefinitionRequest
   { workDir :: FilePath,
@@ -104,20 +105,22 @@ packageK c cPkg = do
   case pkgM of
     Just x -> return (Just x, f)
     Nothing -> do
-      (depsC, m) <- bimap catMaybes (foldr (.) id) <$> mapAndUnzipM (packageCachedGet' c <=< (flip evalStateT c . cabalFull)) (Cabal._dependencies cPkg)
+      (depsC, m) <- bimap catMaybes (foldr (.) id) <$> mapAndUnzipM (packageCachedGet' c <=< flip evalStateT c . cabalFull) (Cabal._dependencies cPkg)
       let deps = foldr (<>) Map.empty $ Package._exports <$> depsC
       pkgWORE <- modules $ Package {_cabalPackage = cPkg, Package._modules = deps, Package._exports = Map.empty}
       let reexports = Map.restrictKeys deps $ Cabal._reExports . Cabal._modules $ cPkg
       let pkg = pkgWORE {Package._exports = Package._exports pkgWORE <> reexports}
       packageCachedPut cPkg pkg
-      logDebugNSS logTag $ printf "given\ndeps=%s\ndepsF=%s\ndepsM=%s\nexports=%s\nreexports=%s\nPRODUCING\nexports=%s\nreexports=%s\n"
-        (show $ Cabal.nameVersionP <$> Cabal._dependencies cPkg)
-        (show $ Cabal.nameVersionF . _cabalPackage <$> depsC)
-        (show $ Map.keys deps)
-        (show $ Cabal._exports . Cabal._modules $ cPkg)
-        (show $ Cabal._reExports . Cabal._modules $ cPkg)
-        (show $ Map.keys $ Package._exports pkgWORE)
-        (show $ Map.keys $ reexports)
+      logDebugNSS logTag $
+        printf
+          "given\ndeps=%s\ndepsF=%s\ndepsM=%s\nexports=%s\nreexports=%s\nPRODUCING\nexports=%s\nreexports=%s\n"
+          (show $ Cabal.nameVersionP <$> Cabal._dependencies cPkg)
+          (show $ Cabal.nameVersionF . _cabalPackage <$> depsC)
+          (show $ Map.keys deps)
+          (show $ Cabal._exports . Cabal._modules $ cPkg)
+          (show $ Cabal._reExports . Cabal._modules $ cPkg)
+          (show $ Map.keys $ Package._exports pkgWORE)
+          (show $ Map.keys reexports)
       return (Just pkg, over cExports (LRU.insert (Cabal.nameVersionF cPkg) (Package._exports pkg)) . m . f)
 
 package0 ::
@@ -144,7 +147,6 @@ simpleShowContext c =
 
 packageOrderedF1 :: (Monad m, MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m, MonadBaseControl IO m) => Cabal.Package -> m (Maybe Cabal.PackageFull)
 packageOrderedF1 cPkg = do b <- persistenceExists cPkg; if b then return Nothing else ((Just <$>) . cabalFull) cPkg
-
 
 packageOrderedF2 :: (Monad m, MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m, MonadBaseControl IO m) => Cabal.Package -> m (Maybe Cabal.PackageFull)
 packageOrderedF2 = (Just <$>) . cabalFull
@@ -196,8 +198,7 @@ definition (DefinitionRequest {workDir = wd, file = rf, word = w}) = do
   m' <- Module.resolution (_modules pkg) m
 
   ccGC <- use $ ccGet . Cabal.changed
-  when ccGC $ do
-    cabalCacheStore
+  when ccGC cabalCacheStore
 
   statsE <- liftIO getRTSStatsEnabled
   when statsE $ do

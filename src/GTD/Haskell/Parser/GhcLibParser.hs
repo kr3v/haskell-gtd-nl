@@ -27,7 +27,7 @@ import GHC.Driver.Errors.Types (DriverMessageOpts (psDiagnosticOpts))
 import GHC.Driver.Ppr (showSDoc)
 import GHC.Driver.Session (DynFlags (..), Language (..), PlatformMisc (..), Settings (..), defaultDynFlags, initDynFlags, parseDynamicFilePragma, supportedLanguagesAndExtensions)
 import GHC.Fingerprint (fingerprint0)
-import GHC.Hs (ConDecl (..), ConDeclField (..), DataDefnCons (..), FamilyDecl (..), FieldOcc (..), GhcPs, HsConDetails (..), HsDataDefn (..), HsDecl (..), HsModule (..), IE (..), IEWrappedName (..), ImportDecl (..), ImportDeclQualifiedStyle (..), ImportListInterpretation (..), LIdP, ModuleName (ModuleName), Sig (..), SrcSpanAnn' (..), TyClDecl (..), moduleNameString)
+import GHC.Hs (ConDecl (..), ConDeclField (..), DataDefnCons (..), FamilyDecl (..), FieldOcc (..), GhcPs, HsConDetails (..), HsDataDefn (..), HsDecl (..), HsModule (..), IE (..), IEWrappedName (..), ImportDecl (..), ImportDeclQualifiedStyle (..), ImportListInterpretation (..), IsBootInterface (..), LIdP, ModuleName (ModuleName), Sig (..), SrcSpanAnn' (..), TyClDecl (..), moduleNameString)
 import GHC.LanguageExtensions (Extension (..))
 import GHC.Parser (parseModule)
 import GHC.Parser.Errors.Types (PsMessage (..))
@@ -208,18 +208,21 @@ exports (HsModuleX HsModule {hsmodExports = Nothing} _) = return True
 imports :: HsModuleX -> (MonadWriter Imports m, MonadLoggerIO m) => m ()
 imports m@(HsModuleX HsModule {hsmodImports = is} ps) = do
   let logTag = "imports0 " ++ name m
-  forM_ is $ \(L _ (ImportDecl {ideclName = (L _ (ModuleName iMN)), ideclQualified = iQ, ideclAs = iA, ideclImportList = iIL})) -> do
-    let imn = unpackFS iMN
-        mQ = maybe imn (\(L _ n) -> moduleNameString n) iA
-        allowNoQ = iQ == NotQualified
+  forM_ is $ \(L _ (ImportDecl {ideclName = (L _ (ModuleName iMN)), ideclQualified = iQ, ideclSource = iS, ideclAs = iA, ideclImportList = iIL})) -> do
+    case iS of
+      IsBoot -> return ()
+      NotBoot -> do
+        let imn = unpackFS iMN
+            mQ = maybe imn (\(L _ n) -> moduleNameString n) iA
+            allowNoQ = iQ == NotQualified
 
-    case iIL of
-      Nothing -> tell $ Map.singleton imn mempty {_mName = imn, _mQualifier = mQ, _mAllowNoQualifier = allowNoQ, _mType = Declarations.All}
-      Just (x, L _ iis) -> do
-        r :: Module <- fold <$> execStateT (forM_ (unLoc <$> iis) (ie imn)) Map.empty
-        tell $ case x of
-          Exactly -> Map.singleton imn mempty {_mName = imn, _mQualifier = mQ, _mAllowNoQualifier = allowNoQ, _mType = Declarations.Exactly, _mDecls = _mDecls r, _mCDs = _mCDs r}
-          EverythingBut -> Map.singleton imn mempty {_mName = imn, _mQualifier = mQ, _mAllowNoQualifier = allowNoQ, _mType = Declarations.EverythingBut, _mDecls = _mDecls r, _mCDs = _mCDs r}
+        case iIL of
+          Nothing -> tell $ Map.singleton imn mempty {_mName = imn, _mQualifier = mQ, _mAllowNoQualifier = allowNoQ, _mType = Declarations.All}
+          Just (x, L _ iis) -> do
+            r :: Module <- fold <$> execStateT (forM_ (unLoc <$> iis) (ie imn)) Map.empty
+            tell $ case x of
+              Exactly -> Map.singleton imn mempty {_mName = imn, _mQualifier = mQ, _mAllowNoQualifier = allowNoQ, _mType = Declarations.Exactly, _mDecls = _mDecls r, _mCDs = _mCDs r}
+              EverythingBut -> Map.singleton imn mempty {_mName = imn, _mQualifier = mQ, _mAllowNoQualifier = allowNoQ, _mType = Declarations.EverythingBut, _mDecls = _mDecls r, _mCDs = _mCDs r}
 
   unless ("-XNoImplicitPrelude" `elem` ps) $ do
     tell $ Map.singleton "Prelude" mempty {_mName = "Prelude", _mQualifier = "Prelude"}

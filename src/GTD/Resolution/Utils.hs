@@ -8,14 +8,16 @@ module GTD.Resolution.Utils where
 
 import Control.Concurrent.Async.Lifted (Async, async, wait)
 import Control.Lens (makeLenses, use, (%=), (.=))
-import Control.Monad.Logger (MonadLoggerIO)
+import Control.Monad.Logger (MonadLoggerIO, logDebugN)
 import Control.Monad.RWS (mapAndUnzipM)
 import Control.Monad.State (MonadIO (..), MonadState (get), MonadTrans (..), StateT, evalStateT, execStateT, gets)
 import Control.Monad.Trans.Control (MonadBaseControl (..))
+import Data.Graph (Tree (..))
 import qualified Data.Graph as Graph
 import qualified Data.Map.Strict as Map
 import Data.Maybe (catMaybes, fromJust, mapMaybe)
 import qualified Data.Set as Set
+import Data.Tree (Tree (..))
 import GTD.Utils (flipTuple, logDebugNSS, mapFrom)
 import Text.Printf
 
@@ -75,8 +77,8 @@ scheme a ka kb p ks = do
       iF i ds = jF i <$> filter (`Map.member` iNModules) ds
   edges <- lift $ concat <$> mapM (\(i, m) -> iF i <$> ((kb <$>) <$> p m)) (Map.assocs iModules)
   let graph = Graph.buildG (1, Map.size as) edges
-  let graphS = concatMap (foldr (:) []) (Graph.scc graph)
 
+  let graphS = concatMap (foldr (:) []) $ Graph.scc graph
   return $ fromJust . (`Map.lookup` iModules) <$> graphS
 
 data ParallelizedState s k a b m = ParallelizedState

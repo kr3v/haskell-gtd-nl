@@ -297,6 +297,16 @@ definitionsSpec = do
             expLineNo = 862
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 5, sourceSpanEndColumn = 11, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
          in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+  let expectedPrintf =
+        let expFile = _repos consts </> "base-4.16.4.0/Text/Printf.hs"
+            expLineNo = 257
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 7, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+  let expectedTry =
+        let expFile = _repos consts </> "base-4.16.4.0/Control/Exception/Base.hs"
+            expLineNo = 174
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 4, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
   let noDefErr = Left "No definition found"
 
   let st0 = emptyContext
@@ -361,7 +371,10 @@ definitionsSpec = do
     -- often failed ones
     it "printf" $ do
       join $ mstack evalStateT serverState $ do
-        eval "printf" noDefErr
+        eval "printf" expectedPrintf
+    it "try" $ do
+      join $ mstack evalStateT serverState $ do
+        eval "try" expectedTry
 
 integrationTestsSpec :: Spec
 integrationTestsSpec = do
