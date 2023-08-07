@@ -102,7 +102,7 @@ parse p content = do
       r = unP parseModule parseState
 
   return $ case r of
-    POk _ (L l e) -> Right $ HsModuleX e languagePragmas
+    POk _ (L _ e) -> Right $ HsModuleX e languagePragmas
     PFailed s -> Left $ showO $ errors s
 
 ---

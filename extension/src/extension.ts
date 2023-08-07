@@ -29,6 +29,10 @@ function isParentOf(p1: string, p2: string) {
 	return relative && !relative.startsWith('..') && !path.isAbsolute(relative);
 }
 
+export function insertAndShift(str: string, char: string, index: number) {
+	return str.slice(0, index) + char + str.slice(index);
+}
+
 async function createSymlink(src: string, dst: string) {
 	try {
 		await fs.promises.symlink(src, dst, 'file');
@@ -64,14 +68,14 @@ async function startServerIfRequired() {
 	if (server != null) { server.kill(); server = null; }
 
 	let conf = vscode.workspace.getConfiguration('haskell-gtd');
-	let as = conf.get<string[]>("server.args") ?? [];
+	let args = conf.get<string[]>("server.args") ?? [];
 	let rts = conf.get<string[]>("server.rts") ?? [];
 
 	stdout = fs.openSync(path.join(serverRoot, 'stdout.log'), 'a');
 	stderr = fs.openSync(path.join(serverRoot, 'stderr.log'), 'a');
 	server = spawn(
 		serverExe,
-		[...as, "+RTS", ...rts, "-RTS"],
+		[...args, "+RTS", ...rts, "-RTS"],
 		{
 			detached: true,
 			stdio: ['ignore', stdout, stderr],
@@ -89,15 +93,187 @@ async function stopServer() {
 	process.kill(pid);
 }
 
+// https://www.haskell.org/onlinereport/haskell2010/haskellch2.html#x7-140002
+// `identifier` returns the longest identifier that contains the given position.
+// Examples:
+// `(.=)`, `.=` 			  => `.=`
+// `(Prelude..)`, `Prelude..` => `Prelude..`
+// `Prelude.flip`             => `Prelude.flip`
+// `Data.List.map` 		  	  => `Data.List.map`
+// `Data.List` 				  => `Data.List`
+// `map` 					  => `map`
+// `Data` 					  => `Data`
+// `a.b` 					  => `b` (if the cursor is on `b`)
+// `(a).(b)` 				  => `b` (if the cursor is on `b`)
+// `A.a'b+c` 					  => `A.a'b` (if the cursor is on `A.a'b`)
+//
+// ```
+/* This 	Lexes as this
+	
+f.g 	f . g (three tokens)e
+F.g 	F.g (qualified ‘g’)
+f.. 	f .. (two tokens)
+F.. 	F.. (qualified ‘.’)
+F. 		F . (two tokens) 
+ */
+const upPunctuation = /^\p{Punctuation}$/u;
+const upLower = /^\p{Lowercase_Letter}$/u;
+const upUpperOrTitle = /^\p{Uppercase_Letter}|\p{Titlecase_Letter}$/u;
+const upDigit = /^\p{Number}$/u
+export function identifier(s: string, pos0: number): [string, string[][]] {
+	function isASCII(c: string) {
+		let code = c.charCodeAt(0);
+		return code >= 0 && code <= 127;
+	}
+
+	function isSymbol(c: string) {
+		if (c.length != 1) throw new Error("isSymbol: `" + c + "`.length != 1");
+		if (isASCII(c)) {
+			// ! # $ % & ⋆ + . / < = > ? @ 	\ ^ - ~ : |
+			// except `( ) , ; [ ] ` { }`
+			return c == '!' || c == '#' || c == '$' || c == '%' || c == '&' || c == '*' || c == '+' || c == '.' || c == '/' || c == '<' || c == '=' || c == '>' || c == '?' || c == '@' || c == '\\' || c == '^' || c == '|' || c == '-' || c == '~' || c == ':';
+		} else {
+			return upPunctuation.test(c);
+		}
+	}
+
+	function isSmall(c: string) {
+		if (c.length != 1) throw new Error("isSmall: `" + c + "`.length != 1");
+		return isASCII(c) ? c >= 'a' && c <= 'z' : upLower.test(c);
+	}
+
+	function isLarge(c: string) {
+		if (c.length != 1) throw new Error("isSmall: `" + c + "`.length != 1");
+		return isASCII(c) ? c >= 'A' && c <= 'Z' : upUpperOrTitle.test(c);
+	}
+
+	function isDigit(c: string) {
+		if (c.length != 1) throw new Error("isSmall: `" + c + "`.length != 1");
+		return isASCII(c) ? c >= '0' && c <= '9' : upDigit.test(c);
+	}
+
+	function isIdentChar(c: string) {
+		return isSmall(c) || isLarge(c) || isDigit(c) || c == '\'';
+	}
+
+	enum Direction {
+		Left,
+		Right,
+		Bidirectional,
+	};
+
+	// [left, right)
+	function emitAt(pos: number, dir: Direction): [number, number, string] {
+		let start = s[pos];
+		if (start == null || start == undefined) return [-1, -1, ""];
+
+		let p;
+		if (isIdentChar(start)) {
+			p = isIdentChar;
+		} else if (isSymbol(start)) {
+			p = isSymbol;
+		} else {
+			return [-1, -1, ""];
+		}
+
+		let left = pos;
+		if (dir == Direction.Left || dir == Direction.Bidirectional) {
+			while (left > 0 && p(s[left - 1])) left--;
+		}
+
+		let right = pos + 1;
+		if (dir == Direction.Right || dir == Direction.Bidirectional) {
+			while (right < s.length && p(s[right])) right++;
+		}
+
+		return [left, right, s.substring(left, right)];
+	}
+
+	function emitLeft(pos: number, acc: string[]): string[] {
+		if (s[pos + 1] != '.') return acc;
+		let [l, , e] = emitAt(pos, Direction.Left);
+		if (e == "") return acc;
+		acc.unshift(e);
+		if (l <= 1 || s[l - 1] != '.') {
+			return acc;
+		}
+		return emitLeft(l - 2, acc);
+	}
+
+	function emitRight(pos: number, acc: string[]): string[] {
+		if (s[pos - 1] != '.') return acc;
+		let [, r, e] = emitAt(pos, Direction.Right);
+		if (e == "") return acc;
+		acc.push(e);
+		if (r >= s.length - 1 || s[r] != '.') {
+			return acc;
+		}
+		return emitRight(r + 1, acc);
+	}
+
+	function isQualifier(s: string) {
+		return s.length > 0 && isLarge(s[0]);
+	}
+
+	function findParenthesis(pos: number): [number, number] {
+		let left = pos;
+		while (left > 0 && s[left - 1] != '(') left--;
+		let right = pos + 1;
+		while (right < s.length && s[right] != ')') right++;
+		return [left, right];
+	}
+	let [lP, rP] = findParenthesis(pos0);
+	let s0 = s, pos0_ = pos0;
+	s = s.slice(lP, rP);
+	pos0 -= lP;
+	console.log("%d => %d; %s => %s", pos0_, pos0, s0, s);
+	console.log("identifier: %s", insertAndShift(s, "\u0333", pos0));
+
+	// if the cursor is `.` which separates qualified names with an identifier/operator
+	if (s[pos0] == "." && pos0 >= 1 && pos0 <= s.length - 1) {
+		let isQualifierOnLeft = isIdentChar(s[pos0 - 1]) && isQualifier(emitAt(pos0 - 1, Direction.Left)[2]);
+		if (isQualifierOnLeft && (isIdentChar(s[pos0 + 1]) || isSymbol(s[pos0 + 1]))) {
+			console.log("cursor is at a qualifier separator");
+			pos0--;
+		}
+	}
+
+	let [l, r, e] = emitAt(pos0, Direction.Bidirectional);
+	if (e == "") return ["", [["e == ''", `${l}`, `${r}`]]];
+
+	if (e[0] == '.') {
+		if (isQualifier(emitAt(l - 1, Direction.Left)[2])) {
+			console.log("e[0] is not a part of the identifier, but rather a qualifier separator", e);
+			e = e.substring(1);
+			l++;
+		}
+	}
+
+	let lA = emitLeft(l - 2, []);
+	let rA = isQualifier(e) ? emitRight(r + 1, []) : [];
+
+	if (lA.length == 0 && rA.length == 0) {
+		return [e, [["lA.length == 0 && rA.length == 0"]]];
+	}
+	let a = [...lA, e, ...rA];
+	let a1 = a.slice(a.findIndex(p => isLarge(p[0])));
+	return [a1.join("."), [lA, [e], rA, a, a1]];
+}
+
 class XDefinitionProvider implements vscode.DefinitionProvider {
 	async provideDefinition(
 		document: vscode.TextDocument,
 		position: vscode.Position,
 		token: vscode.CancellationToken
 	): Promise<vscode.Definition> {
-		let range = document.getWordRangeAtPosition(position);
-		let word = document.getText(range);
-
+		// let range = document.getWordRangeAtPosition(position);
+		// let word = document.getText(range);
+		let [word,] = identifier(document.lineAt(position.line).text, position.character);
+		if (word == "") {
+			let [word,] = identifier(document.lineAt(position.line).text, position.character - 1);
+		}
+		
+		console.log("identifier: %s", word);
 		outputChannel.appendLine(util.format("%s", word));
 
 		if (!vscode.workspace.workspaceFolders) {
@@ -138,8 +314,6 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 		outputChannel.appendLine(util.format(data));
 
 		let symlink = path.join(workspacePath, "./.repos");
-		await createSymlink(serverRepos, symlink);
-
 		let filePath = data.srcSpan.sourceSpanFileName;
 		let filePathU;
 		if (isParentOf(workspacePath, filePath)) {
@@ -162,9 +336,9 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 	}
 }
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
 	outputChannel = vscode.window.createOutputChannel("haskell-gtd");
-	
+
 	outputChannel.appendLine(userHomeDir);
 
 	context.subscriptions.push(
@@ -183,7 +357,7 @@ export function activate(context: vscode.ExtensionContext) {
 			outputChannel.appendLine(util.format("resetting workspace extension cache"));
 
 			await startServerIfRequired();
-			let body = {dir: workspacePath};
+			let body = { dir: workspacePath };
 			let res = await axios.post(`http://localhost:${port}/dropcache`, body);
 			outputChannel.appendLine(util.format("resetting workspace extension cache: %s", res.data));
 		})
@@ -195,6 +369,13 @@ export function activate(context: vscode.ExtensionContext) {
 			new XDefinitionProvider()
 		)
 	);
+
+	let workspaceFolders = vscode.workspace.workspaceFolders;
+	if (workspaceFolders) {
+		let workspacePath = workspaceFolders[0].uri.fsPath;
+		let symlink = path.join(workspacePath, "./.repos");
+		await createSymlink(serverRepos, symlink);
+	}
 
 	context.subscriptions.push(vscode.commands.registerCommand('hs-gtd.server.restart', stopServer));
 

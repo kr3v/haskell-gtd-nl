@@ -13,7 +13,7 @@ import Control.Lens (makeLenses)
 import Control.Monad.Cont (MonadIO)
 import Control.Monad.Except (MonadError (..), liftEither)
 import Control.Monad.Logger (MonadLoggerIO)
-import Control.Monad.State (MonadIO (..), execStateT, StateT (runStateT))
+import Control.Monad.State (MonadIO (..), StateT (runStateT), execStateT)
 import Control.Monad.Trans.Writer (WriterT (runWriterT), execWriterT)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Either.Combinators (mapLeft)
@@ -88,27 +88,26 @@ emptyHsModule =
     }
 
 parseModule :: HsModule -> (MonadLoggerIO m, MonadError String m) => m HsModule
-parseModule cm = do
-  let srcP = _path cm
+parseModule cm@HsModule {_path = srcP} = do
   let logTag = "parsing module " ++ srcP
   logDebugNSS logTag ""
 
-  src <- liftEither . mapLeft show =<< (liftIO (try $ readFile srcP) :: (MonadIO m) => m (Either IOException String))
+  src <- liftEither . mapLeft show =<< liftIO (try $ readFile srcP :: IO (Either IOException String))
   srcPostCpp <- haskellApplyCppHs srcP src
 
-  a <- liftIO $ GHC.parse srcP srcPostCpp
-  case a of
+  aE <- liftIO $ GHC.parse srcP srcPostCpp
+  a <- case aE of
     Left err -> throwError err
-    Right a -> do
-      (iiea, es) <- runStateT (GHC.exports a) Map.empty
-      is <- execWriterT $ GHC.imports a
-      locals <- execWriterT $ GHC.identifiers a
-      return $
-        cm
-          { _info = HsModuleData {_exports0 = es, _imports = is, _locals = locals},
-            _params = HsModuleParams {_isImplicitExportAll = iiea},
-            _name = GHC.name a
-          }
+    Right a -> return a
+  (iiea, es) <- runStateT (GHC.exports a) Map.empty
+  is <- execWriterT $ GHC.imports a
+  locals <- execWriterT $ GHC.identifiers a
+  return $
+    cm
+      { _info = HsModuleData {_exports0 = es, _imports = is, _locals = locals},
+        _params = HsModuleParams {_isImplicitExportAll = iiea},
+        _name = GHC.name a
+      }
 
 ---
 

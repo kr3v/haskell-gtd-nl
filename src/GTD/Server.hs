@@ -18,6 +18,7 @@ import Control.Monad.Trans.Reader (ReaderT (..))
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Bifunctor (Bifunctor (..))
 import qualified Data.Cache.LRU as LRU
+import qualified Data.Graph as Graph
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes)
 import qualified Data.Set as Set
@@ -38,7 +39,6 @@ import GTD.Resolution.State.Caching.Package (packageCachedAdaptSizeTo, packageCa
 import GTD.Resolution.Utils (ParallelizedState (..), SchemeState (..), parallelized, scheme)
 import GTD.Utils (logDebugNSS, ultraZoom)
 import Text.Printf (printf)
-import qualified Data.Graph as Graph
 
 data DefinitionRequest = DefinitionRequest
   { workDir :: FilePath,

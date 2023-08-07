@@ -40,6 +40,11 @@ executable haskell-gtd-debug
         , process ^>= 1.6.17.0
         , unix ^>= 2.8.1.1
 
+        , Cabal ^>= 3.10.1.0
+        , cpphs ^>= 1.20.9.1
+        , ghc-lib-parser ^>= 9.6.2.20230523
+        , haskell-src-exts ^>= 1.23.1
+
     hs-source-dirs:   app/debug
     default-language: Haskell2010
 
@@ -79,6 +84,11 @@ executable haskell-gtd-server
         , utf8-string ^>= 1.0.2
         , regex ^>= 1.1.0.2
         , regex-posix ^>= 0.96.0.1
+
+        , Cabal ^>= 3.10.1.0
+        , cpphs ^>= 1.20.9.1
+        , ghc-lib-parser ^>= 9.6.2.20230523
+        , haskell-src-exts ^>= 1.23.1
 
         , network ^>= 3.1.4.0
         , servant ^>= 0.19.1

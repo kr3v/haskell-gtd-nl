@@ -28,13 +28,10 @@ import qualified Distribution.ModuleName as ModuleName
 
 import GTD.Cabal
 import GTD.Configuration
-import GTD.Haskell.AST
 import GTD.Haskell.Cpphs
 import GTD.Haskell.Declaration
 import GTD.Haskell.Module
 import GTD.Haskell.Parser.GhcLibParser
-import GTD.Haskell.Parser.GhcLibParser.Extension
-import GTD.Haskell.Parser.HaskellSrcExts
 import GTD.Resolution.Definition
 import GTD.Resolution.Module
 import GTD.Resolution.State
