@@ -158,5 +158,5 @@ main = do
           r = GHC.unP GHC.parseIdentifier parseState
 
       print $ case r of
-        POk _ e -> printf ":t %s => %s" (showConstr . toConstr $ e) (showO e)
+        POk _ (L _ e) -> printf ":t %s => %s" (showConstr . toConstr $ e) (showO e)
         PFailed s -> showO $ errors s

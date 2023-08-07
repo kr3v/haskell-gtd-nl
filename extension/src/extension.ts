@@ -270,7 +270,10 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 		// let word = document.getText(range);
 		let [word,] = identifier(document.lineAt(position.line).text, position.character);
 		if (word == "") {
-			let [word,] = identifier(document.lineAt(position.line).text, position.character - 1);
+			[word,] = identifier(document.lineAt(position.line).text, position.character - 1);
+		}
+		if (word == "") {
+			return Promise.resolve([]);
 		}
 		
 		console.log("identifier: %s", word);

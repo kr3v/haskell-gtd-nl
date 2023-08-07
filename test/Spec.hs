@@ -307,6 +307,21 @@ definitionsSpec = do
             expLineNo = 174
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 4, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
          in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+  let expectedQMap =
+        let expFile = _repos consts </> "containers-0.6.7/src/Data/Map/Internal.hs"
+            expLineNo = 0
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 0, sourceSpanEndColumn = 0, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+  let expectedDTClockPosix =
+        let expFile = _repos consts </> "time-1.12.2/lib/Data/Time/Clock/POSIX.hs"
+            expLineNo = 0
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 0, sourceSpanEndColumn = 0, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+  let expectedQMapKeys =
+        let expFile = _repos consts </> "containers-0.6.7/src/Data/Map/Internal.hs"
+            expLineNo = 3347
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
   let noDefErr = Left "No definition found"
 
   let st0 = emptyContext
@@ -316,57 +331,71 @@ definitionsSpec = do
   runIO $ mstack execStateT serverState cabalCacheStore
 
   describe descr $ do
-    it "directly exported regular function" $ do
-      join $ mstack evalStateT serverState $ eval "playIO" expectedPlayIO
-    it "sequential execution does not fail" $ do
+    it "directly exported regular function `playIO`" $ do
+      join $ mstack evalStateT serverState $ do
+        eval "playIO" expectedPlayIO
+    it "sequential execution does not fail `playIO`" $ do
       join $ mstack evalStateT serverState $ do
         eval "playIO" expectedPlayIO
         eval "playIO" expectedPlayIO
         eval "playIO" expectedPlayIO
-    it "re-exported regular function" $ do
+    it "re-exported regular function `mkStdGen`" $ do
       join $ mstack evalStateT serverState $ do
         eval "mkStdGen" expectedMkStdGen
 
     -- if `return` is broken, then it is possible that `module X (module X) where ...` case is broken
-    it "from prelude - function" $ do
+    it "from prelude - function `return`" $ do
       join $ mstack evalStateT serverState $ do
         eval "return" expectedPreludeReturn
-    it "from prelude - data ctor" $ do
+    it "from prelude - data ctor `Nothing`" $ do
       join $ mstack evalStateT serverState $ do
         eval "Nothing" expectedPreludeNothing
 
-    it "re-exported throughout packages (?) class name" $ do
+    it "re-exported throughout packages (?) class name `State`" $ do
       join $ mstack evalStateT serverState $ do
         eval "State" noDefErr
-    it "cross-package module re-export" $ do
+    it "cross-package module re-export `runState`" $ do
       join $ mstack evalStateT serverState $ do
         eval "runState" expectedRunState
-    it "(re-export)? data name" $ do
+    it "(re-export)? data name `Picture`" $ do
       join $ mstack evalStateT serverState $ do
         eval "Picture" expectedPicture
 
-    it "data type name" $ do
+    it "data type name `Display`" $ do
       join $ mstack evalStateT serverState $ do
         eval "Display" expectedDisplay
-    it "data constructor" $ do
+    it "data constructor `InWindow`" $ do
       join $ mstack evalStateT serverState $ do
         eval "InWindow" expectedInWindow
 
-    it "data type with type variable" $ do
+    it "data type with type variable `Proxy`" $ do
       join $ mstack evalStateT serverState $ do
         eval "Proxy" expectedProxy
-
-    it "in-package module re-export + operator form 1" $ do
+    it "in-package module re-export + operator form 1 `^., %=`" $ do
       join $ mstack evalStateT serverState $ do
         eval "^." noDefErr
         eval "%=" expectedLensOverOperator
-    it "in-package module re-export + operator form 2" $ do
+    it "in-package module re-export + operator form 2 `(^.), (%=)`" $ do
       join $ mstack evalStateT serverState $ do
         eval "(^.)" noDefErr
-        eval "(%=)" noDefErr
-    it "`view`: in-package module re-export + function" $ do
+        eval "(%=)" expectedLensOverOperator
+    it "`view`: in-package module re-export + function `view`" $ do
       join $ mstack evalStateT serverState $ do
         eval "view" expectedLensView
+
+    -- qualified's
+    it "qualified module import - go to module via qualifier `Map`" $ do
+      join $ mstack evalStateT serverState $ do
+        eval "Map" expectedQMap
+    it "qualified module import - go to module via 'original' name `Data.Map.Strict`" $ do
+      join $ mstack evalStateT serverState $ do
+        eval "Data.Map.Strict" noDefErr
+    it "regular module import - go to module via 'original' name `Data.Time.Clock.POSIX`" $ do
+      join $ mstack evalStateT serverState $ do
+        eval "Data.Time.Clock.POSIX" expectedDTClockPosix
+    it "qualified module import - go to function through qualifier `Map.keys`" $ do
+      join $ mstack evalStateT serverState $ do
+        eval "Map.keys" expectedQMapKeys
 
     -- often failed ones
     it "printf" $ do

@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wno-missing-fields #-}
@@ -29,7 +30,7 @@ import GHC.Driver.Session (DynFlags (..), Language (..), PlatformMisc (..), Sett
 import GHC.Fingerprint (fingerprint0)
 import GHC.Hs (ConDecl (..), ConDeclField (..), DataDefnCons (..), FamilyDecl (..), FieldOcc (..), GhcPs, HsConDetails (..), HsDataDefn (..), HsDecl (..), HsModule (..), IE (..), IEWrappedName (..), ImportDecl (..), ImportDeclQualifiedStyle (..), ImportListInterpretation (..), IsBootInterface (..), LIdP, ModuleName (ModuleName), Sig (..), SrcSpanAnn' (..), TyClDecl (..), moduleNameString)
 import GHC.LanguageExtensions (Extension (..))
-import GHC.Parser (parseModule)
+import GHC.Parser (parseIdentifier, parseModule)
 import GHC.Parser.Errors.Types (PsMessage (..))
 import GHC.Parser.Header (getOptions)
 import GHC.Parser.Lexer (P (unP), PState (..), ParseResult (..), ParserOpts, getPsMessages, initParserState, mkParserOpts)
@@ -226,3 +227,19 @@ imports m@(HsModuleX HsModule {hsmodImports = is} ps) = do
 
   unless ("-XNoImplicitPrelude" `elem` ps) $ do
     tell $ Map.singleton "Prelude" mempty {_mName = "Prelude", _mQualifier = "Prelude"}
+
+---
+
+identifier :: (MonadLoggerIO m) => String -> m (Maybe (String, String))
+identifier c = do
+  let dynFlags0 = defaultDynFlags fakeSettings
+
+  let opts = initParserOpts dynFlags0
+      location = mkRealSrcLoc (mkFastString ".") 1 1
+      buffer = stringToStringBuffer c
+      parseState = initParserState opts buffer location
+      r = unP parseIdentifier parseState
+
+  case r of
+    POk _ (L _ e) -> runMaybeT (rdr e)
+    PFailed s -> return Nothing

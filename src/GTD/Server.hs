@@ -7,7 +7,7 @@
 module GTD.Server where
 
 import Control.Lens (over, use, (%=))
-import Control.Monad (forM_, mapAndUnzipM, when, (<=<), (>=>))
+import Control.Monad (forM_, join, mapAndUnzipM, when, (<=<), (>=>))
 import Control.Monad.Except (ExceptT, MonadError (..), MonadIO (..), liftEither, runExceptT)
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (MonadReader (..), MonadState (..))
@@ -20,16 +20,18 @@ import Data.Bifunctor (Bifunctor (..))
 import qualified Data.Cache.LRU as LRU
 import qualified Data.Graph as Graph
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes)
+import Data.Map.Internal.Debug (node)
+import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
 import qualified Data.Set as Set
 import GHC.Generics (Generic)
 import GHC.Stats (getRTSStats, getRTSStatsEnabled)
 import GTD.Cabal (ModuleNameS)
 import qualified GTD.Cabal as Cabal
 import GTD.Configuration (GTDConfiguration (..))
-import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Identifier, SourceSpan, asDeclsMap, hasNonEmptyOrig)
+import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Identifier, SourceSpan (..), asDeclsMap, emptySourceSpan, hasNonEmptyOrig)
 import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule, parseModule)
 import qualified GTD.Haskell.Module as HsModule
+import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import GTD.Resolution.Module (figureOutExports, figureOutExports0, figureOutExports1, module'Dependencies, moduleR)
 import qualified GTD.Resolution.Module as Module
 import GTD.Resolution.State (Context (..), Package (Package, _cabalPackage, _modules), cExports, ccGet)
@@ -194,8 +196,8 @@ definition (DefinitionRequest {workDir = wd, file = rf, word = w}) = do
   pkgM <- package cPkg
   pkg <- maybe (throwError "no package found?") return pkgM
 
-  m <- parseModule emptyHsModule {_path = rf, HsModule._package = Cabal.nameF cPkg}
-  m' <- Module.resolution (_modules pkg) m
+  mod <- parseModule emptyHsModule {_path = rf, HsModule._package = Cabal.nameF cPkg}
+  resolutionMap <- Module.resolution (_modules pkg) mod
 
   ccGC <- use $ ccGet . Cabal.changed
   when ccGC cabalCacheStore
@@ -207,15 +209,21 @@ definition (DefinitionRequest {workDir = wd, file = rf, word = w}) = do
 
   ultraZoom cExports $ packageCachedAdaptSizeTo (toInteger $ 10 + length (Cabal._dependencies cPkg))
 
-  case "" `Map.lookup` m' of
-    Nothing -> noDefintionFoundErrorME
-    Just m'' ->
-      case w `Map.lookup` resolution m'' of
-        Nothing -> noDefintionFoundErrorME
-        Just d ->
-          if hasNonEmptyOrig d
-            then return $ DefinitionResponse {srcSpan = Just $ _declSrcOrig d, err = Nothing}
-            else noDefintionFoundErrorME
+  case w `Map.lookup` resolutionMap of
+    Just d -> do
+      let d0 = head $ Map.elems $ resolution d
+      return $ DefinitionResponse {srcSpan = Just $ emptySourceSpan {sourceSpanFileName = sourceSpanFileName . _declSrcOrig $ d0, sourceSpanStartColumn = 1, sourceSpanStartLine = 1}, err = Nothing}
+    Nothing -> do
+      qwM <- GHC.identifier w
+      let (q, w') = fromMaybe ("", w) qwM
+      let lookup q w = join $ do
+            m' <- Map.lookup q resolutionMap
+            d <- Map.lookup w $ resolution m'
+            return $ Just $ DefinitionResponse {srcSpan = Just $ _declSrcOrig d, err = Nothing}
+      let cases = mapMaybe (uncurry lookup) [(q, w'), ("", w), ("", w')]
+      case cases of
+        (x : _) -> return x
+        _ -> noDefintionFoundErrorME
 
 ---
 
