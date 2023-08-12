@@ -42,11 +42,7 @@ async function createSymlink(src: string, dst: string) {
 }
 
 async function sendHeartbeat() {
-	fs.readFile(serverPortF, "utf8", (err, data) => {
-		let pid = parseInt(data, 10);
-		port = pid;
-	});
-
+	fs.readFile(serverPortF, "utf8", (err, data) => { port = parseInt(data, 10); });
 	if (port <= 0) return false;
 
 	let res = await axios.
@@ -60,14 +56,15 @@ async function sendHeartbeat() {
 }
 
 async function startServerIfRequired() {
-	if (await sendHeartbeat()) return;
+	try { if (await sendHeartbeat()) return; }
+	catch (error) { outputChannel.appendLine(util.format(error)); }
 	outputChannel.appendLine(util.format("starting server"));
 
 	if (stdout != null) { fs.closeSync(stdout); stdout = null; }
 	if (stderr != null) { fs.closeSync(stderr); stderr = null; }
 	if (server != null) { server.kill(); server = null; }
 
-	let conf = vscode.workspace.getConfiguration('haskell-gtd');
+	let conf = vscode.workspace.getConfiguration('hs-gtd');
 	let args = conf.get<string[]>("server.args") ?? [];
 	let rts = conf.get<string[]>("server.rts") ?? [];
 
@@ -88,7 +85,7 @@ async function startServerIfRequired() {
 
 async function stopServer() {
 	let pid: number = -1;
-	fs.readFile(serverPortF, "utf8", (err, data) => pid = parseInt(data, 10));
+	fs.readFile(serverPidF, "utf8", (err, data) => pid = parseInt(data, 10));
 	if (pid <= 0) return;
 	process.kill(pid);
 }
@@ -139,7 +136,7 @@ export function identifier(s: string, pos0: number): [string, string[][]] {
 
 	function isSmall(c: string) {
 		if (c.length != 1) throw new Error("isSmall: `" + c + "`.length != 1");
-		return isASCII(c) ? c >= 'a' && c <= 'z' : upLower.test(c);
+		return isASCII(c) ? c == '_' || c >= 'a' && c <= 'z' : upLower.test(c);
 	}
 
 	function isLarge(c: string) {
@@ -275,7 +272,7 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 		if (word == "") {
 			return Promise.resolve([]);
 		}
-		
+
 		console.log("identifier: %s", word);
 		outputChannel.appendLine(util.format("%s", word));
 

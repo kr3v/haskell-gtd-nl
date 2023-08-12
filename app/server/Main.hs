@@ -20,7 +20,6 @@ import Data.Proxy (Proxy (..))
 import GHC.TypeLits (KnownSymbol)
 import GTD.Configuration (GTDConfiguration (..), prepareConstants, root)
 import GTD.Resolution.State (Context, emptyContext)
-import GTD.Resolution.State.Caching.Cabal (cabalCacheFetch)
 import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), DropCacheRequest, definition, resetCache)
 import GTD.Utils (ultraZoom)
 import Network.Socket (Family (AF_INET), SockAddr (SockAddrInet), SocketType (Stream), bind, defaultProtocol, listen, socket, socketPort, tupleToHostAddress, withSocketsDo)
@@ -35,6 +34,7 @@ import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
 import System.Posix (exitImmediately, getProcessID)
 import Text.Printf (printf)
 import Control.Monad.IO.Class (liftIO)
+import qualified GTD.Resolution.State.Caching.Cabal as CabalCache
 
 data ServerState = ServerState
   { _context :: Context,
@@ -165,6 +165,7 @@ main = withSocketsDo $ do
   writeFile (constants ^. root </> "pid") (show pid)
   writeFile (constants ^. root </> "port") (show port)
 
-  s <- newMVar =<< runReaderT (runStdoutLoggingT $ execStateT (ultraZoom context cabalCacheFetch) emptyServerState) constants
+  s0 <- flip runReaderT constants $ runStdoutLoggingT $ flip execStateT emptyServerState $ ultraZoom context CabalCache.load
+  s <- newMVar s0
   _ <- forkIO $ selfKiller s (ttl as)
   runSettingsSocket defaultSettings sock $ serve api (definitionH constants s :<|> pingH s :<|> dropCacheH constants s)

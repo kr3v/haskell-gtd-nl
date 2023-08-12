@@ -4,6 +4,7 @@
 
 module Main where
 
+import Control.Exception (try)
 import Control.Lens ((^.))
 import Control.Monad (forM_)
 import Control.Monad.Except (MonadError (..), MonadIO (..), runExceptT)
@@ -12,42 +13,39 @@ import Control.Monad.Reader (ReaderT (..))
 import Control.Monad.State (evalStateT)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Data.Data (Data (..), showConstr)
+import Data.Either (fromRight)
 import Data.Foldable (foldrM)
 import Data.GraphViz (GraphID (Str), GraphvizOutput (..), X11Color (..), runGraphviz)
 import qualified Data.GraphViz.Attributes.Colors as Color
 import Data.GraphViz.Attributes.Complete (Attribute (..), RankDir (FromLeft), toColorList)
 import Data.GraphViz.Types.Monadic (digraph, edge, graphAttrs)
+import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 import Data.Text.Lazy as L (pack)
 import qualified GHC.Data.FastString as GHC
 import qualified GHC.Data.StringBuffer as GHC
 import qualified GHC.Driver.Config.Parser as GHC
+import GHC.Driver.Session (DynFlags)
 import qualified GHC.Driver.Session as GHC
 import qualified GHC.Parser as GHC
 import GHC.Parser.Lexer
 import qualified GHC.Parser.Lexer as GHC
+import GHC.Types.SourceError (SourceError)
 import GHC.Types.SrcLoc (GenLocated (..))
 import qualified GHC.Types.SrcLoc as GHC
 import qualified GTD.Cabal as Cabal
 import GTD.Configuration (prepareConstants, repos)
 import qualified GTD.Haskell.Module as HsModule
-import GTD.Haskell.Parser.GhcLibParser (fakeSettings, showO, parsePragmasIntoDynFlags)
+import GTD.Haskell.Parser.GhcLibParser (fakeSettings, parsePragmasIntoDynFlags, showO)
 import GTD.Resolution.Module (module'Dependencies)
 import GTD.Resolution.State (ccGet, emptyContext)
-import GTD.Resolution.State.Caching.Cabal (cabalCacheFetch, cabalFindAtCached)
-import GTD.Server (modulesOrdered, packageOrderedF2, packagesOrdered)
 import GTD.Utils (ultraZoom)
 import Options.Applicative (Parser, ParserInfo, auto, command, execParser, fullDesc, help, helper, info, long, metavar, option, progDesc, strOption, subparser, (<**>))
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.FilePath ((</>))
 import Text.Printf (printf)
-import GHC.Types.SourceError (SourceError)
-import GHC.Driver.Session
-import Data.Maybe (fromMaybe)
-import Data.Either (fromRight)
-import Control.Exception (try)
-import qualified Language.Haskell.Exts as GHC
-import GHC.Parser.PostProcess
+import qualified GTD.Resolution.State.Caching.Cabal as CabalCache
+import GTD.Server (modulesOrdered, package'dependencies'ordered, package'order'default)
 
 showT2 :: (String, String) -> String
 showT2 (a, b) = "(" ++ a ++ "," ++ b ++ ")"
@@ -100,12 +98,12 @@ main = do
       print constants
 
       x :: Either String () <- runStderrLoggingT $ runExceptT $ flip runReaderT constants $ flip evalStateT emptyContext $ do
-        cabalCacheFetch
+        CabalCache.load
         cPkgM <- ultraZoom ccGet $ runMaybeT $ Cabal.get pkgN pkgV
         cPkgP <- case cPkgM of
           Nothing -> throwError "Cabal.get: no package found"
           Just cPkgP -> return cPkgP
-        cPkg <- cabalFindAtCached cPkgP
+        cPkg <- CabalCache.findAt cPkgP
 
         let h nmae depsM f = do
               pkgs <- reverse <$> f cPkg
@@ -137,7 +135,7 @@ main = do
 
         case t of
           Module -> h HsModule._name module'Dependencies modulesOrdered
-          Package -> h (showT2 . Cabal.tuple . Cabal.nameVersionF) (fmap (showT2 . Cabal.tuple . Cabal.nameVersionP) . Cabal._dependencies) (flip packagesOrdered packageOrderedF2)
+          Package -> h (showT2 . Cabal.tuple . Cabal.nameVersionF) (fmap (showT2 . Cabal.tuple . Cabal.nameVersionP) . Cabal._dependencies) (flip package'dependencies'ordered package'order'default)
 
       case x of
         Left e -> print e

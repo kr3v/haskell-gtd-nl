@@ -8,18 +8,16 @@ module GTD.Resolution.Utils where
 
 import Control.Concurrent.Async.Lifted (Async, async, wait)
 import Control.Lens (makeLenses, use, (%=), (.=))
-import Control.Monad.Logger (MonadLoggerIO, logDebugN)
+import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (mapAndUnzipM)
-import Control.Monad.State (MonadIO (..), MonadState (get), MonadTrans (..), StateT, evalStateT, execStateT, gets)
+import Control.Monad.State (MonadIO (..), MonadTrans (..), StateT, execStateT, gets)
 import Control.Monad.Trans.Control (MonadBaseControl (..))
-import Data.Graph (Tree (..))
 import qualified Data.Graph as Graph
 import qualified Data.Map.Strict as Map
 import Data.Maybe (catMaybes, fromJust, mapMaybe)
 import qualified Data.Set as Set
-import Data.Tree (Tree (..))
 import GTD.Utils (flipTuple, logDebugNSS, mapFrom)
-import Text.Printf
+import Text.Printf (printf)
 
 data SchemeState k a b = SchemeState
   { _schemeStateA :: Map.Map k a,

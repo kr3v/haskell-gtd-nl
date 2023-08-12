@@ -10,18 +10,17 @@ module GTD.Haskell.Module where
 
 import Control.Exception (IOException, try)
 import Control.Lens (makeLenses)
-import Control.Monad.Cont (MonadIO)
 import Control.Monad.Except (MonadError (..), liftEither)
 import Control.Monad.Logger (MonadLoggerIO)
-import Control.Monad.State (MonadIO (..), StateT (runStateT), execStateT)
-import Control.Monad.Trans.Writer (WriterT (runWriterT), execWriterT)
+import Control.Monad.State (MonadIO (..), StateT (runStateT))
+import Control.Monad.Trans.Writer (execWriterT)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Either.Combinators (mapLeft)
 import qualified Data.Map.Strict as Map
 import GHC.Generics (Generic)
 import GTD.Cabal (ModuleNameS, PackageNameS)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
-import GTD.Haskell.Declaration (ClassOrData (_cdtName), Declaration (_declModule, _declName), Declarations (..), Exports (..), Imports (..))
+import GTD.Haskell.Declaration (ClassOrData (_cdtName), Declaration (_declModule, _declName), Declarations (..), Exports, Imports)
 import qualified GTD.Haskell.Declaration as Declarations
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import GTD.Utils (logDebugNSS)

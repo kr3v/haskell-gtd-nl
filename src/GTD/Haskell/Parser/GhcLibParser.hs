@@ -1,5 +1,4 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wno-missing-fields #-}
@@ -7,61 +6,39 @@
 module GTD.Haskell.Parser.GhcLibParser where
 
 import Control.Exception (try)
-import Control.Monad (forM, forM_, guard, join, unless, void, when, (>=>))
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad (forM_, unless, (>=>))
 import Control.Monad.Logger (MonadLoggerIO)
-import Control.Monad.State (MonadState (..), MonadTrans (..), evalStateT, execStateT, modify)
-import Control.Monad.Trans.Maybe (MaybeT (..))
-import Control.Monad.Writer (MonadWriter (..), WriterT (..), execWriterT, mapWriterT)
-import Data.Data (Data (..), showConstr)
+import Control.Monad.State (MonadState (..), execStateT, modify)
+import Control.Monad.Writer (MonadWriter (..))
 import Data.Either (fromRight)
 import Data.Foldable (Foldable (..))
-import qualified Data.Functor
 import qualified Data.Map.Strict as Map
-import Data.Maybe (catMaybes, fromMaybe, isJust, mapMaybe)
-import qualified GHC.Data.EnumSet as EnumSet
+import Data.Maybe (fromMaybe, mapMaybe)
 import GHC.Data.FastString (mkFastString, unpackFS)
 import GHC.Data.StringBuffer (stringToStringBuffer)
-import GHC.Driver.Config.Diagnostic (initDiagOpts)
 import GHC.Driver.Config.Parser (initParserOpts)
-import GHC.Driver.Errors.Types (DriverMessageOpts (psDiagnosticOpts))
-import GHC.Driver.Ppr (showSDoc)
-import GHC.Driver.Session (DynFlags (..), Language (..), PlatformMisc (..), Settings (..), defaultDynFlags, initDynFlags, parseDynamicFilePragma, supportedLanguagesAndExtensions)
+import GHC.Driver.Session (DynFlags (..), PlatformMisc (..), Settings (..), defaultDynFlags, parseDynamicFilePragma)
 import GHC.Fingerprint (fingerprint0)
-import GHC.Hs (ConDecl (..), ConDeclField (..), DataDefnCons (..), FamilyDecl (..), FieldOcc (..), GhcPs, HsConDetails (..), HsDataDefn (..), HsDecl (..), HsModule (..), IE (..), IEWrappedName (..), ImportDecl (..), ImportDeclQualifiedStyle (..), ImportListInterpretation (..), IsBootInterface (..), LIdP, ModuleName (ModuleName), Sig (..), SrcSpanAnn' (..), TyClDecl (..), moduleNameString)
-import GHC.LanguageExtensions (Extension (..))
+import GHC.Hs (ConDecl (..), ConDeclField (..), DataDefnCons (..), FamilyDecl (..), FieldOcc (..), GhcPs, HsConDetails (..), HsDataDefn (..), HsDecl (..), HsModule (..), IE (..), IEWrappedName (..), ImportDecl (..), ImportDeclQualifiedStyle (..), ImportListInterpretation (..), IsBootInterface (..), ModuleName (ModuleName), Sig (..), SrcSpanAnn' (..), TyClDecl (..), moduleNameString)
 import GHC.Parser (parseIdentifier, parseModule)
-import GHC.Parser.Errors.Types (PsMessage (..))
 import GHC.Parser.Header (getOptions)
-import GHC.Parser.Lexer (P (unP), PState (..), ParseResult (..), ParserOpts, getPsMessages, initParserState, mkParserOpts)
-import GHC.Platform (Arch (..), ArchOS (..), ByteOrder (..), OS (..), PlatformWordSize (..), genericPlatform)
-import GHC.Settings (FileSettings (..), GhcNameVersion (..), Platform (..), ToolSettings (..), sTopDir)
+import GHC.Parser.Lexer (P (unP), PState (..), ParseResult (..), initParserState)
+import GHC.Platform (genericPlatform)
+import GHC.Settings (FileSettings (..), GhcNameVersion (..), ToolSettings (..))
 import GHC.Settings.Config (cProjectVersion)
-import GHC.Types.Error (DecoratedSDoc, Diagnostic (..), Messages (getMessages))
 import GHC.Types.Name (HasOccName (..), occNameString)
 import GHC.Types.Name.Reader (RdrName (..))
-import GHC.Types.PkgQual (RawPkgQual (..))
-import GHC.Types.SourceError (SourceError (SourceError), handleSourceError, srcErrorMessages)
-import GHC.Types.SourceText (StringLiteral (..))
-import GHC.Types.SrcLoc (GenLocated (..), Located, RealSrcSpan (srcSpanFile), SrcSpan (..), mkRealSrcLoc, srcSpanEndCol, srcSpanEndLine, srcSpanStartCol, srcSpanStartLine, unLoc)
+import GHC.Types.SourceError (SourceError)
+import GHC.Types.SrcLoc (GenLocated (..), RealSrcSpan (srcSpanFile), SrcSpan (..), mkRealSrcLoc, srcSpanEndCol, srcSpanEndLine, srcSpanStartCol, srcSpanStartLine, unLoc)
 import qualified GHC.Unit.Types as GenModule
-import GHC.Utils.Error (DiagOpts (..), pprMessages, pprMsgEnvelopeBagWithLocDefault)
 import GHC.Utils.Outputable (Outputable (..), SDocContext (..), defaultSDocContext, renderWithContext)
-import GHC.Utils.Panic (handleGhcException)
 import GTD.Cabal (ModuleNameS)
-import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Exports (..), ExportsOrImports (..), Imports (..), Module (..), SourceSpan (..), asDeclsMap, emptySourceSpan)
+import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Exports, Imports, Module (..), SourceSpan (..), asDeclsMap, emptySourceSpan)
 import qualified GTD.Haskell.Declaration as Declarations
-import GTD.Resolution.Utils (ParallelizedState (_queue))
-import GTD.Utils (logDebugNSS, logErrorNSS, modifyM)
-import qualified Language.Haskell.Exts as HSE
-import Language.Preprocessor.Cpphs (BoolOptions (lang))
 import Text.Printf (printf)
 
 showO :: Outputable a => a -> String
 showO = renderWithContext defaultSDocContext {sdocErrorSpans = True} . ppr
-
-showS :: Outputable a => SrcSpanAnn' a -> String
-showS (SrcSpanAnn ann loc) = showO ann ++ " " ++ showO loc
 
 ---
 
@@ -98,8 +75,8 @@ parse p content = do
 
   let opts = initParserOpts dynFlags
       location = mkRealSrcLoc (mkFastString p) 1 1
-      buffer = stringToStringBuffer content
-      parseState = initParserState opts buffer location
+      b = stringToStringBuffer content
+      parseState = initParserState opts b location
       r = unP parseModule parseState
 
   return $ case r of
@@ -117,9 +94,10 @@ asSourceSpan (RealSrcSpan r _) =
       sourceSpanEndLine = srcSpanEndLine r,
       sourceSpanEndColumn = srcSpanEndCol r
     }
+asSourceSpan _ = emptySourceSpan
 
 declM :: String -> SrcSpan -> (Outputable a) => a -> Declaration
-declM m loc k = Declaration {_declSrcOrig = asSourceSpan loc, _declModule = m, _declName = showO k}
+declM m l k = Declaration {_declSrcOrig = asSourceSpan l, _declModule = m, _declName = showO k}
 
 declME :: String -> (Outputable a) => a -> Declaration
 declME m k = Declaration {_declSrcOrig = emptySourceSpan, _declModule = m, _declName = showO k}
@@ -131,84 +109,86 @@ identifiers :: HsModuleX -> (MonadWriter Declarations m, MonadLoggerIO m) => m (
 identifiers (HsModuleX HsModule {hsmodName = Just (L _ (ModuleName nF)), hsmodDecls = decls} _) = do
   let mN = unpackFS nF
   let decl = declM mN
-  let tellD loc k = tell mempty {_decls = asDeclsMap [decl loc k]}
+  let tellD l k = tell mempty {_decls = asDeclsMap [decl l k]}
 
   forM_ decls $ \(L _ d) -> case d of
     SigD _ s -> case s of
       TypeSig _ names _ -> do
-        forM_ names $ \(L (SrcSpanAnn ann loc) k) -> tellD loc k
+        forM_ names $ \(L (SrcSpanAnn _ l) k) -> tellD l k
       _ -> return ()
     TyClD _ tc -> case tc of
-      FamDecl {tcdFam = FamilyDecl {fdLName = (L (SrcSpanAnn ann loc) k)}} -> tellD loc k -- TODO: add more stuff?
-      SynDecl {tcdLName = (L (SrcSpanAnn ann loc) k)} -> tellD loc k
-      DataDecl {tcdLName = (L (SrcSpanAnn ann loc) k), tcdDataDefn = (HsDataDefn _ _ _ _ ctorsD _)} -> do
+      FamDecl {tcdFam = FamilyDecl {fdLName = (L (SrcSpanAnn _ l) k)}} -> tellD l k -- TODO: add more stuff?
+      SynDecl {tcdLName = (L (SrcSpanAnn _ l) k)} -> tellD l k
+      DataDecl {tcdLName = (L (SrcSpanAnn _ l) k), tcdDataDefn = (HsDataDefn _ _ _ _ ctorsD _)} -> do
         let ctors = case ctorsD of
               NewTypeCon a -> [a]
               DataTypeCons _ as -> as
         let fs = flip concatMap ctors $ \(L _ ctor) -> case ctor of
-              ConDeclH98 {con_name = (L (SrcSpanAnn ann loc1) k1), con_args = ctor1} -> do
+              ConDeclH98 {con_name = (L (SrcSpanAnn _ loc1) k1), con_args = ctor1} -> do
                 let fields = case ctor1 of
-                      PrefixCon pc1 pc2 -> []
-                      InfixCon ic1 ic2 -> []
+                      PrefixCon _ _ -> []
+                      InfixCon _ _ -> []
                       RecCon (L _ fs1) -> flip concatMap fs1 $ \(L _ (ConDeclField _ fs2 _ _)) ->
-                        flip fmap fs2 $ \(L _ (FieldOcc _ (L (SrcSpanAnn ann loc2) k2))) ->
+                        flip fmap fs2 $ \(L _ (FieldOcc _ (L (SrcSpanAnn _ loc2) k2))) ->
                           decl loc2 k2
                 fields ++ [decl loc1 k1]
               _ -> []
-        tell mempty {_dataTypes = Map.singleton (showO k) ClassOrData {_cdtName = decl loc k, _cdtFields = asDeclsMap fs, _eWildcard = False}}
-      ClassDecl {tcdLName = (L (SrcSpanAnn ann loc) k), tcdSigs = ms} -> do
+        tell mempty {_dataTypes = Map.singleton (showO k) ClassOrData {_cdtName = decl l k, _cdtFields = asDeclsMap fs, _eWildcard = False}}
+      ClassDecl {tcdLName = (L (SrcSpanAnn _ l) k), tcdSigs = ms} -> do
         let fs = flip concatMap ms $ \(L _ m) -> case m of
-              TypeSig _ names _ -> flip fmap names $ \(L (SrcSpanAnn ann loc) k) -> decl loc k
-              ClassOpSig _ _ names _ -> flip fmap names $ \(L (SrcSpanAnn ann loc) k) -> decl loc k
+              TypeSig _ names _ -> flip fmap names $ \(L (SrcSpanAnn _ l) k) -> decl l k
+              ClassOpSig _ _ names _ -> flip fmap names $ \(L (SrcSpanAnn _ l) k) -> decl l k
               _ -> []
-        tell mempty {_dataTypes = Map.singleton (showO k) ClassOrData {_cdtName = decl loc k, _cdtFields = asDeclsMap fs, _eWildcard = False}}
+        tell mempty {_dataTypes = Map.singleton (showO k) ClassOrData {_cdtName = decl l k, _cdtFields = asDeclsMap fs, _eWildcard = False}}
     _ -> return ()
 identifiers _ = return ()
 
-ieName :: IEWrappedName GhcPs -> (MonadLoggerIO m) => MaybeT m RdrName
+ieName :: IEWrappedName GhcPs -> Maybe RdrName
 ieName (IEName _ n) = return $ unLoc n
 ieName (IEType _ n) = return $ unLoc n
-ieName n = do
-  logDebugNSS "ieName" $ printf "not yet handled :t %s" (showConstr . toConstr $ n)
-  MaybeT $ pure Nothing
+ieName _ = Nothing
 
-rdr :: RdrName -> (MonadLoggerIO m) => MaybeT m (String, String)
+-- logDebugNSS "ieName" $ printf "not yet handled :t %s" (showConstr . toConstr $ n)
+
+rdr :: RdrName -> Maybe (String, String)
 rdr (Unqual n) = return ("", occNameString n)
 rdr (Exact n) = return ("", occNameString $ occName n)
 rdr (Qual q n) = return (moduleNameString q, occNameString n)
-rdr (Orig (GenModule.Module u q) n) = do
-  logDebugNSS "asString@RdrName" $ printf "u=%s, mq=%s, n=%s" (show u) (show q) (show $ occNameString n)
-  MaybeT $ pure Nothing
+rdr (Orig (GenModule.Module u q) n) = Nothing
 
-ie :: String -> IE GhcPs -> (MonadState (Map.Map ModuleNameS Module) m, MonadLoggerIO m) => m ()
-ie mN (IEModuleContents _ (L _ n)) = modify $ Map.insertWith (<>) (moduleNameString n) mempty {_mName = moduleNameString n, _mType = Declarations.All}
+-- logDebugNSS "asString@RdrName" $ printf "u=%s, mq=%s, n=%s" (show u) (show q) (show $ occNameString n)
+
+ie :: String -> IE GhcPs -> (MonadState (Map.Map ModuleNameS Module) m) => m ()
+ie _ (IEModuleContents _ (L _ n)) = modify $ Map.insertWith (<>) (moduleNameString n) mempty {_mName = moduleNameString n, _mType = Declarations.All}
 ie mN e = do
   let decl = declS mN
-  void $ runMaybeT $ do
-    (m, n) <- case e of
-      IEVar _ (L _ n) -> ieName n >>= rdr
-      IEThingAbs _ (L _ n) -> ieName n >>= rdr
-      IEThingAll _ (L _ n) -> ieName n >>= rdr
-      IEThingWith _ (L _ n) wc ns -> ieName n >>= rdr
-      _ -> MaybeT $ pure Nothing
-    z <- case e of
-      IEVar _ _ -> return mempty {_mDecls = [decl n]}
-      IEThingAbs _ _ -> return mempty {_mCDs = [ClassOrData {_cdtName = decl n, _cdtFields = mempty, _eWildcard = False}]}
-      IEThingAll _ _ -> return mempty {_mCDs = [ClassOrData {_cdtName = decl n, _cdtFields = mempty, _eWildcard = True}]}
-      IEThingWith _ _ wc ns -> do
-        ns1 <- forM (unLoc <$> ns) (ieName >=> rdr)
-        return mempty {_mCDs = [ClassOrData {_cdtName = decl n, _cdtFields = asDeclsMap $ decl . snd <$> ns1, _eWildcard = False}]}
-    modify $ Map.insertWith (<>) m z {_mType = Declarations.Exactly}
+      mn = case e of
+        IEVar _ (L _ n) -> ieName n
+        IEThingAbs _ (L _ n) -> ieName n
+        IEThingAll _ (L _ n) -> ieName n
+        IEThingWith _ (L _ n) _ _ -> ieName n
+        _ -> Nothing
+  case mn >>= rdr of
+    Nothing -> return mempty
+    Just (m, n) -> do
+      z <- case e of
+        IEVar _ _ -> return mempty {_mDecls = [decl n]}
+        IEThingAbs _ _ -> return mempty {_mCDs = [ClassOrData {_cdtName = decl n, _cdtFields = mempty, _eWildcard = False}]}
+        IEThingAll _ _ -> return mempty {_mCDs = [ClassOrData {_cdtName = decl n, _cdtFields = mempty, _eWildcard = True}]}
+        IEThingWith _ _ _ ns -> do
+          let ns1 = mapMaybe ((ieName >=> rdr) . unLoc) ns
+          return mempty {_mCDs = [ClassOrData {_cdtName = decl n, _cdtFields = asDeclsMap $ decl . snd <$> ns1, _eWildcard = False}]}
+        _ -> return mempty
+      modify $ Map.insertWith (<>) m z {_mType = Declarations.Exactly}
 
-exports :: HsModuleX -> (MonadState Exports m, MonadLoggerIO m) => m Bool
-exports (HsModuleX HsModule {hsmodName = Just (L _ (ModuleName nF)), hsmodExports = Just (L _ es)} _) = do
+exports :: HsModuleX -> (MonadState Exports m) => m Bool
+exports (HsModuleX HsModule {hsmodExports = Just (L _ es), hsmodName = Just (L _ (ModuleName nF))} _) = do
   forM_ (unLoc <$> es) $ ie $ unpackFS nF
   return False
 exports (HsModuleX HsModule {hsmodExports = Nothing} _) = return True
 
-imports :: HsModuleX -> (MonadWriter Imports m, MonadLoggerIO m) => m ()
-imports m@(HsModuleX HsModule {hsmodImports = is} ps) = do
-  let logTag = "imports0 " ++ name m
+imports :: HsModuleX -> (MonadWriter Imports m) => m ()
+imports (HsModuleX HsModule {hsmodImports = is} ps) = do
   forM_ is $ \(L _ (ImportDecl {ideclName = (L _ (ModuleName iMN)), ideclQualified = iQ, ideclSource = iS, ideclAs = iA, ideclImportList = iIL})) -> do
     case iS of
       IsBoot -> return ()
@@ -230,7 +210,7 @@ imports m@(HsModuleX HsModule {hsmodImports = is} ps) = do
 
 ---
 
-identifier :: (MonadLoggerIO m) => String -> m (Maybe (String, String))
+identifier :: String -> Maybe (String, String)
 identifier c = do
   let dynFlags0 = defaultDynFlags fakeSettings
 
@@ -241,5 +221,5 @@ identifier c = do
       r = unP parseIdentifier parseState
 
   case r of
-    POk _ (L _ e) -> runMaybeT (rdr e)
-    PFailed s -> return Nothing
+    POk _ (L _ e) -> rdr e
+    PFailed _ -> Nothing

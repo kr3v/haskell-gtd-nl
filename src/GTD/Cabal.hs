@@ -12,7 +12,7 @@
 module GTD.Cabal where
 
 import Control.Concurrent.Async.Lifted (forConcurrently)
-import Control.Lens (At (..), makeLenses, set, use, view, (%=), (%~), (.=))
+import Control.Lens (At (..), makeLenses, use, view, (%=), (.=))
 import Control.Monad (forM, forM_)
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.Logger (MonadLogger, MonadLoggerIO (..))
@@ -30,14 +30,14 @@ import Data.Maybe (catMaybes, fromMaybe)
 import qualified Data.Set as Set
 import Distribution.Compat.Prelude (Generic)
 import Distribution.Package (PackageIdentifier (..), packageName)
-import Distribution.PackageDescription (BuildInfo (..), Dependency (Dependency), Library (..), PackageDescription (..), allBuildInfo, enabledBuildDepends, unPackageName)
+import Distribution.PackageDescription (BuildInfo (..), Dependency (Dependency), Library (..), PackageDescription (..), enabledBuildDepends, unPackageName)
 import Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import Distribution.PackageDescription.Parsec (parseGenericPackageDescription, runParseResult)
 import Distribution.Pretty (prettyShow)
-import Distribution.Types.ComponentRequestedSpec
+import Distribution.Types.ComponentRequestedSpec (ComponentRequestedSpec (ComponentRequestedSpec, benchmarksRequested, testsRequested))
 import Distribution.Utils.Path (getSymbolicPath)
 import GTD.Configuration (GTDConfiguration (..), repos)
-import GTD.Utils (deduplicate, logDebugNSS, logDebugNSS', logErrorNSS)
+import GTD.Utils (deduplicate, logDebugNSS, logDebugNSS')
 import System.Directory (listDirectory)
 import System.FilePath (takeDirectory, takeExtension, (</>))
 import System.IO (IOMode (ReadMode), hGetContents, openFile)
@@ -146,10 +146,12 @@ emptyPackageModules = PackageModules [] Set.empty Set.empty
 __exports :: PackageDescription -> Maybe PackageModules
 __exports pkg = do
   lib <- library pkg
-  let es = Set.fromList $ prettyShow <$> exposedModules lib
-  let res = Set.fromList $ prettyShow <$> reexportedModules lib
-  let srcDirs = getSymbolicPath <$> (hsSourceDirs . libBuildInfo) lib
-  return $ PackageModules srcDirs es res
+  return
+    PackageModules
+      { _srcDirs = getSymbolicPath <$> (hsSourceDirs . libBuildInfo) lib,
+        _exports = Set.fromList $ prettyShow <$> exposedModules lib,
+        _reExports = Set.fromList $ prettyShow <$> reexportedModules lib
+      }
 
 ---
 

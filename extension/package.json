@@ -33,7 +33,7 @@
           },
           "hs-gtd.server.args": {
             "type": "array",
-            "default": ["--ttl", "60s"]
+            "default": ["--ttl", "60"]
           }
         }
       }
@@ -41,7 +41,7 @@
     "commands": [
       {
         "command": "hs-gtd.server.restart",
-        "title": "Kill/stop backend server (it will be restarted automatically when a Haskell file is opened)"
+        "title": "hs-gtd: kill/stop backend server (it will be restarted automatically when a Haskell file is opened)"
       }
     ]
   },

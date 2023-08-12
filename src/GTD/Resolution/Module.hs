@@ -6,29 +6,24 @@
 
 module GTD.Resolution.Module where
 
-import Control.Lens (over)
 import Control.Monad.Cont (forM, forM_, when)
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (MonadReader (ask), MonadWriter (..))
-import Control.Monad.State.Lazy (MonadState (..), evalStateT, execStateT, modify)
+import Control.Monad.State.Lazy (MonadState (..), execStateT, modify)
 import Control.Monad.Trans.Except (runExceptT, withExceptT)
-import Control.Monad.Trans.Writer (WriterT (..), execWriterT)
-import Data.Aeson (FromJSON, ToJSON)
+import Control.Monad.Trans.Writer (execWriterT)
 import Data.Either (partitionEithers)
-import Data.Foldable (Foldable (..))
 import qualified Data.Map.Strict as Map
-import Data.Maybe (mapMaybe)
-import Distribution.ModuleName (fromString, toFilePath, validModuleComponent)
-import GHC.Generics (Generic)
+import Distribution.ModuleName (fromString, toFilePath)
 import GTD.Cabal (ModuleNameS)
 import qualified GTD.Cabal as Cabal
-import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Exports (..), Imports (..), Module (..), ModuleImportType (..), allImportedModules, asDeclsMap)
-import qualified GTD.Haskell.Declaration as Declarations
-import GTD.Haskell.Module (HsModule (..), HsModuleData (..), HsModuleP (..), HsModuleParams (..), emptyHsModule, exports, parseModule)
+import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Module (..), ModuleImportType (..), allImportedModules, asDeclsMap)
+import GTD.Haskell.Module (HsModule (..), HsModuleData (..), HsModuleP (..), HsModuleParams (..), emptyHsModule, parseModule)
 import qualified GTD.Haskell.Module as HsModule
 import GTD.Utils (logDebugNSS, logErrorNSS, mapFrom)
 import System.FilePath (normalise, (</>))
 import Text.Printf (printf)
+import GTD.Configuration
 
 ---
 
@@ -79,12 +74,17 @@ moduleR m = do
 
 ---
 
+resolutionCached :: String -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m (Map.Map ModuleNameS Declarations)
+resolutionCached p = do
+  undefined
+
+-- fork: caching should be added here
 resolution :: Map.Map ModuleNameS HsModuleP -> HsModule -> (MonadLoggerIO m) => m (Map.Map ModuleNameS Declarations)
 resolution sM m = flip execStateT Map.empty $ do
   let locals = _locals . _info $ m
       name = _name m
 
-  forM_ (_imports . _info $ m) $ \i@(Module {_mName = k, _mType = mt, _mAllowNoQualifier = mnq, _mQualifier = mq, _mDecls = md, _mCDs = mc}) -> do
+  forM_ (_imports . _info $ m) $ \Module {_mName = k, _mType = mt, _mAllowNoQualifier = mnq, _mQualifier = mq, _mDecls = md, _mCDs = mc} -> do
     forM_ (Map.lookup k sM) $ \c -> do
       let stuff = case mt of
             All -> _exports c

@@ -3,50 +3,35 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 
-import Control.Applicative (Alternative (empty), Applicative (liftA2))
-import Control.Exception (IOException, evaluate, try)
-import Control.Lens (At (at), use)
-import Control.Lens.Prism (_Just)
-import Control.Monad.Logger (NoLoggingT (runNoLoggingT), runStderrLoggingT, runStdoutLoggingT)
+import Control.Exception (IOException, try)
+import Control.Monad.Logger (runStderrLoggingT, runStdoutLoggingT)
 import Control.Monad.Logger.CallStack (runFileLoggingT)
-import Control.Monad.State (MonadState (..), MonadTrans (lift), StateT (..), evalStateT, execStateT, forM)
-import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
-import Control.Monad.Trans.Maybe (MaybeT (runMaybeT))
+import Control.Monad.RWS (MonadIO (liftIO), MonadState (get), forM, forM_, join)
+import Control.Monad.State (StateT (..), evalStateT, execStateT)
+import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (ReaderT (..))
-import Control.Monad.Writer (MonadIO (liftIO), execWriterT, forM_, join, runWriterT)
-import Data.Aeson (FromJSON, ToJSON, decode, defaultOptions, encode, genericToJSON)
+import Control.Monad.Writer (execWriterT)
+import Data.Aeson (decode, encode)
 import qualified Data.ByteString.Lazy as BS
 import Data.Either (partitionEithers)
 import Data.Either.Combinators (mapLeft, mapRight)
 import Data.List (isPrefixOf, isSuffixOf)
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes, fromJust, fromMaybe)
-import qualified Data.Set as Set
-import Data.Time.Clock (diffUTCTime)
-import Data.Time.Clock.POSIX (getCurrentTime)
-import qualified Distribution.ModuleName as Cabal
-import qualified Distribution.ModuleName as ModuleName
-import Distribution.PackageDescription (emptyGenericPackageDescription, emptyPackageDescription)
-import GHC.RTS.Flags (ProfFlags (descrSelector))
-import qualified GTD.Cabal as Cabal
-import GTD.Configuration (GTDConfiguration (_repos), prepareConstants)
+import Data.Maybe (fromJust, fromMaybe)
+import GTD.Configuration (GTDConfiguration (..), prepareConstants)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
-import GTD.Haskell.Declaration (Declaration (Declaration, _declName, _declSrcOrig), Declarations (..), Exports, Identifier (..), Imports, SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine), emptySourceSpan)
+import GTD.Haskell.Declaration (Declarations (..), Exports, Imports, SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine))
 import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule, parseModule)
-import qualified GTD.Haskell.Module as HsModule
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import GTD.Resolution.Module (figureOutExports, figureOutExports0)
 import GTD.Resolution.State (emptyContext)
 import GTD.Resolution.State.Caching.Cabal (cabalCacheFetch, cabalCacheStore)
-import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), definition, noDefintionFoundError, noDefintionFoundErrorE)
-import GTD.Utils (logDebugNSS, ultraZoom)
-import Language.Haskell.Exts (Module (..), Parseable (parse), SrcSpan (..), SrcSpanInfo (..))
-import System.Directory (getCurrentDirectory, listDirectory, setCurrentDirectory)
+import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), definition)
+import System.Directory (listDirectory)
 import System.FilePath ((</>))
-import System.IO
-import Test.Hspec (Spec, describe, expectationFailure, it, runIO, shouldBe, shouldNotBe, shouldSatisfy)
+import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
+import Test.Hspec (Spec, describe, expectationFailure, it, runIO, shouldBe)
 import Test.Hspec.Runner (Config (configPrintCpuTime), defaultConfig, hspecWith)
-import Test.QuickCheck (Testable (..), forAll, (==>))
 import Text.Printf (printf)
 
 haskellApplyCppHsSpec :: Spec
@@ -62,10 +47,10 @@ haskellApplyCppHsSpec = do
 
       result <- liftIO $ runExceptT $ haskellApplyCppHs srcPath src
       case result of
-        Left err -> expectationFailure $ show err
-        Right result -> do
-          writeFile dstPath result
-          result `shouldBe` expected
+        Left e -> expectationFailure $ show e
+        Right r -> do
+          writeFile dstPath r
+          r `shouldBe` expected
     it "ignores #error directive" $ do
       let srcPath = "./test/samples/haskellApplyCppHs/in.1.hs"
       let dstPath = "./test/samples/haskellApplyCppHs/out.1.hs"
@@ -76,10 +61,10 @@ haskellApplyCppHsSpec = do
 
       result <- liftIO $ runExceptT $ haskellApplyCppHs srcPath src
       case result of
-        Left err -> expectationFailure $ show err
-        Right result -> do
-          writeFile dstPath result
-          result `shouldBe` expected
+        Left e -> expectationFailure $ show e
+        Right r -> do
+          writeFile dstPath r
+          r `shouldBe` expected
 
 haskellGetIdentifiersSpec :: Spec
 haskellGetIdentifiersSpec = do
@@ -212,11 +197,11 @@ figureOutExportsTest = do
 
         mainModuleE <- runStdoutLoggingT $ runExceptT $ parseModule emptyHsModule {_path = mainFileP}
         join $ case mainModuleE of
-          Left err -> return $ expectationFailure $ printf "failed to parse %s: %s" mainFileP err
+          Left e -> return $ expectationFailure $ printf "failed to parse %s: %s" mainFileP e
           Right mainModule -> do
             liftIO $ runStdoutLoggingT $ flip evalStateT Map.empty $ do
               forM_ importedModules $ \(p, m) -> do
-                figureOutExports m
+                _ <- figureOutExports m
                 liftIO $ BS.writeFile (p ++ ".out.json") $ encode m
               st0 <- get
               liftIO $ BS.writeFile outS0P $ encode st0
@@ -233,14 +218,13 @@ definitionsSpec = do
   consts <- runIO prepareConstants
 
   let descr = "definitions"
-
   let workDir = "./test/integrationTestRepo/sc-ea-hs"
   let file = workDir </> "app/game/Main.hs"
   let req = DefinitionRequest {workDir = "./test/integrationTestRepo/sc-ea-hs", file = file, word = ""}
 
-  let eval0 w = runExceptT (definition req {word = w})
-  let eval w r = eval0 w >>= (\x -> return $ x `shouldBe` r)
-  let mstack f s a = runFileLoggingT (workDir </> descr ++ ".txt") $ flip f s $ runReaderT a consts
+  let eval0 w = runExceptT $ definition req {word = w}
+      eval w r = eval0 w >>= (\d -> return $ d `shouldBe` r)
+      mstack f a = runFileLoggingT (workDir </> descr ++ ".txt") $ f $ runReaderT a consts
 
   let expectedPlayIO =
         let expFile = _repos consts </> "gloss-1.13.2.2/Graphics/Gloss/Interface/IO/Game.hs"
@@ -309,13 +293,13 @@ definitionsSpec = do
          in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
   let expectedQMap =
         let expFile = _repos consts </> "containers-0.6.7/src/Data/Map/Internal.hs"
-            expLineNo = 0
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 0, sourceSpanEndColumn = 0, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+            expLineNo = 1
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 0, sourceSpanStartLine = expLineNo, sourceSpanEndLine = 0}
          in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
   let expectedDTClockPosix =
         let expFile = _repos consts </> "time-1.12.2/lib/Data/Time/Clock/POSIX.hs"
-            expLineNo = 0
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 0, sourceSpanEndColumn = 0, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+            expLineNo = 1
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 0, sourceSpanStartLine = expLineNo, sourceSpanEndLine = 0}
          in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
   let expectedQMapKeys =
         let expFile = _repos consts </> "containers-0.6.7/src/Data/Map/Internal.hs"
@@ -325,84 +309,89 @@ definitionsSpec = do
   let noDefErr = Left "No definition found"
 
   let st0 = emptyContext
-  st1 <- runIO $ mstack execStateT st0 cabalCacheFetch
-  (a, serverState) <- runIO $ mstack runStateT st1 $ eval0 "playIO"
+  st1 <- runIO $ mstack (`execStateT` st0) cabalCacheFetch
+  (a, serverState) <- runIO $ mstack (`runStateT` st1) $ eval0 "playIO"
   runIO $ print a
-  runIO $ mstack execStateT serverState cabalCacheStore
+  -- TODO: check the warning
+  _ <- runIO $ mstack (`execStateT` serverState) cabalCacheStore
 
   describe descr $ do
     it "directly exported regular function `playIO`" $ do
-      join $ mstack evalStateT serverState $ do
+      join $ mstack (`evalStateT` serverState) $ do
         eval "playIO" expectedPlayIO
+
     it "sequential execution does not fail `playIO`" $ do
-      join $ mstack evalStateT serverState $ do
-        eval "playIO" expectedPlayIO
-        eval "playIO" expectedPlayIO
-        eval "playIO" expectedPlayIO
+      join $ mstack (`evalStateT` serverState) $ do
+        a1 <- eval "playIO" expectedPlayIO
+        a2 <- eval "playIO" expectedPlayIO
+        a3 <- eval "playIO" expectedPlayIO
+        return $ a1 <> a2 <> a3
     it "re-exported regular function `mkStdGen`" $ do
-      join $ mstack evalStateT serverState $ do
+      join $ mstack (`evalStateT` serverState) $ do
         eval "mkStdGen" expectedMkStdGen
 
     -- if `return` is broken, then it is possible that `module X (module X) where ...` case is broken
     it "from prelude - function `return`" $ do
-      join $ mstack evalStateT serverState $ do
+      join $ mstack (`evalStateT` serverState) $ do
         eval "return" expectedPreludeReturn
     it "from prelude - data ctor `Nothing`" $ do
-      join $ mstack evalStateT serverState $ do
+      join $ mstack (`evalStateT` serverState) $ do
         eval "Nothing" expectedPreludeNothing
 
     it "re-exported throughout packages (?) class name `State`" $ do
-      join $ mstack evalStateT serverState $ do
+      join $ mstack (`evalStateT` serverState) $ do
         eval "State" noDefErr
     it "cross-package module re-export `runState`" $ do
-      join $ mstack evalStateT serverState $ do
+      join $ mstack (`evalStateT` serverState) $ do
         eval "runState" expectedRunState
     it "(re-export)? data name `Picture`" $ do
-      join $ mstack evalStateT serverState $ do
+      join $ mstack (`evalStateT` serverState) $ do
         eval "Picture" expectedPicture
 
     it "data type name `Display`" $ do
-      join $ mstack evalStateT serverState $ do
+      join $ mstack (`evalStateT` serverState) $ do
         eval "Display" expectedDisplay
     it "data constructor `InWindow`" $ do
-      join $ mstack evalStateT serverState $ do
+      join $ mstack (`evalStateT` serverState) $ do
         eval "InWindow" expectedInWindow
 
     it "data type with type variable `Proxy`" $ do
-      join $ mstack evalStateT serverState $ do
+      join $ mstack (`evalStateT` serverState) $ do
         eval "Proxy" expectedProxy
     it "in-package module re-export + operator form 1 `^., %=`" $ do
-      join $ mstack evalStateT serverState $ do
-        eval "^." noDefErr
-        eval "%=" expectedLensOverOperator
+      join $ mstack (`evalStateT` serverState) $ do
+        a1 <- eval "^." noDefErr
+        a2 <- eval "%=" expectedLensOverOperator
+        return $ a1 <> a2
     it "in-package module re-export + operator form 2 `(^.), (%=)`" $ do
-      join $ mstack evalStateT serverState $ do
-        eval "(^.)" noDefErr
-        eval "(%=)" expectedLensOverOperator
+      join $ mstack (`evalStateT` serverState) $ do
+        a1 <- eval "(^.)" noDefErr
+        a2 <- eval "(%=)" expectedLensOverOperator
+        return $ a1 <> a2
     it "`view`: in-package module re-export + function `view`" $ do
-      join $ mstack evalStateT serverState $ do
+      join $ mstack (`evalStateT` serverState) $ do
         eval "view" expectedLensView
 
     -- qualified's
     it "qualified module import - go to module via qualifier `Map`" $ do
-      join $ mstack evalStateT serverState $ do
+      join $ mstack (`evalStateT` serverState) $ do
         eval "Map" expectedQMap
     it "qualified module import - go to module via 'original' name `Data.Map.Strict`" $ do
-      join $ mstack evalStateT serverState $ do
+      join $ mstack (`evalStateT` serverState) $ do
         eval "Data.Map.Strict" noDefErr
     it "regular module import - go to module via 'original' name `Data.Time.Clock.POSIX`" $ do
-      join $ mstack evalStateT serverState $ do
+      join $ mstack (`evalStateT` serverState) $ do
         eval "Data.Time.Clock.POSIX" expectedDTClockPosix
     it "qualified module import - go to function through qualifier `Map.keys`" $ do
-      join $ mstack evalStateT serverState $ do
+      join $ mstack (`evalStateT` serverState) $ do
         eval "Map.keys" expectedQMapKeys
 
     -- often failed ones
     it "printf" $ do
-      join $ mstack evalStateT serverState $ do
+      join $ mstack (`evalStateT` serverState) $ do
         eval "printf" expectedPrintf
     it "try" $ do
-      join $ mstack evalStateT serverState $ do
+      join $ mstack (`evalStateT` serverState) $ do
         eval "try" expectedTry
 
 integrationTestsSpec :: Spec

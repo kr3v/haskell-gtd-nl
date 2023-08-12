@@ -9,7 +9,6 @@ import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Map.Strict as Map
 import GHC.Generics (Generic)
 import GTD.Cabal (ModuleNameS)
-import GTD.Utils (deduplicate)
 import Language.Haskell.Exts (ModuleName (..), Name (..), SrcSpan (..), SrcSpanInfo (srcInfoSpan))
 
 data SourceSpan = SourceSpan

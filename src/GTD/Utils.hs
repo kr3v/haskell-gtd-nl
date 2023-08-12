@@ -1,13 +1,14 @@
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module GTD.Utils where
 
 import Control.Concurrent (myThreadId)
 import Control.Exception (catch, throwIO)
 import Control.Lens (Lens', use, (.=))
-import Control.Monad.Except (ExceptT, MonadIO (liftIO))
+import Control.Monad.Except (ExceptT, MonadIO (liftIO), when)
 import Control.Monad.Logger (MonadLogger, MonadLoggerIO, logDebugNS, logErrorNS)
-import Control.Monad.RWS (MonadState)
+import Control.Monad.RWS (MonadState (..))
 import Control.Monad.State (StateT (..))
 import Control.Monad.Trans.Except (catchE, mapExceptT)
 import Control.Monad.Trans.Maybe (MaybeT (..))
@@ -17,6 +18,8 @@ import Data.Time.Clock.POSIX (getPOSIXTime)
 import System.Directory (removeFile)
 import System.IO.Error (isDoesNotExistError)
 import Text.Printf (printf)
+import GHC.Stats (RTSStats(..), getRTSStats, getRTSStatsEnabled)
+import Numeric ( showFFloat )
 
 maybeToMaybeT :: Monad m => Maybe a -> MaybeT m a
 maybeToMaybeT = MaybeT . return
@@ -75,9 +78,38 @@ modifyM f = StateT $ \s -> do
   s' <- f s
   return ((), s')
 
+modifyMS :: (MonadState s m) => (s -> m s) -> m ()
+modifyMS f = do
+  s0 <- get
+  s1 <- f s0
+  put s1
+
 removeIfExists :: FilePath -> IO ()
 removeIfExists fileName = removeFile fileName `catch` handleExists
   where
     handleExists e
       | isDoesNotExistError e = return ()
       | otherwise = throwIO e
+
+
+stats :: IO ()
+stats = do
+  statsE <- liftIO getRTSStatsEnabled
+  when statsE $ do
+    let showF2 :: Float -> String = flip (showFFloat (Just 2)) ""
+    stats@RTSStats
+      { init_cpu_ns = ic,
+        init_elapsed_ns = ie,
+        mutator_cpu_ns = mc,
+        mutator_elapsed_ns = me,
+        gc_cpu_ns = gc,
+        gc_elapsed_ns = ge,
+        cpu_ns = c,
+        elapsed_ns = e
+      } <-
+      liftIO getRTSStats
+    let cI = fromIntegral c
+    let eI = fromIntegral e
+    liftIO $ putStrLn $ printf "CPU : i:%s m:%s g:%s r:%s" (showF2 $ fromIntegral ic / cI) (showF2 $ fromIntegral mc / cI) (showF2 $ fromIntegral gc / cI) (showF2 $ fromIntegral (c - ic - mc - gc) / cI)
+    liftIO $ putStrLn $ printf "Wall: i:%s m:%s g:%s r:%s" (showF2 $ fromIntegral ie / eI) (showF2 $ fromIntegral me / eI) (showF2 $ fromIntegral ge / eI) (showF2 $ fromIntegral (e - ie - me - ge) / eI)
+    liftIO $ putStrLn $ "GCs: " ++ show stats
