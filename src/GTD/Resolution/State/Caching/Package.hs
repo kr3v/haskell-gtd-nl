@@ -1,6 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
+
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -26,65 +26,65 @@ import System.Directory (doesFileExist)
 import System.FilePath.Posix ((</>))
 import Text.Printf (printf)
 
-__pGet :: Cabal.PackageFull -> FilePath -> (MonadLoggerIO m, MonadReader GTDConfiguration m, Binary a) => m (Maybe a)
+__pGet :: Cabal.Package a -> FilePath -> (MonadLoggerIO m, MonadReader GTDConfiguration m, Binary a) => m (Maybe a)
 __pGet cPkg f = do
-  let p = (Cabal._path . Cabal._fpackage $ cPkg) </> f
+  let p = Cabal._root cPkg </> f
   rJ :: Either IOError (Either (ByteOffset, String) a) <- liftIO $ try $ decodeFileOrFail p
   case rJ of
-    Left e -> logDebugNSS "persistence get" (printf "%s / %s failed: %s" (show $ Cabal.nameVersionF cPkg) p (show e)) >> return Nothing
+    Left e -> logDebugNSS "persistence get" (printf "%s / %s failed: %s" (show $ Cabal.key cPkg) p (show e)) >> return Nothing
     Right ew -> case ew of
-      Left (_, e2) -> logDebugNSS "persistence get" (printf "%s / %s: reading succeeded, yet decodeFileOrFail failed: %s" (show $ Cabal.nameVersionF cPkg) p (show e2)) >> return Nothing
-      Right w -> logDebugNSS "persistence get" (printf "%s / %s succeded" (show $ Cabal.nameVersionF cPkg) p) >> return (Just w)
+      Left (_, e2) -> logDebugNSS "persistence get" (printf "%s / %s: reading succeeded, yet decodeFileOrFail failed: %s" (show $ Cabal.key cPkg) p (show e2)) >> return Nothing
+      Right w -> logDebugNSS "persistence get" (printf "%s / %s succeded" (show $ Cabal.key cPkg) p) >> return (Just w)
 
-pExists :: Cabal.Package -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m Bool
+pExists :: Cabal.Package a -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m Bool
 pExists cPkg = do
-  let p = Cabal._path cPkg </> "exports.binary"
+  let p = Cabal._root cPkg </> "exports.binary"
   r <- liftIO $ doesFileExist p
-  logDebugNSS "package cached exists" $ printf "%s, %s -> %s" (show $ Cabal.nameVersionP cPkg) p (show r)
+  logDebugNSS "package cached exists" $ printf "%s, %s -> %s" (show $ Cabal.key cPkg) p (show r)
   return r
 
-pGet :: Cabal.PackageFull -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m (Maybe Package)
+pGet :: Cabal.Package Cabal.DependenciesResolved -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m (Maybe Package)
 pGet cPkg = do
   modulesJ <- __pGet cPkg "modules.binary"
   exportsJ <- __pGet cPkg "exports.binary"
   let p = Package cPkg <$> modulesJ <*> exportsJ
-  logDebugNSS "package cached get" $ printf "%s -> %s (%s, %s)" (show $ Cabal.nameVersionF cPkg) (show $ isJust p) (show $ isJust modulesJ) (show $ isJust exportsJ)
+  logDebugNSS "package cached get" $ printf "%s -> %s (%s, %s)" (show $ Cabal.key cPkg) (show $ isJust p) (show $ isJust modulesJ) (show $ isJust exportsJ)
   return p
 
 pStore ::
-  Cabal.PackageFull ->
+  Cabal.Package Cabal.DependenciesResolved ->
   Package ->
   (MonadLoggerIO m, MonadReader GTDConfiguration m) => m ()
 pStore cPkg pkg = do
-  let root = Cabal._path . Cabal._fpackage $ cPkg
+  let root = Cabal._root $ cPkg
       modulesP = root </> "modules.binary"
       exportsP = root </> "exports.binary"
   liftIO $ encodeFile modulesP $ Package._modules pkg
   liftIO $ encodeFile exportsP $ Package._exports pkg
-  logDebugNSS "package cached put" $ printf "%s -> (%d, %d)" (show $ Cabal.nameVersionF cPkg) (length $ Package._modules pkg) (length $ Package._exports pkg)
+  logDebugNSS "package cached put" $ printf "%s -> (%d, %d)" (show $ Cabal.key cPkg) (length $ Package._modules pkg) (length $ Package._exports pkg)
 
 pRemove ::
-  Cabal.PackageFull ->
+  Cabal.Package Cabal.DependenciesResolved ->
   (MonadLoggerIO m, MonadReader GTDConfiguration m) => m ()
 pRemove cPkg = do
-  let root = Cabal._path . Cabal._fpackage $ cPkg
+  let root = Cabal._root $ cPkg
       modulesP = root </> "modules.binary"
       exportsP = root </> "exports.binary"
   liftIO $ removeIfExists modulesP
   liftIO $ removeIfExists exportsP
-  logDebugNSS "package cached remove" $ printf "%s" (show $ Cabal.nameVersionF cPkg)
+  logDebugNSS "package cached remove" $ printf "%s" (show $ Cabal.key cPkg)
 
 ---
 
 get ::
   Context ->
-  Cabal.PackageFull ->
+  Cabal.Package Cabal.DependenciesResolved ->
   (MonadLoggerIO m, MonadReader GTDConfiguration m) => m (Maybe Package, Context -> Context)
 get c cPkg = do
-  let k = Cabal.nameVersionF cPkg
+  let k = Cabal.key cPkg
       (_, r) = LRU.lookup k (view cExports c)
       defM = over cExports (fst . LRU.lookup k)
-  logDebugNSS "package cached get'" $ printf "%s -> %s" (show $ Cabal.nameVersionF cPkg) (show $ isJust r)
+  logDebugNSS "package cached get'" $ printf "%s -> %s" (show $ Cabal.key cPkg) (show $ isJust r)
   case r of
     Just es -> return (Just Package {_cabalPackage = cPkg, _modules = Map.empty, Package._exports = es}, defM)
     Nothing -> do

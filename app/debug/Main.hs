@@ -1,6 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use section" #-}
 
 module Main where
 
@@ -139,7 +141,7 @@ main = do
 
         case t of
           Module -> h HsModule._name module'Dependencies modulesOrdered
-          Package -> h (showT2 . Cabal.tuple . Cabal.nameVersionF) (fmap (showT2 . Cabal.tuple . Cabal.nameVersionP) . Cabal._dependencies) (flip package'dependencies'ordered package'order'default)
+          Package -> h (show . Cabal.key) (fmap show . Cabal._dependencies) (flip package'dependencies'ordered package'order'default)
 
       case x of
         Left e -> print e

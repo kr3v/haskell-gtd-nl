@@ -78,29 +78,28 @@ modules pkg@Package {_cabalPackage = c} = do
   return pkg {Package._exports = Map.restrictKeys mods (Cabal._exports . Cabal._modules $ c), Package._modules = mods}
 
 -- for a given Cabal package, it returns a list of modules in the order they should be processed
-modulesOrdered :: Cabal.PackageFull -> (MS m) => m [HsModule]
-modulesOrdered c = do
-  flip runReaderT c $ flip evalStateT (SchemeState Map.empty Map.empty) $ do
-    scheme moduleR HsModule._name id (return . module'Dependencies) (Set.toList . Cabal._exports . Cabal._modules $ c)
+modulesOrdered :: Cabal.Package Cabal.DependenciesResolved -> (MS m) => m [HsModule]
+modulesOrdered c = flip runReaderT c $ flip evalStateT (SchemeState Map.empty Map.empty) $ do
+  scheme moduleR HsModule._name id (return . module'Dependencies) (Set.toList . Cabal._exports . Cabal._modules $ c)
 
 -- for a given Cabal package and list of its modules in the 'right' order, concurrently parses all the modules
 modules1 ::
   Package ->
-  Cabal.PackageFull ->
+  Cabal.Package Cabal.DependenciesResolved ->
   (MS m) => m (Map.Map ModuleNameS HsModuleP)
 modules1 pkg c = do
   modsO <- modulesOrdered c
   let st = ParallelizedState modsO Map.empty Map.empty (_modules pkg)
-  parallelized st (Cabal.nameVersionF c) figureOutExports1 (const "tbd") HsModule._name (return . module'Dependencies)
+  parallelized st (Cabal.key c) figureOutExports1 (const "tbd") HsModule._name (return . module'Dependencies)
 
 ---
 
 package'resolution'withMutator'direct ::
   Context ->
-  Cabal.PackageFull ->
+  Cabal.Package Cabal.DependenciesResolved ->
   (MS m) => m (Maybe Package, Context -> Context)
 package'resolution'withMutator'direct c cPkg = do
-  let logTag = "package'resolution'withMutator'direct " ++ show (Cabal.nameVersionF cPkg)
+  let logTag = "package'resolution'withMutator'direct " ++ show (Cabal.key cPkg)
 
   (depsC, m) <- bimap catMaybes (foldr (.) id) <$> mapAndUnzipM (PackageCache.get c <=< flip evalStateT c . CabalCache.full) (Cabal._dependencies cPkg)
   let deps = foldr (<>) Map.empty $ Package._exports <$> depsC
@@ -113,19 +112,19 @@ package'resolution'withMutator'direct c cPkg = do
   logDebugNSS logTag $
     printf
       "given\ndeps=%s\ndepsF=%s\ndepsM=%s\nexports=%s\nreexports=%s\nPRODUCING\nexports=%s\nreexports=%s\nmodules=%s\n"
-      (show $ Cabal.nameVersionP <$> Cabal._dependencies cPkg)
-      (show $ Cabal.nameVersionF . _cabalPackage <$> depsC)
+      (show $ Cabal._dependencies cPkg)
+      (show $ Cabal.key . _cabalPackage <$> depsC)
       (show $ Map.keys deps)
       (show $ Cabal._exports . Cabal._modules $ cPkg)
       (show $ Cabal._reExports . Cabal._modules $ cPkg)
       (show $ Map.keys $ Package._exports pkgE)
       (show $ Map.keys reexports)
       (show $ Set.difference (Map.keysSet $ Package._modules pkg) (Map.keysSet deps))
-  return (Just pkg, over cExports (LRU.insert (Cabal.nameVersionF cPkg) (Package._exports pkg)) . m)
+  return (Just pkg, over cExports (LRU.insert (Cabal.key cPkg) (Package._exports pkg)) . m)
 
 package'resolution'withMutator ::
   Context ->
-  Cabal.PackageFull ->
+  Cabal.Package Cabal.DependenciesResolved ->
   (MS m) => m (Maybe Package, Context -> Context)
 package'resolution'withMutator c cPkg = do
   (pkgM, f) <- PackageCache.get c cPkg
@@ -136,7 +135,7 @@ package'resolution'withMutator c cPkg = do
       return (r, m)
 
 package'resolution ::
-  Cabal.PackageFull ->
+  Cabal.Package Cabal.DependenciesResolved ->
   (MS m) => m (Maybe Package)
 package'resolution cPkg = do
   c <- get
@@ -144,20 +143,20 @@ package'resolution cPkg = do
   modify m
   return a
 
-package'order'ignoringAlreadyCached :: Cabal.Package -> (MS m) => m (Maybe Cabal.PackageFull)
+package'order'ignoringAlreadyCached :: Cabal.Package Cabal.DependenciesUnresolved -> (MS m) => m (Maybe (Cabal.Package Cabal.DependenciesResolved, [Cabal.Package Cabal.DependenciesUnresolved]))
 package'order'ignoringAlreadyCached cPkg = do b <- PackageCache.pExists cPkg; if b then return Nothing else package'order'default cPkg
 
-package'order'default :: Cabal.Package -> (MS m) => m (Maybe Cabal.PackageFull)
-package'order'default = (Just <$>) . CabalCache.full
+package'order'default :: Cabal.Package Cabal.DependenciesUnresolved -> (MS m) => m (Maybe(Cabal.Package Cabal.DependenciesResolved, [Cabal.Package Cabal.DependenciesUnresolved]))
+package'order'default = (Just <$>) . CabalCache.fullD
 
 package'dependencies'ordered ::
-  Cabal.PackageFull ->
+  Cabal.Package Cabal.DependenciesUnresolved ->
   (MS m) =>
-  (Cabal.Package -> m (Maybe Cabal.PackageFull)) ->
-  m [Cabal.PackageFull]
-package'dependencies'ordered cPkg0 f = do
-  flip evalStateT (SchemeState Map.empty Map.empty) $ do
-    scheme f Cabal.nameVersionF Cabal.nameVersionP (return . Cabal._dependencies) [Cabal._fpackage cPkg0]
+  (Cabal.Package Cabal.DependenciesUnresolved -> m (Maybe (Cabal.Package Cabal.DependenciesResolved, [Cabal.Package Cabal.DependenciesUnresolved]))) ->
+  m [Cabal.Package Cabal.DependenciesResolved]
+package'dependencies'ordered cPkg0 f =
+   flip evalStateT (SchemeState Map.empty Map.empty) $ do
+    fmap fst <$> scheme f (Cabal.key . fst) Cabal.key (\(_, ds) -> return ds) [cPkg0]
 
 package'concurrent'contextDebugInfo :: Context -> String
 package'concurrent'contextDebugInfo c =
@@ -173,33 +172,32 @@ package'concurrent'contextDebugInfo c =
     (show $ fst <$> LRU.toList (_cExports c))
 
 package'resolution'withDependencies'concurrently ::
-  Cabal.PackageFull ->
+  Cabal.Package Cabal.DependenciesResolved ->
   (MS m) => m (Maybe Package)
 package'resolution'withDependencies'concurrently cPkg0 = do
   pkgsO <- package'dependencies'ordered cPkg0 package'order'ignoringAlreadyCached
   modifyMS $ \st ->
     parallelized
       (ParallelizedState pkgsO Map.empty Map.empty st)
-      ("packages", Cabal.nameVersionF cPkg0)
+      ("packages", Cabal.key cPkg0)
       package'resolution'withMutator
       package'concurrent'contextDebugInfo
-      Cabal.nameVersionF
-      (return . fmap Cabal.nameVersionP . Cabal._dependencies)
+      Cabal.key
+      (return . fmap Cabal.key . Cabal._dependencies)
   package'resolution cPkg0
 
-package'resolution'withDependencies'forked :: Cabal.PackageFull -> (MS m) => m ()
+package'resolution'withDependencies'forked :: Cabal.Package Cabal.DependenciesResolved -> (MS m) => m ()
 package'resolution'withDependencies'forked p = do
-  let d = Cabal._path . Cabal._fpackage $ p
+  let d = Cabal._root p
   r <- view root
   ec <- liftIO $
-    withFile (r </> "package.stdout.log") AppendMode $ \hout -> do
-      withFile (r </> "package.stderr.log") AppendMode $ \herr -> do
-        (_, _, _, h) <- createProcess (proc "haskell-gtd-package" ["--dir", d]) {std_out = UseHandle hout, std_err = UseHandle herr}
-        waitForProcess h
+    withFile (r </> "package.stdout.log") AppendMode $ \hout -> withFile (r </> "package.stderr.log") AppendMode $ \herr -> do
+      (_, _, _, h) <- createProcess (proc "haskell-gtd-package" ["--dir", d]) {std_out = UseHandle hout, std_err = UseHandle herr}
+      waitForProcess h
   logDebugNSS "haskell-gtd-package" $ printf "%s -> %s" d (show ec)
 
 package ::
-  Cabal.PackageFull ->
+  Cabal.Package Cabal.DependenciesResolved ->
   (MS m) => m (Maybe Package)
 package cPkg0 = do
   m <- PackageCache.pGet cPkg0
@@ -225,7 +223,7 @@ definition (DefinitionRequest {workDir = wd, file = rf, word = w}) = do
   pkgM <- package cPkg
   pkg <- maybe (throwError "no package found?") return pkgM
 
-  m <- parseModule emptyHsModule {_path = rf, HsModule._package = Cabal.nameF cPkg}
+  m <- parseModule emptyHsModule {_path = rf, HsModule._package = Cabal._name cPkg}
   resolutionMap <- fmap resolution <$> Module.resolution (_modules pkg) m
 
   r <- case w `Map.lookup` resolutionMap of
@@ -264,5 +262,5 @@ resetCache ::
 resetCache (DropCacheRequest {dir = d}) = do
   cPkg <- CabalCache.findAt d
   PackageCache.pRemove cPkg
-  cExports %= fst . LRU.delete (Cabal.nameVersionF cPkg)
+  cExports %= fst . LRU.delete (Cabal.key cPkg)
   return "OK"

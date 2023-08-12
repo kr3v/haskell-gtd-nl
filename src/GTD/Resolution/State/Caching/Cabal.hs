@@ -23,29 +23,34 @@ import Text.Printf (printf)
 
 findAt ::
   FilePath ->
-  (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m, MonadError String m) => m Cabal.PackageFull
+  (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m, MonadError String m) => m [Cabal.Package Cabal.DependenciesResolved]
 findAt p = do
   e <- use $ ccFindAt . at p
   case e of
     Just d -> return d
     Nothing -> do
       d <- Cabal.findAt p
-      dF <- ultraZoom ccGet $ Cabal.full d
+      dF <- mapM full d
       ccFindAt %= Map.insert p dF
       return dF
 
 full ::
-  Cabal.Package ->
-  (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m) => m Cabal.PackageFull
-full pkg = do
-  let k = Cabal.nameVersionP pkg
+  Cabal.Package Cabal.DependenciesUnresolved ->
+  (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m) => m (Cabal.Package Cabal.DependenciesResolved)
+full pkg = fst <$> fullD pkg
+
+fullD ::
+  Cabal.Package Cabal.DependenciesUnresolved ->
+  (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m) => m (Cabal.Package Cabal.DependenciesResolved, [Cabal.Package Cabal.DependenciesUnresolved])
+fullD pkg = do
+  let k = Cabal.key pkg
   e <- use $ ccFull . at k
   case e of
     Just d -> return d
     Nothing -> do
-      d <- ultraZoom ccGet $ Cabal.full pkg
-      ccFull %= Map.insert k d
-      return d
+      r <- ultraZoom ccGet $ Cabal.full pkg
+      ccFull %= Map.insert k r
+      return r
 
 ---
 
