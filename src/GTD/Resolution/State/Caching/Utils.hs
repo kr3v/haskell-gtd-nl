@@ -22,5 +22,5 @@ binaryGet p = do
   case rJ of
     Left e -> logDebugNSS "binary get" (printf "%s failed: %s" p (show e)) >> return Nothing
     Right ew -> case ew of
-      Left (_, e2) -> logDebugNSS "binary get" (printf "%s: reading succeeded, yet decodeFileOrFail failed: %s" p (show e2)) >> return Nothing
+      Left (_, e) -> logDebugNSS "binary get" (printf "%s: reading succeeded, yet decodeFileOrFail failed: %s" p $ show e) >> return Nothing
       Right w -> logDebugNSS "binary get" (printf "%s succeded" p) >> return (Just w)

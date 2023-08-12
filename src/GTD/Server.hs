@@ -7,11 +7,11 @@
 
 module GTD.Server where
 
-import Control.Lens (over, view, (%=))
+import Control.Lens (over, view, (%=), use, (.=))
 import Control.Monad (forM, forM_, join, mapAndUnzipM, unless, void, (<=<))
 import Control.Monad.Except (MonadError (..), MonadIO (..))
 import Control.Monad.Logger (MonadLoggerIO)
-import Control.Monad.RWS (MonadReader (..), MonadState (..))
+import Control.Monad.RWS (MonadReader (..), MonadState (..), gets)
 import Control.Monad.State (evalStateT, modify)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT (..))
@@ -31,13 +31,13 @@ import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule)
 import qualified GTD.Haskell.Module as HsModule
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import GTD.Resolution.Module (figureOutExports1, module'Dependencies, moduleR)
-import GTD.Resolution.State (Context (..), Package (Package, _cabalPackage, _modules), cExports)
+import GTD.Resolution.State (Context (..), Package (Package, _cabalPackage, _modules), cExports, cResolution)
 import qualified GTD.Resolution.State as Package
 import qualified GTD.Resolution.State.Caching.Cabal as CabalCache
 import qualified GTD.Resolution.State.Caching.Package as PackageCache
 import GTD.Resolution.Utils (ParallelizedState (..), SchemeState (..), parallelized, scheme)
 import GTD.Utils (logDebugNSS, modifyMS, stats)
-import System.FilePath ((</>), normalise)
+import System.FilePath (normalise, (</>))
 import System.IO (IOMode (..), withFile)
 import System.Process (CreateProcess (..), StdStream (..), createProcess, proc, waitForProcess)
 import Text.Printf (printf)
@@ -232,8 +232,14 @@ definition (DefinitionRequest {workDir = wd, file = rf, word = w}) = do
         any (\d -> normalise (Cabal._root c </> d) `isPrefixOf` rf) $ Cabal._srcDirs . Cabal._modules $ c
   cPkg <- maybe (throwError "cannot find a cabal 'item' with source directory that owns given file") return cPkgM
 
-  m' <- PackageCache.resolution'get emptyHsModule {_path = rf, HsModule._pkgK = Cabal.key cPkg}
-  resolutionMap <- maybe noDefinitionFoundError return m'
+  (l, mL) <- gets $ LRU.lookup rf . _cResolution
+  cResolution .= l
+  resolutionMap <- case join mL of
+    Just x -> return x
+    Nothing -> do
+      m' <- PackageCache.resolution'get emptyHsModule {_path = rf, HsModule._pkgK = Cabal.key cPkg}
+      cResolution %= LRU.insert rf m'
+      maybe noDefinitionFoundError return m'
 
   r <- case w `Map.lookup` resolutionMap of
     Just d -> do
@@ -274,4 +280,5 @@ resetCache (DropCacheRequest {dir = d}) = do
     PackageCache.pRemove cPkg
     PackageCache.resolution'remove cPkg
     cExports %= fst . LRU.delete (Cabal.key cPkg)
+    cResolution %= LRU.newLRU . LRU.maxSize
   return "OK"
