@@ -8,7 +8,8 @@
 module Main where
 
 import Control.Lens (use, (^.))
-import Control.Monad.Except (runExceptT, void, when)
+import Control.Monad (forM_)
+import Control.Monad.Except (runExceptT, when)
 import Control.Monad.Logger (runFileLoggingT)
 import Control.Monad.Reader (ReaderT (runReaderT))
 import Control.Monad.State (execStateT)
@@ -17,7 +18,7 @@ import GTD.Configuration (GTDConfiguration (..), prepareConstants, root)
 import GTD.Resolution.State (ccGet, emptyContext)
 import qualified GTD.Resolution.State.Caching.Cabal as CabalCache
 import GTD.Server (package'resolution'withDependencies'concurrently)
-import GTD.Utils (stats)
+import GTD.Utils (logErrorNSS, stats)
 import Options.Applicative (Parser, ParserInfo, execParser, fullDesc, help, helper, info, long, strOption, (<**>))
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.FilePath ((</>))
@@ -47,14 +48,17 @@ main = do
   getCurrentDirectory >>= print
   print constants
 
-  let logP = _root constants </> "package.log"
-
   Args {dir = d} <- execParser opts
 
-  void $ runExceptT $ flip runReaderT constants $ runFileLoggingT logP $ flip execStateT emptyContext $ do
-    CabalCache.load
-    pkg <- CabalCache.findAt d
-    _ <- package'resolution'withDependencies'concurrently pkg
-    ccGC <- use $ ccGet . Cabal.changed
-    when ccGC CabalCache.store
+  runFileLoggingT (_root constants </> "package.log") $ do
+    e <- runExceptT $ flip runReaderT constants $ flip execStateT emptyContext $ do
+      CabalCache.load
+      pkg <- CabalCache.findAt d
+      forM_ pkg $ \p -> package'resolution'withDependencies'concurrently p
+      ccGC <- use $ ccGet . Cabal.changed
+      when ccGC CabalCache.store
+    case e of
+      Left err -> logErrorNSS d err
+      Right _ -> pure ()
+
   stats

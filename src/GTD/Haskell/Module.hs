@@ -26,6 +26,7 @@ import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import GTD.Utils (logDebugNSS)
 import Language.Haskell.Exts (Module (Module), SrcSpan (..), SrcSpanInfo (..))
 import Data.Binary (Binary)
+import qualified GTD.Cabal as Cabal
 
 newtype HsModuleParams = HsModuleParams
   { _isImplicitExportAll :: Bool
@@ -55,6 +56,7 @@ emptyData = HsModuleData {_exports0 = Map.empty, _imports = Map.empty, _locals =
 
 data HsModule = HsModule
   { _package :: PackageNameS,
+    _pkgK :: Cabal.PackageKey,
     _name :: ModuleNameS,
     _path :: FilePath,
     _info :: HsModuleData,
@@ -82,6 +84,7 @@ emptyHsModule =
   HsModule
     { _package = "",
       _name = "",
+      _pkgK = Cabal.emptyPackageKey,
       _path = "",
       _info = emptyData,
       _params = emptyParams

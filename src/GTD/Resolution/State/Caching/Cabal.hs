@@ -23,26 +23,25 @@ import Text.Printf (printf)
 
 findAt ::
   FilePath ->
-  (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m, MonadError String m) => m [Cabal.Package Cabal.DependenciesResolved]
+  (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m, MonadError String m) => m [Cabal.PackageWithUnresolvedDependencies]
 findAt p = do
   e <- use $ ccFindAt . at p
   case e of
     Just d -> return d
     Nothing -> do
       d <- Cabal.findAt p
-      dF <- mapM full d
-      ccFindAt %= Map.insert p dF
-      return dF
+      ccFindAt %= Map.insert p d
+      return d
+
+findAtF ::
+  FilePath ->
+  (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m, MonadError String m) => m [Cabal.PackageWithResolvedDependencies]
+findAtF p = findAt p >>= mapM full
 
 full ::
-  Cabal.Package Cabal.DependenciesUnresolved ->
-  (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m) => m (Cabal.Package Cabal.DependenciesResolved)
-full pkg = fst <$> fullD pkg
-
-fullD ::
-  Cabal.Package Cabal.DependenciesUnresolved ->
-  (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m) => m (Cabal.Package Cabal.DependenciesResolved, [Cabal.Package Cabal.DependenciesUnresolved])
-fullD pkg = do
+  Cabal.PackageWithUnresolvedDependencies ->
+  (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m) => m Cabal.PackageWithResolvedDependencies
+full pkg = do
   let k = Cabal.key pkg
   e <- use $ ccFull . at k
   case e of

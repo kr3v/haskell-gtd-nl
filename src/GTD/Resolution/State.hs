@@ -12,7 +12,7 @@ import GTD.Haskell.Module (HsModuleP)
 import qualified Data.Cache.LRU as LRU
 
 data Package = Package
-  { _cabalPackage :: Cabal.Package Cabal.DependenciesResolved,
+  { _cabalPackage :: Cabal.PackageWithResolvedDependencies,
     _modules :: Map.Map ModuleNameS HsModuleP,
     _exports :: Map.Map ModuleNameS HsModuleP
   }
@@ -23,8 +23,8 @@ $(makeLenses ''Package)
 ---
 
 data Context = Context
-  { _ccFindAt :: Map.Map FilePath [Cabal.Package Cabal.DependenciesResolved],
-    _ccFull :: Map.Map Cabal.PackageKey (Cabal.Package Cabal.DependenciesResolved, [Cabal.Package Cabal.DependenciesUnresolved]),
+  { _ccFindAt :: Map.Map FilePath [Cabal.PackageWithUnresolvedDependencies],
+    _ccFull :: Map.Map Cabal.PackageKey Cabal.PackageWithResolvedDependencies,
     _ccGet :: Cabal.GetCache,
     _cExports :: LRU.LRU Cabal.PackageKey (Map.Map ModuleNameS HsModuleP)
   }

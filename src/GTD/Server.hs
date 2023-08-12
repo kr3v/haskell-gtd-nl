@@ -8,7 +8,7 @@
 module GTD.Server where
 
 import Control.Lens (over, view, (%=))
-import Control.Monad (forM, join, mapAndUnzipM, (<=<))
+import Control.Monad (forM, forM_, join, mapAndUnzipM, unless, void, (<=<))
 import Control.Monad.Except (MonadError (..), MonadIO (..))
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (MonadReader (..), MonadState (..))
@@ -18,6 +18,7 @@ import Control.Monad.Trans.Reader (ReaderT (..))
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Bifunctor (Bifunctor (..))
 import qualified Data.Cache.LRU as LRU
+import Data.List (find, isPrefixOf)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes, fromMaybe)
 import qualified Data.Set as Set
@@ -26,18 +27,17 @@ import GTD.Cabal (ModuleNameS)
 import qualified GTD.Cabal as Cabal
 import GTD.Configuration (GTDConfiguration (..), root)
 import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Identifier, SourceSpan (..), asDeclsMap, emptySourceSpan)
-import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule, parseModule)
+import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule)
 import qualified GTD.Haskell.Module as HsModule
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import GTD.Resolution.Module (figureOutExports1, module'Dependencies, moduleR)
-import qualified GTD.Resolution.Module as Module
 import GTD.Resolution.State (Context (..), Package (Package, _cabalPackage, _modules), cExports)
 import qualified GTD.Resolution.State as Package
 import qualified GTD.Resolution.State.Caching.Cabal as CabalCache
 import qualified GTD.Resolution.State.Caching.Package as PackageCache
 import GTD.Resolution.Utils (ParallelizedState (..), SchemeState (..), parallelized, scheme)
 import GTD.Utils (logDebugNSS, modifyMS, stats)
-import System.FilePath ((</>))
+import System.FilePath ((</>), normalise)
 import System.IO (IOMode (..), withFile)
 import System.Process (CreateProcess (..), StdStream (..), createProcess, proc, waitForProcess)
 import Text.Printf (printf)
@@ -78,14 +78,14 @@ modules pkg@Package {_cabalPackage = c} = do
   return pkg {Package._exports = Map.restrictKeys mods (Cabal._exports . Cabal._modules $ c), Package._modules = mods}
 
 -- for a given Cabal package, it returns a list of modules in the order they should be processed
-modulesOrdered :: Cabal.Package Cabal.DependenciesResolved -> (MS m) => m [HsModule]
+modulesOrdered :: Cabal.PackageWithResolvedDependencies -> (MS m) => m [HsModule]
 modulesOrdered c = flip runReaderT c $ flip evalStateT (SchemeState Map.empty Map.empty) $ do
   scheme moduleR HsModule._name id (return . module'Dependencies) (Set.toList . Cabal._exports . Cabal._modules $ c)
 
 -- for a given Cabal package and list of its modules in the 'right' order, concurrently parses all the modules
 modules1 ::
   Package ->
-  Cabal.Package Cabal.DependenciesResolved ->
+  Cabal.PackageWithResolvedDependencies ->
   (MS m) => m (Map.Map ModuleNameS HsModuleP)
 modules1 pkg c = do
   modsO <- modulesOrdered c
@@ -96,7 +96,7 @@ modules1 pkg c = do
 
 package'resolution'withMutator'direct ::
   Context ->
-  Cabal.Package Cabal.DependenciesResolved ->
+  Cabal.PackageWithResolvedDependencies ->
   (MS m) => m (Maybe Package, Context -> Context)
 package'resolution'withMutator'direct c cPkg = do
   let logTag = "package'resolution'withMutator'direct " ++ show (Cabal.key cPkg)
@@ -124,7 +124,7 @@ package'resolution'withMutator'direct c cPkg = do
 
 package'resolution'withMutator ::
   Context ->
-  Cabal.Package Cabal.DependenciesResolved ->
+  Cabal.PackageWithResolvedDependencies ->
   (MS m) => m (Maybe Package, Context -> Context)
 package'resolution'withMutator c cPkg = do
   (pkgM, f) <- PackageCache.get c cPkg
@@ -135,7 +135,7 @@ package'resolution'withMutator c cPkg = do
       return (r, m)
 
 package'resolution ::
-  Cabal.Package Cabal.DependenciesResolved ->
+  Cabal.PackageWithResolvedDependencies ->
   (MS m) => m (Maybe Package)
 package'resolution cPkg = do
   c <- get
@@ -143,20 +143,20 @@ package'resolution cPkg = do
   modify m
   return a
 
-package'order'ignoringAlreadyCached :: Cabal.Package Cabal.DependenciesUnresolved -> (MS m) => m (Maybe (Cabal.Package Cabal.DependenciesResolved, [Cabal.Package Cabal.DependenciesUnresolved]))
+package'order'ignoringAlreadyCached :: Cabal.PackageWithUnresolvedDependencies -> (MS m) => m (Maybe Cabal.PackageWithResolvedDependencies)
 package'order'ignoringAlreadyCached cPkg = do b <- PackageCache.pExists cPkg; if b then return Nothing else package'order'default cPkg
 
-package'order'default :: Cabal.Package Cabal.DependenciesUnresolved -> (MS m) => m (Maybe(Cabal.Package Cabal.DependenciesResolved, [Cabal.Package Cabal.DependenciesUnresolved]))
-package'order'default = (Just <$>) . CabalCache.fullD
+package'order'default :: Cabal.PackageWithUnresolvedDependencies -> (MS m) => m (Maybe Cabal.PackageWithResolvedDependencies)
+package'order'default = (Just <$>) . CabalCache.full
 
 package'dependencies'ordered ::
-  Cabal.Package Cabal.DependenciesUnresolved ->
+  Cabal.PackageWithUnresolvedDependencies ->
   (MS m) =>
-  (Cabal.Package Cabal.DependenciesUnresolved -> m (Maybe (Cabal.Package Cabal.DependenciesResolved, [Cabal.Package Cabal.DependenciesUnresolved]))) ->
-  m [Cabal.Package Cabal.DependenciesResolved]
+  (Cabal.PackageWithUnresolvedDependencies -> m (Maybe Cabal.PackageWithResolvedDependencies)) ->
+  m [Cabal.PackageWithResolvedDependencies]
 package'dependencies'ordered cPkg0 f =
-   flip evalStateT (SchemeState Map.empty Map.empty) $ do
-    fmap fst <$> scheme f (Cabal.key . fst) Cabal.key (\(_, ds) -> return ds) [cPkg0]
+  flip evalStateT (SchemeState Map.empty Map.empty) $ do
+    scheme f Cabal.key Cabal.key (return . Cabal._dependencies) [cPkg0]
 
 package'concurrent'contextDebugInfo :: Context -> String
 package'concurrent'contextDebugInfo c =
@@ -172,7 +172,7 @@ package'concurrent'contextDebugInfo c =
     (show $ fst <$> LRU.toList (_cExports c))
 
 package'resolution'withDependencies'concurrently ::
-  Cabal.Package Cabal.DependenciesResolved ->
+  Cabal.PackageWithUnresolvedDependencies ->
   (MS m) => m (Maybe Package)
 package'resolution'withDependencies'concurrently cPkg0 = do
   pkgsO <- package'dependencies'ordered cPkg0 package'order'ignoringAlreadyCached
@@ -184,9 +184,9 @@ package'resolution'withDependencies'concurrently cPkg0 = do
       package'concurrent'contextDebugInfo
       Cabal.key
       (return . fmap Cabal.key . Cabal._dependencies)
-  package'resolution cPkg0
+  CabalCache.full cPkg0 >>= package'resolution
 
-package'resolution'withDependencies'forked :: Cabal.Package Cabal.DependenciesResolved -> (MS m) => m ()
+package'resolution'withDependencies'forked :: Cabal.PackageWithResolvedDependencies -> (MS m) => m ()
 package'resolution'withDependencies'forked p = do
   let d = Cabal._root p
   r <- view root
@@ -197,7 +197,7 @@ package'resolution'withDependencies'forked p = do
   logDebugNSS "haskell-gtd-package" $ printf "%s -> %s" d (show ec)
 
 package ::
-  Cabal.Package Cabal.DependenciesResolved ->
+  Cabal.PackageWithResolvedDependencies ->
   (MS m) => m (Maybe Package)
 package cPkg0 = do
   m <- PackageCache.pGet cPkg0
@@ -219,22 +219,31 @@ definition ::
   DefinitionRequest ->
   ((MS m), MonadError String m) => m DefinitionResponse
 definition (DefinitionRequest {workDir = wd, file = rf, word = w}) = do
-  cPkg <- CabalCache.findAt wd
-  pkgM <- package cPkg
-  pkg <- maybe (throwError "no package found?") return pkgM
+  cPkgs <- CabalCache.findAtF wd
+  forM_ cPkgs $ \cPkg -> do
+    e <- PackageCache.pExists cPkg
+    unless e $ void $ package cPkg
+  logDebugNSS "definition" $
+    printf
+      "rf = %s\nsource dirs=%s\n"
+      rf
+      (show $ (\m -> (,) (Cabal.key m) (Cabal._srcDirs . Cabal._modules $ m)) <$> cPkgs)
+  let cPkgM = flip find cPkgs $ \c -> do
+        any (\d -> normalise (Cabal._root c </> d) `isPrefixOf` rf) $ Cabal._srcDirs . Cabal._modules $ c
+  cPkg <- maybe (throwError "cannot find a cabal 'item' with source directory that owns given file") return cPkgM
 
-  m <- parseModule emptyHsModule {_path = rf, HsModule._package = Cabal._name cPkg}
-  resolutionMap <- fmap resolution <$> Module.resolution (_modules pkg) m
+  m' <- PackageCache.resolution'get emptyHsModule {_path = rf, HsModule._pkgK = Cabal.key cPkg}
+  resolutionMap <- maybe noDefinitionFoundError return m'
 
   r <- case w `Map.lookup` resolutionMap of
     Just d -> do
-      let d0 = head $ Map.elems d
+      let d0 = head $ Map.elems $ resolution d
       return $ DefinitionResponse {srcSpan = Just $ emptySourceSpan {sourceSpanFileName = sourceSpanFileName . _declSrcOrig $ d0, sourceSpanStartColumn = 1, sourceSpanStartLine = 1}, err = Nothing}
     Nothing -> do
       let (q, w') = fromMaybe ("", w) $ GHC.identifier w
       let look q1 w1 = join $ do
-            m' <- Map.lookup q1 resolutionMap
-            d <- Map.lookup w1 m'
+            mQ <- Map.lookup q1 resolutionMap
+            d <- Map.lookup w1 $ resolution mQ
             return $ Just DefinitionResponse {srcSpan = Just $ _declSrcOrig d, err = Nothing}
       let cases = if w == w' then [("", w)] else [(q, w'), ("", w)]
       casesM <- forM cases $ \(q1, w1) -> do
@@ -260,7 +269,9 @@ resetCache ::
   DropCacheRequest ->
   (MS m, MonadError String m) => m String
 resetCache (DropCacheRequest {dir = d}) = do
-  cPkg <- CabalCache.findAt d
-  PackageCache.pRemove cPkg
-  cExports %= fst . LRU.delete (Cabal.key cPkg)
+  cPkgs <- CabalCache.findAtF d
+  forM_ cPkgs $ \cPkg -> do
+    PackageCache.pRemove cPkg
+    PackageCache.resolution'remove cPkg
+    cExports %= fst . LRU.delete (Cabal.key cPkg)
   return "OK"

@@ -109,9 +109,9 @@ main = do
         cPkgP <- case cPkgM of
           Nothing -> throwError "Cabal.get: no package found"
           Just cPkgP -> return cPkgP
-        cPkg <- CabalCache.findAt cPkgP
 
-        let h nmae depsM f = do
+        let h nmae depsM f g = do
+              cPkg <- head <$> g cPkgP
               pkgs <- reverse <$> f cPkg
               let pkgsN = Set.fromList $ nmae <$> pkgs
 
@@ -140,8 +140,8 @@ main = do
               return ()
 
         case t of
-          Module -> h HsModule._name module'Dependencies modulesOrdered
-          Package -> h (show . Cabal.key) (fmap show . Cabal._dependencies) (flip package'dependencies'ordered package'order'default)
+          Module -> h HsModule._name module'Dependencies modulesOrdered CabalCache.findAtF
+          Package -> h (show . Cabal.key) (fmap show . Cabal._dependencies) (flip package'dependencies'ordered package'order'default) CabalCache.findAt
 
       case x of
         Left e -> print e

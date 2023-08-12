@@ -1,6 +1,7 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
@@ -8,6 +9,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# HLINT ignore "Avoid lambda" #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 module GTD.Cabal where
@@ -17,20 +19,21 @@ import Control.Lens (At (..), makeLenses, use, view, (%=), (.=))
 import Control.Monad (forM, forM_)
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.Logger (MonadLogger, MonadLoggerIO (..))
-import Control.Monad.RWS (MonadReader (..), MonadState (put), MonadWriter (..), asks)
-import Control.Monad.State (StateT (..))
+import Control.Monad.RWS (MonadReader (..), MonadWriter (..), asks, MonadState)
+import Control.Monad.State (StateT (..), MonadState (put))
 import qualified Control.Monad.State.Lazy as State
 import Control.Monad.Trans (MonadIO (liftIO))
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Control.Monad.Trans.Writer (execWriter, execWriterT)
 import Data.Aeson (FromJSON, ToJSON)
+import Data.Binary (encodeFile)
 import qualified Data.ByteString.UTF8 as BS
 import Data.List (find)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes)
 import qualified Data.Set as Set
-import Distribution.Compat.Prelude (Generic)
+import Distribution.Compat.Prelude (Binary, Generic, fromMaybe)
 import Distribution.Package (PackageIdentifier (..), packageName, unPackageName)
 import Distribution.PackageDescription (BuildInfo (..), LibraryName (..), unUnqualComponentName)
 import qualified Distribution.PackageDescription as Cabal (BuildInfo (..), Dependency (..), Executable (..), Library (..), PackageDescription (..), explicitLibModules, unPackageName)
@@ -38,7 +41,8 @@ import Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import Distribution.PackageDescription.Parsec (parseGenericPackageDescription, runParseResult)
 import Distribution.Pretty (prettyShow)
 import Distribution.Utils.Path (getSymbolicPath)
-import GTD.Configuration (GTDConfiguration (..), repos)
+import GTD.Configuration (GTDConfiguration (_repos, _cache), repos)
+import GTD.Resolution.State.Caching.Utils (binaryGet, pathAsFile)
 import GTD.Utils (deduplicate, logDebugNSS, logDebugNSS')
 import System.Directory (listDirectory)
 import System.FilePath (takeDirectory, takeExtension, (</>))
@@ -105,7 +109,26 @@ data DesignationType = Library | Executable | TestSuite | Benchmark
 data Designation = Designation {_desName :: Maybe String, _desType :: DesignationType}
   deriving (Eq, Ord, Show, Generic)
 
-data Dependency a = Dependency
+instance FromJSON Designation
+
+instance FromJSON DesignationType
+
+instance ToJSON Designation
+
+instance ToJSON DesignationType
+
+instance Binary DesignationType
+
+instance Binary Designation
+
+dKey :: Designation -> String
+dKey d = case _desType d of
+  Library -> "lib:" ++ fromMaybe "" (_desName d)
+  Executable -> "exe:" ++ fromMaybe "" (_desName d)
+  TestSuite -> "test:" ++ fromMaybe "" (_desName d)
+  Benchmark -> "bench:" ++ fromMaybe "" (_desName d)
+
+data Dependency = Dependency
   { _dName :: PackageNameS,
     _dVersion :: String,
     _dSubname :: Maybe String
@@ -114,7 +137,9 @@ data Dependency a = Dependency
 
 $(makeLenses ''Dependency)
 
-dAsT :: Dependency a -> (PackageNameS, String, Maybe String)
+instance Binary Dependency
+
+dAsT :: Dependency -> (PackageNameS, String, Maybe String)
 dAsT d = (_dName d, _dVersion d, _dSubname d)
 
 data PackageModules = PackageModules
@@ -130,9 +155,11 @@ $(makeLenses ''PackageModules)
 emptyPackageModules :: PackageModules
 emptyPackageModules = PackageModules [] Set.empty Set.empty Set.empty
 
-type DependenciesResolved = ()
+instance Binary PackageModules
 
-type DependenciesUnresolved = ()
+type PackageWithResolvedDependencies = Package (Package Dependency)
+
+type PackageWithUnresolvedDependencies = Package Dependency
 
 data Package a = Package
   { _designation :: Designation,
@@ -140,11 +167,13 @@ data Package a = Package
     _version :: String,
     _root :: FilePath,
     _modules :: PackageModules,
-    _dependencies :: [Dependency a]
+    _dependencies :: [a]
   }
   deriving (Show, Generic)
 
-$(makeLenses ''Package)
+instance Binary (Package (Package Dependency))
+
+instance Binary (Package Dependency)
 
 data PackageKey = PackageKey
   { _pkName :: PackageNameS,
@@ -153,33 +182,77 @@ data PackageKey = PackageKey
   }
   deriving (Show, Eq, Ord, Generic)
 
+instance Binary PackageKey
+
+instance FromJSON PackageKey
+
+instance ToJSON PackageKey
+
+emptyPackageKey :: PackageKey
+emptyPackageKey = PackageKey "" "" (Designation Nothing Library)
+
 key :: Package a -> PackageKey
 key p = PackageKey {_pkName = _name p, _pkVersion = _version p, _pkDesignation = _designation p}
 
+pKey :: PackageKey -> String
+pKey k = _pkName k ++ "-" ++ _pkVersion k ++ "-" ++ dKey (_pkDesignation k)
+
 ---
 
-_read :: FilePath -> (MonadLoggerIO m) => m [Package DependenciesUnresolved]
-_read p = do
+__read'cache'get :: FilePath -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m (Maybe [PackageWithUnresolvedDependencies])
+__read'cache'get = binaryGet
+
+__read'cache'put :: FilePath -> [PackageWithUnresolvedDependencies] -> (MonadIO m) => m ()
+__read'cache'put p r = liftIO $ encodeFile p r
+
+__read :: FilePath -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m [PackageWithUnresolvedDependencies]
+__read p = do
+  __read'cache'get p >>= \case
+    Just r -> return r
+    Nothing -> do
+      c <- asks _cache
+      let pc = c </> pathAsFile p
+      r <- __read'direct p
+      __read'cache'put pc r
+      return r
+
+__read'direct :: FilePath -> (MonadLoggerIO m) => m [PackageWithUnresolvedDependencies]
+__read'direct p = do
   logDebugNSS "cabal read" p
   handle <- liftIO $ openFile p ReadMode
   (warnings, epkg) <- liftIO $ runParseResult . parseGenericPackageDescription . BS.fromString <$> hGetContents handle
   forM_ warnings (\w -> logDebugNSS "cabal read" $ "got warnings for `" ++ p ++ "`: " ++ show w)
   pd <- liftIO $ either (fail . show) (return . flattenPackageDescription) epkg
 
-  let r = takeDirectory p
-      n = unPackageName $ packageName pd
-      v = prettyShow $ pkgVersion $ Cabal.package pd
   execWriterT $ do
     -- TODO: benchmarks, test suites
-    let lh lib = tell $ pure $ Package Designation {_desType = Library, _desName = libraryNameToDesignationName $ Cabal.libName lib} r n v (__exportsL lib) (__depsU $ Cabal.libBuildInfo lib)
+    let p0 =
+          Package
+            { _name = unPackageName $ packageName pd,
+              _version = prettyShow $ pkgVersion $ Cabal.package pd,
+              _root = takeDirectory p,
+              _designation = Designation {_desType = Library, _desName = Nothing},
+              _modules = emptyPackageModules,
+              _dependencies = []
+            }
+    let lh lib = tell . pure $ do
+          p0
+            { _designation = Designation {_desType = Library, _desName = libraryNameToDesignationName $ Cabal.libName lib},
+              _modules = __exportsL lib,
+              _dependencies = __depsU $ Cabal.libBuildInfo lib
+            }
     forM_ (Cabal.library pd) lh
     forM_ (Cabal.subLibraries pd) lh
-    forM_ (Cabal.executables pd) $ \exe ->
-      tell $ pure $ Package Designation {_desType = Executable, _desName = Just $ unUnqualComponentName $ Cabal.exeName exe} r n v (__exportsE exe) (__depsU $ Cabal.buildInfo exe)
+    forM_ (Cabal.executables pd) $ \exe -> tell . pure $ do
+      p0
+        { _designation = Designation {_desType = Executable, _desName = Just $ unUnqualComponentName $ Cabal.exeName exe},
+          _modules = __exportsE exe,
+          _dependencies = __depsU $ Cabal.buildInfo exe
+        }
 
 findAt ::
   FilePath ->
-  (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadError String m) => m [Package DependenciesUnresolved]
+  (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadError String m) => m [PackageWithUnresolvedDependencies]
 findAt wd = do
   cabalFiles <- liftIO $ filter (\x -> takeExtension x == ".cabal") <$> listDirectory wd
   cabalFile <- case length cabalFiles of
@@ -187,7 +260,7 @@ findAt wd = do
     1 -> return $ wd </> head cabalFiles
     _ -> throwError "Multiple cabal files found"
   logDebugNSS "definition" $ "Found cabal file: " ++ cabalFile
-  _read cabalFile
+  __read cabalFile
 
 ---
 
@@ -213,7 +286,7 @@ libraryNameToDesignationName :: LibraryName -> Maybe String
 libraryNameToDesignationName LMainLibName = Nothing
 libraryNameToDesignationName (LSubLibName n) = Just $ unUnqualComponentName n
 
-__depsU :: BuildInfo -> [Dependency DependenciesUnresolved]
+__depsU :: BuildInfo -> [Dependency]
 __depsU i = execWriter $
   forM_ (targetBuildDepends i) $ \(Cabal.Dependency p vP ns) ->
     forM_ ns \n ->
@@ -221,7 +294,7 @@ __depsU i = execWriter $
 
 ---
 
-full :: Package DependenciesUnresolved -> (MonadBaseControl IO m, MonadLoggerIO m, MonadState GetCache m, MonadReader GTDConfiguration m) => m (Package DependenciesResolved, [Package DependenciesUnresolved])
+full :: PackageWithUnresolvedDependencies -> (MonadBaseControl IO m, MonadLoggerIO m, MonadState GetCache m, MonadReader GTDConfiguration m) => m PackageWithResolvedDependencies
 full pkg = do
   logDebugNSS "cabal fetch" $ _name pkg
   let deps = _dependencies pkg
@@ -237,8 +310,8 @@ full pkg = do
      in fetchDependencies namesWithPredicates
   reposR <- asks _repos
   depsF <- fmap (Map.fromList . concat) $ forM pkgs $ \(n, v, p) -> do
-    r <- _read $ reposR </> p </> (n ++ ".cabal")
+    r <- __read $ reposR </> p </> (n ++ ".cabal")
     let libs = filter ((== Library) . _desType . _designation) r
     return $ fmap (\l -> (,) (n, v, _desName . _designation $ l) l) libs
   let depsR = Map.restrictKeys depsF (Set.fromList $ dAsT <$> deps)
-  return $ (,) pkg {_dependencies = (\((n, _, d), p) -> Dependency {_dName = n, _dSubname = d, _dVersion = _version p}) <$> Map.toList depsR} (Map.elems depsR)
+  return $ pkg {_dependencies = Map.elems depsR}

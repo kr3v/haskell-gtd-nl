@@ -195,6 +195,7 @@ library haskell-gtd-lib
         GTD.Resolution.State
         GTD.Resolution.State.Caching.Cabal
         GTD.Resolution.State.Caching.Package
+        GTD.Resolution.State.Caching.Utils
         GTD.Resolution.Utils
         GTD.Server
         GTD.Utils
