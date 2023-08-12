@@ -13,14 +13,15 @@ import Control.Monad.Logger (runFileLoggingT)
 import Control.Monad.Reader (ReaderT (runReaderT))
 import Control.Monad.State (execStateT)
 import qualified GTD.Cabal as Cabal
-import GTD.Configuration (prepareConstants, GTDConfiguration(..), root)
+import GTD.Configuration (GTDConfiguration (..), prepareConstants, root)
 import GTD.Resolution.State (ccGet, emptyContext)
 import qualified GTD.Resolution.State.Caching.Cabal as CabalCache
+import GTD.Server (package'resolution'withDependencies'concurrently)
 import GTD.Utils (stats)
 import Options.Applicative (Parser, ParserInfo, execParser, fullDesc, help, helper, info, long, strOption, (<**>))
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
-import GTD.Server (package'resolution'withDependencies'concurrently)
 import System.FilePath ((</>))
+import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
 
 newtype Args = Args
   { dir :: String
@@ -38,6 +39,9 @@ opts =
 
 main :: IO ()
 main = do
+  hSetBuffering stdout LineBuffering
+  hSetBuffering stderr LineBuffering
+
   constants <- prepareConstants
   setCurrentDirectory (constants ^. root)
   getCurrentDirectory >>= print

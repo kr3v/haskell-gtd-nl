@@ -10,6 +10,7 @@ import qualified Data.Map.Strict as Map
 import GHC.Generics (Generic)
 import GTD.Cabal (ModuleNameS)
 import Language.Haskell.Exts (ModuleName (..), Name (..), SrcSpan (..), SrcSpanInfo (srcInfoSpan))
+import Data.Binary (Binary)
 
 data SourceSpan = SourceSpan
   { sourceSpanFileName :: FilePath,
@@ -37,6 +38,8 @@ instance FromJSON SourceSpan
 
 instance ToJSON SourceSpan
 
+instance Binary SourceSpan
+
 ---
 
 data Declaration = Declaration
@@ -51,6 +54,8 @@ $(makeLenses ''Declaration)
 instance FromJSON Declaration
 
 instance ToJSON Declaration
+
+instance Binary Declaration
 
 hasNonEmptyOrig :: Declaration -> Bool
 hasNonEmptyOrig = (/= emptySourceSpan) . _declSrcOrig
@@ -97,6 +102,8 @@ instance FromJSON ClassOrData
 
 instance ToJSON ClassOrData
 
+instance Binary ClassOrData
+
 ---
 
 data Declarations = Declarations
@@ -110,6 +117,8 @@ $(makeLenses ''Declarations)
 instance FromJSON Declarations
 
 instance ToJSON Declarations
+
+instance Binary Declarations
 
 instance Semigroup Declarations where
   (<>) :: Declarations -> Declarations -> Declarations

@@ -39,13 +39,14 @@ import qualified GTD.Haskell.Module as HsModule
 import GTD.Haskell.Parser.GhcLibParser (fakeSettings, parsePragmasIntoDynFlags, showO)
 import GTD.Resolution.Module (module'Dependencies)
 import GTD.Resolution.State (ccGet, emptyContext)
+import qualified GTD.Resolution.State.Caching.Cabal as CabalCache
+import GTD.Server (modulesOrdered, package'dependencies'ordered, package'order'default)
 import GTD.Utils (ultraZoom)
 import Options.Applicative (Parser, ParserInfo, auto, command, execParser, fullDesc, help, helper, info, long, metavar, option, progDesc, strOption, subparser, (<**>))
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.FilePath ((</>))
+import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
 import Text.Printf (printf)
-import qualified GTD.Resolution.State.Caching.Cabal as CabalCache
-import GTD.Server (modulesOrdered, package'dependencies'ordered, package'order'default)
 
 showT2 :: (String, String) -> String
 showT2 (a, b) = "(" ++ a ++ "," ++ b ++ ")"
@@ -86,6 +87,9 @@ flip3 f x y z = f z y x
 
 main :: IO ()
 main = do
+  hSetBuffering stdout LineBuffering
+  hSetBuffering stderr LineBuffering
+
   a <- execParser opts
   print a
 

@@ -1,5 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -11,10 +12,9 @@ import Control.Lens (over, view)
 import Control.Monad.Except (MonadIO (..))
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (MonadReader (..), MonadState (..), gets, modify)
-import Data.Aeson (FromJSON, decode, encode)
-import qualified Data.ByteString.Lazy as BS
+import Data.Binary (Binary, decodeFileOrFail, encodeFile)
+import Data.Binary.Get (ByteOffset)
 import qualified Data.Cache.LRU as LRU
-import Data.Either (fromRight)
 import qualified Data.Map as Map
 import Data.Maybe (isJust)
 import qualified GTD.Cabal as Cabal
@@ -26,28 +26,29 @@ import System.Directory (doesFileExist)
 import System.FilePath.Posix ((</>))
 import Text.Printf (printf)
 
-__pGet :: Cabal.PackageFull -> FilePath -> (MonadLoggerIO m, MonadReader GTDConfiguration m, FromJSON a) => m (Maybe a)
+__pGet :: Cabal.PackageFull -> FilePath -> (MonadLoggerIO m, MonadReader GTDConfiguration m, Binary a) => m (Maybe a)
 __pGet cPkg f = do
   let p = (Cabal._path . Cabal._fpackage $ cPkg) </> f
-  rJ :: Either IOError (Maybe a) <- liftIO (try $ decode <$> BS.readFile p)
+  rJ :: Either IOError (Either (ByteOffset, String) a) <- liftIO $ try $ decodeFileOrFail p
   case rJ of
-    Left e -> do logDebugNSS "persistence get" $ printf "%s / %s failed: %s" (show $ Cabal.nameVersionF cPkg) p (show e)
-    Right _ -> do logDebugNSS "persistence get" $ printf "%s / %s -> True" (show $ Cabal.nameVersionF cPkg) p
-  return $ fromRight Nothing rJ
+    Left e -> logDebugNSS "persistence get" (printf "%s / %s failed: %s" (show $ Cabal.nameVersionF cPkg) p (show e)) >> return Nothing
+    Right ew -> case ew of
+      Left (_, e2) -> logDebugNSS "persistence get" (printf "%s / %s: reading succeeded, yet decodeFileOrFail failed: %s" (show $ Cabal.nameVersionF cPkg) p (show e2)) >> return Nothing
+      Right w -> logDebugNSS "persistence get" (printf "%s / %s succeded" (show $ Cabal.nameVersionF cPkg) p) >> return (Just w)
 
 pExists :: Cabal.Package -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m Bool
 pExists cPkg = do
-  let p = Cabal._path cPkg </> "exports.json"
+  let p = Cabal._path cPkg </> "exports.binary"
   r <- liftIO $ doesFileExist p
   logDebugNSS "package cached exists" $ printf "%s, %s -> %s" (show $ Cabal.nameVersionP cPkg) p (show r)
   return r
 
 pGet :: Cabal.PackageFull -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m (Maybe Package)
 pGet cPkg = do
-  modulesJ <- __pGet cPkg "modules.json"
-  exportsJ <- __pGet cPkg "exports.json"
+  modulesJ <- __pGet cPkg "modules.binary"
+  exportsJ <- __pGet cPkg "exports.binary"
   let p = Package cPkg <$> modulesJ <*> exportsJ
-  logDebugNSS "package cached get" $ printf "%s -> %s" (show $ Cabal.nameVersionF cPkg) (show $ isJust p)
+  logDebugNSS "package cached get" $ printf "%s -> %s (%s, %s)" (show $ Cabal.nameVersionF cPkg) (show $ isJust p) (show $ isJust modulesJ) (show $ isJust exportsJ)
   return p
 
 pStore ::
@@ -56,10 +57,10 @@ pStore ::
   (MonadLoggerIO m, MonadReader GTDConfiguration m) => m ()
 pStore cPkg pkg = do
   let root = Cabal._path . Cabal._fpackage $ cPkg
-      modulesP = root </> "modules.json"
-      exportsP = root </> "exports.json"
-  liftIO $ BS.writeFile modulesP $ encode $ Package._modules pkg
-  liftIO $ BS.writeFile exportsP $ encode $ Package._exports pkg
+      modulesP = root </> "modules.binary"
+      exportsP = root </> "exports.binary"
+  liftIO $ encodeFile modulesP $ Package._modules pkg
+  liftIO $ encodeFile exportsP $ Package._exports pkg
   logDebugNSS "package cached put" $ printf "%s -> (%d, %d)" (show $ Cabal.nameVersionF cPkg) (length $ Package._modules pkg) (length $ Package._exports pkg)
 
 pRemove ::
@@ -67,8 +68,8 @@ pRemove ::
   (MonadLoggerIO m, MonadReader GTDConfiguration m) => m ()
 pRemove cPkg = do
   let root = Cabal._path . Cabal._fpackage $ cPkg
-      modulesP = root </> "modules.json"
-      exportsP = root </> "exports.json"
+      modulesP = root </> "modules.binary"
+      exportsP = root </> "exports.binary"
   liftIO $ removeIfExists modulesP
   liftIO $ removeIfExists exportsP
   logDebugNSS "package cached remove" $ printf "%s" (show $ Cabal.nameVersionF cPkg)
@@ -87,7 +88,7 @@ get c cPkg = do
   case r of
     Just es -> return (Just Package {_cabalPackage = cPkg, _modules = Map.empty, Package._exports = es}, defM)
     Nothing -> do
-      eM <- __pGet cPkg "exports.json"
+      eM <- __pGet cPkg "exports.binary"
       return $ case eM of
         Nothing -> (Nothing, defM)
         Just e -> (Just Package {_cabalPackage = cPkg, _modules = Map.empty, Package._exports = e}, over cExports (LRU.insert k e))

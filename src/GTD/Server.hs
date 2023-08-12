@@ -36,9 +36,9 @@ import qualified GTD.Resolution.State as Package
 import qualified GTD.Resolution.State.Caching.Cabal as CabalCache
 import qualified GTD.Resolution.State.Caching.Package as PackageCache
 import GTD.Resolution.Utils (ParallelizedState (..), SchemeState (..), parallelized, scheme)
-import GTD.Utils (logDebugNSS, modifyM, modifyMS)
+import GTD.Utils (logDebugNSS, modifyMS, stats)
 import System.FilePath ((</>))
-import System.IO (IOMode (..), stderr, stdout, withFile)
+import System.IO (IOMode (..), withFile)
 import System.Process (CreateProcess (..), StdStream (..), createProcess, proc, waitForProcess)
 import Text.Printf (printf)
 
@@ -63,8 +63,8 @@ instance ToJSON DefinitionResponse
 
 instance FromJSON DefinitionResponse
 
-noDefintionFoundError :: MonadError String m => m a
-noDefintionFoundError = throwError "No definition found"
+noDefinitionFoundError :: MonadError String m => m a
+noDefinitionFoundError = throwError "No definition found"
 
 ---
 
@@ -228,7 +228,7 @@ definition (DefinitionRequest {workDir = wd, file = rf, word = w}) = do
   m <- parseModule emptyHsModule {_path = rf, HsModule._package = Cabal.nameF cPkg}
   resolutionMap <- fmap resolution <$> Module.resolution (_modules pkg) m
 
-  case w `Map.lookup` resolutionMap of
+  r <- case w `Map.lookup` resolutionMap of
     Just d -> do
       let d0 = head $ Map.elems d
       return $ DefinitionResponse {srcSpan = Just $ emptySourceSpan {sourceSpanFileName = sourceSpanFileName . _declSrcOrig $ d0, sourceSpanStartColumn = 1, sourceSpanStartLine = 1}, err = Nothing}
@@ -245,7 +245,9 @@ definition (DefinitionRequest {workDir = wd, file = rf, word = w}) = do
         return r
       case catMaybes casesM of
         (x : _) -> return x
-        _ -> noDefintionFoundError
+        _ -> noDefinitionFoundError
+  liftIO stats
+  return r
 
 ---
 

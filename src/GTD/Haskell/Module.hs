@@ -25,6 +25,7 @@ import qualified GTD.Haskell.Declaration as Declarations
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import GTD.Utils (logDebugNSS)
 import Language.Haskell.Exts (Module (Module), SrcSpan (..), SrcSpanInfo (..))
+import Data.Binary (Binary)
 
 newtype HsModuleParams = HsModuleParams
   { _isImplicitExportAll :: Bool
@@ -120,6 +121,8 @@ $(makeLenses ''HsModuleP)
 instance FromJSON HsModuleP
 
 instance ToJSON HsModuleP
+
+instance Binary HsModuleP
 
 ---
 
