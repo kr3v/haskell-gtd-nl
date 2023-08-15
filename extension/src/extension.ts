@@ -51,35 +51,52 @@ async function sendHeartbeat() {
 			outputChannel.appendLine(util.format(error));
 			return null;
 		});
-	outputChannel.appendLine(util.format("heartbeat: %s", res));
+	outputChannel.appendLine(util.format("heartbeat: %s", res?.status));
 	return res != null;
 }
 
 async function startServerIfRequired() {
 	try { if (await sendHeartbeat()) return; }
 	catch (error) { outputChannel.appendLine(util.format(error)); }
+
 	outputChannel.appendLine(util.format("starting server"));
 
 	if (stdout != null) { fs.closeSync(stdout); stdout = null; }
 	if (stderr != null) { fs.closeSync(stderr); stderr = null; }
-	if (server != null) { server.kill(); server = null; }
+	if (server != null) { server.kill(); server = null; stopServer(); }
 
 	let conf = vscode.workspace.getConfiguration('hs-gtd');
-	let args = conf.get<string[]>("server.args") ?? [];
-	let rts = conf.get<string[]>("server.rts") ?? [];
+	let serverArgs = conf.get<string[]>("server.args") ?? [];
+	let packageArgs = conf.get<string[]>("package.args") ?? [];
+	let args = serverArgs.concat(packageArgs.length > 0 ? ["--package", ...packageArgs] : []);
+
+	const ac = new AbortController();
+	const { signal } = ac;
+	setTimeout(() => ac.abort(), 5000);
+
+	const watcher = fs.promises.watch(serverPortF, { signal });
 
 	stdout = fs.openSync(path.join(serverRoot, 'stdout.log'), 'a');
 	stderr = fs.openSync(path.join(serverRoot, 'stderr.log'), 'a');
 	server = spawn(
 		serverExe,
-		[...args, "+RTS", ...rts, "-RTS"],
+		args,
 		{
 			detached: true,
 			stdio: ['ignore', stdout, stderr],
 		}
 	);
 	server.unref();
-	await new Promise(r => setTimeout(r, 3000));
+
+
+	try {
+		for await (const {} of watcher) {
+			break;
+		}
+	} catch (err) {
+		outputChannel.appendLine(util.format("serverPortF watcher: %s", err));
+	}
+
 	await sendHeartbeat();
 }
 
@@ -263,8 +280,11 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 		position: vscode.Position,
 		token: vscode.CancellationToken
 	): Promise<vscode.Definition> {
-		// let range = document.getWordRangeAtPosition(position);
-		// let word = document.getText(range);
+		let currentDocument = vscode.window.activeTextEditor?.document;
+		if (!currentDocument) return Promise.resolve([]);
+		let workspaceFolder = vscode.workspace.getWorkspaceFolder(currentDocument.uri);
+		if (!workspaceFolder) return Promise.resolve([]);
+
 		let [word,] = identifier(document.lineAt(position.line).text, position.character);
 		if (word == "") {
 			[word,] = identifier(document.lineAt(position.line).text, position.character - 1);
@@ -280,7 +300,6 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 			return Promise.resolve([]);
 		}
 
-		let workspaceFolder = vscode.workspace.workspaceFolders[0];
 		let workspacePath = workspaceFolder.uri.fsPath;
 		let docPath = document.uri.fsPath;
 
@@ -298,8 +317,7 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 		let res = await axios.
 			post(`http://localhost:${port}/definition`, body).
 			catch(function (error) {
-				outputChannel.appendLine(util.format("for body {body}"));
-				outputChannel.appendLine(util.format(error));
+				outputChannel.appendLine(util.format("%s -> %s", body, error));
 				return { "data": {} };
 			});
 		let data = res.data;
@@ -383,7 +401,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		if (!e.affectsConfiguration('hs-gtd')) {
 			return;
 		}
-		let conf = vscode.workspace.getConfiguration('hs-gtd');
+		let conf = vscode.workspace.getConfiguration('hs-gtd', vscode.window.activeTextEditor?.document?.uri);
 		serverRoot = conf.get<string>('server.root') ?? path.join(userHomeDir, "/.local/share/haskell-gtd-extension-server-root");
 		serverExe = conf.get<string>('server.path') ?? "hs-gtd-server";
 		if (!path.isAbsolute(serverExe)) {
