@@ -12,7 +12,8 @@ module Main where
 import Control.Concurrent (MVar, forkIO, modifyMVar_, newMVar, putMVar, readMVar, takeMVar, threadDelay)
 import Control.Lens (makeLenses, (<+=), (^.))
 import Control.Monad.Except (runExceptT)
-import Control.Monad.Logger (runFileLoggingT, runStdoutLoggingT)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Logger (runFileLoggingT, runStdoutLoggingT, LogLevel (..), filterLogger)
 import Control.Monad.Reader (ReaderT (runReaderT))
 import Control.Monad.State (StateT (runStateT), execStateT)
 import Control.Monad.State.Lazy (evalStateT)
@@ -20,11 +21,12 @@ import Data.Proxy (Proxy (..))
 import GHC.TypeLits (KnownSymbol)
 import GTD.Configuration (GTDConfiguration (..), prepareConstants, root)
 import GTD.Resolution.State (Context, emptyContext)
+import qualified GTD.Resolution.State.Caching.Cabal as CabalCache
 import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), DropCacheRequest, definition, resetCache)
 import GTD.Utils (ultraZoom)
 import Network.Socket (Family (AF_INET), SockAddr (SockAddrInet), SocketType (Stream), bind, defaultProtocol, listen, socket, socketPort, tupleToHostAddress, withSocketsDo)
 import Network.Wai.Handler.Warp (defaultSettings, runSettingsSocket)
-import Options.Applicative (Parser, ParserInfo, auto, execParser, fullDesc, help, helper, info, long, option, showDefault, value, (<**>))
+import Options.Applicative (Parser, ParserInfo, auto, execParser, fullDesc, help, helper, info, long, option, showDefault, value, (<**>), switch)
 import Servant (Header, Headers, JSON, Post, ReqBody, addHeader, (:<|>) (..), (:>))
 import Servant.Server (Handler, serve)
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
@@ -33,8 +35,6 @@ import System.FilePath ((</>))
 import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
 import System.Posix (exitImmediately, getProcessID)
 import Text.Printf (printf)
-import Control.Monad.IO.Class (liftIO)
-import qualified GTD.Resolution.State.Caching.Cabal as CabalCache
 
 data ServerState = ServerState
   { _context :: Context,
@@ -71,7 +71,7 @@ nt s x = liftIO (evalStateT x s)
 
 ---
 
-h c m respP1 respP2 req = do
+h a c m respP1 respP2 req = do
   s <- liftIO $ takeMVar m
   (r, s') <- flip runStateT s $ do
     rq <- reqId <+= 1
@@ -79,7 +79,7 @@ h c m respP1 respP2 req = do
     let logP = _root c </> "server.log"
     liftIO $ putStrLn $ "Got request with ID:" ++ show reqId
 
-    r' <- ultraZoom context $ runFileLoggingT logP $ flip runReaderT c $ runExceptT $ respP1 req
+    r' <- ultraZoom context $ runFileLoggingT logP $ filterLogger (\_ l -> l >= logLevel a) $ flip runReaderT c $ runExceptT $ respP1 req
     return $ respP2 reqId r'
   liftIO $ putMVar m s'
   return r
@@ -88,13 +88,14 @@ h c m respP1 respP2 req = do
 
 definitionH ::
   KnownSymbol hs =>
+  Args ->
   GTDConfiguration ->
   MVar ServerState ->
   DefinitionRequest ->
   Handler (Headers '[Header hs String] DefinitionResponse)
-definitionH c m req = do
+definitionH a c m req = do
   let defH = either (\e -> DefinitionResponse {err = Just e, srcSpan = Nothing}) id
-  h c m definition (\r e -> addHeader r $ defH e) req
+  h a c m definition (\r e -> addHeader r $ defH e) req
 
 pingH :: MVar ServerState -> Handler String
 pingH m = do
@@ -102,13 +103,14 @@ pingH m = do
   return "pong"
 
 dropCacheH ::
+  Args ->
   GTDConfiguration ->
   MVar ServerState ->
   DropCacheRequest ->
   Handler String
-dropCacheH c m req = do
+dropCacheH a c m req = do
   let defH = either id id
-  h c m resetCache (\_ e -> defH e) req
+  h a c m resetCache (\_ e -> defH e) req
 
 ---
 
@@ -126,13 +128,19 @@ selfKiller m ttl = do
       putMVar m m'
       selfKiller m ttl
 
-newtype Args = Args
-  { ttl :: Int
+data Args = Args
+  { ttl :: Int,
+    dynamicMemoryUsage :: Bool,
+    logLevel :: LogLevel
   }
   deriving (Show)
 
 args :: Parser Args
-args = Args <$> option auto (long "ttl" <> help "how long to wait before dying when idle (in seconds)" <> showDefault <> value 60)
+args =
+  Args
+    <$> option auto (long "ttl" <> help "how long to wait before dying when idle (in seconds)" <> showDefault <> value 60)
+    <*> switch (long "dynamic-memory-usage" <> help "whether to use dynamic memory usage" <> showDefault)
+    <*> option auto (long "log-level" <> help "" <> showDefault <> value LevelInfo)
 
 opts :: ParserInfo Args
 opts =
@@ -155,7 +163,7 @@ main = withSocketsDo $ do
   port <- socketPort sock
   printf "port=%s\n" (show port)
 
-  constants <- prepareConstants
+  constants <- prepareConstants (dynamicMemoryUsage as) (logLevel as)
   setCurrentDirectory (constants ^. root)
   getCurrentDirectory >>= print
   print constants
@@ -168,4 +176,4 @@ main = withSocketsDo $ do
   s0 <- flip runReaderT constants $ runStdoutLoggingT $ flip execStateT emptyServerState $ ultraZoom context CabalCache.load
   s <- newMVar s0
   _ <- forkIO $ selfKiller s (ttl as)
-  runSettingsSocket defaultSettings sock $ serve api (definitionH constants s :<|> pingH s :<|> dropCacheH constants s)
+  runSettingsSocket defaultSettings sock $ serve api (definitionH as constants s :<|> pingH s :<|> dropCacheH as constants s)

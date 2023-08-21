@@ -19,8 +19,8 @@ import Control.Lens (At (..), makeLenses, use, view, (%=), (.=))
 import Control.Monad (forM, forM_)
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.Logger (MonadLogger, MonadLoggerIO (..))
-import Control.Monad.RWS (MonadReader (..), MonadWriter (..), asks, MonadState)
-import Control.Monad.State (StateT (..), MonadState (put))
+import Control.Monad.RWS (MonadReader (..), MonadState, MonadWriter (..), asks)
+import Control.Monad.State (MonadState (put), StateT (..))
 import qualified Control.Monad.State.Lazy as State
 import Control.Monad.Trans (MonadIO (liftIO))
 import Control.Monad.Trans.Control (MonadBaseControl)
@@ -41,7 +41,7 @@ import Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import Distribution.PackageDescription.Parsec (parseGenericPackageDescription, runParseResult)
 import Distribution.Pretty (prettyShow)
 import Distribution.Utils.Path (getSymbolicPath)
-import GTD.Configuration (GTDConfiguration (_repos, _cache), repos)
+import GTD.Configuration (GTDConfiguration (_cache, _repos), repos)
 import GTD.Resolution.State.Caching.Utils (binaryGet, pathAsFile)
 import GTD.Utils (deduplicate, logDebugNSS, logDebugNSS')
 import System.Directory (listDirectory)
@@ -277,7 +277,7 @@ __exportsE :: Cabal.Executable -> PackageModules
 __exportsE exe =
   PackageModules
     { _srcDirs = getSymbolicPath <$> (hsSourceDirs . Cabal.buildInfo) exe,
-      _exports = Set.empty,
+      _exports = Set.singleton "Main",
       _reExports = Set.empty,
       _allKnownModules = Set.fromList $ "Main" : (prettyShow <$> Cabal.otherModules (Cabal.buildInfo exe))
     }

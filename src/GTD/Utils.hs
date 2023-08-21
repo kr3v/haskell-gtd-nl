@@ -15,11 +15,11 @@ import Control.Monad.Trans.Maybe (MaybeT (..))
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
 import Data.Time.Clock.POSIX (getPOSIXTime)
+import GHC.Stats (RTSStats (..), getRTSStats, getRTSStatsEnabled)
+import Numeric (showFFloat)
 import System.Directory (removeFile)
 import System.IO.Error (isDoesNotExistError)
 import Text.Printf (printf)
-import GHC.Stats (RTSStats(..), getRTSStats, getRTSStatsEnabled)
-import Numeric ( showFFloat )
 
 maybeToMaybeT :: Monad m => Maybe a -> MaybeT m a
 maybeToMaybeT = MaybeT . return
@@ -91,7 +91,6 @@ removeIfExists fileName = removeFile fileName `catch` handleExists
       | isDoesNotExistError e = return ()
       | otherwise = throwIO e
 
-
 stats :: IO ()
 stats = do
   statsE <- liftIO getRTSStatsEnabled
@@ -113,3 +112,13 @@ stats = do
     liftIO $ putStrLn $ printf "CPU : i:%s m:%s g:%s r:%s" (showF2 $ fromIntegral ic / cI) (showF2 $ fromIntegral mc / cI) (showF2 $ fromIntegral gc / cI) (showF2 $ fromIntegral (c - ic - mc - gc) / cI)
     liftIO $ putStrLn $ printf "Wall: i:%s m:%s g:%s r:%s" (showF2 $ fromIntegral ie / eI) (showF2 $ fromIntegral me / eI) (showF2 $ fromIntegral ge / eI) (showF2 $ fromIntegral (e - ie - me - ge) / eI)
     liftIO $ putStrLn $ "GCs: " ++ show stats
+
+getUsableFreeMemory :: IO Int
+getUsableFreeMemory = do
+  content <- readFile "/proc/meminfo"
+  let memInfo = (\[name, val, _] -> (name, read val :: Int)) . words <$> lines content
+      lookupVal name = maybe 0 id (lookup name memInfo)
+      freeMem = lookupVal "MemFree:"
+      buffers = lookupVal "Buffers:"
+      cached = lookupVal "Cached:"
+  return ((freeMem + buffers + cached) `div` 1024)

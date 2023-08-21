@@ -1,6 +1,7 @@
 {
   "name": "hs-gtd",
   "displayName": "hs-gtd",
+  "publisher": "kr3v",
   "description": "",
   "version": "0.2.5",
   "engines": {
@@ -18,6 +19,11 @@
       {
         "title": "hs-gtd configuration",
         "properties": {
+          "hs-gtd.extension.disable-local-definitions-when-hls-is-active": {
+            "type": "boolean",
+            "default": true,
+            "description": "If HLS is active, this extension's local definitions will be disabled, as they are often out of sync with HLS (meaning you would see two definitions for local symbols). Does not affect behaviour for symbols resolved outside of current working directory."
+          },
           "hs-gtd.server.root": {
             "type": "string",
             "default": "~/.local/share/haskell-gtd-extension-server-root"
@@ -26,14 +32,21 @@
             "type": "string",
             "default": "./haskell-gtd-server"
           },
-          "hs-gtd.server.rts": {
-            "type": "array",
-            "default": ["-N", "-A128M"],
-            "description": "those options are default in `cabal` `ghc-options`, so just removing them won't help if you want 'default' Haskell behavior"
+          "hs-gtd.package.path": {
+            "type": "string",
+            "default": "./haskell-gtd-server"
           },
           "hs-gtd.server.args": {
             "type": "array",
-            "default": ["--ttl", "60"]
+            "default": [
+              "--ttl",
+              "60",
+              "--dynamic-memory-usage"
+            ]
+          },
+          "hs-gtd.package.args": {
+            "type": "array",
+            "default": []
           }
         }
       }

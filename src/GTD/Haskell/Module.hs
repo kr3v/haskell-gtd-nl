@@ -98,7 +98,7 @@ parseModule cm@HsModule {_path = srcP} = do
   src <- liftEither . mapLeft show =<< liftIO (try $ readFile srcP :: IO (Either IOException String))
   srcPostCpp <- haskellApplyCppHs srcP src
 
-  aE <- liftIO $ GHC.parse srcP srcPostCpp
+  aE <- GHC.parse srcP srcPostCpp
   a <- case aE of
     Left err -> throwError err
     Right a -> return a

@@ -4,6 +4,7 @@
   - apply cpphs via command + allow specify 'defined' stuff
   - go to symbol command (local hoogle)
   - add 'usage cases' (reverse go to definition)
+  - add 'instances' list
 
 - performance:
   - when file is saved, the cache is dropped for the directory;
@@ -18,20 +19,26 @@
   - research Haskell formatters to avoid lines longer than 80/120 characters (wrap the imports, wrap the exports, wrap function declarations, ...)
 
 		| - front-end:
-3		|   - if `hls` is active, disable go-to-definition in local non-.repos repo by default (3 states - disabled, disabled_if_hls, enabled)
+3x	|   - if `hls` is active, disable go-to-definition in local non-.repos repo by default (3 states - disabled, disabled_if_hls, enabled)
 1x	|   - add support for multiple workspace directories
-		|   - if there's no `.cabal` file in the workspace, avoid using the server
 2x	|   - try watching for `port=\d+` in the server output instead of `sleep`
+		|   - if there's no `.cabal` file in the workspace, avoid using the server
 		| - back-end:
-4		|   - 'dynamic' package memory usage: if available RAM ... => ... : >=8 GiB => -N -A128M, <8 GiB => -N -A64M, <4 GiB => -A16M, <2 GiB => no options
-5		|   - server logging: 'debug' vs 'info' level configurable
+4x	|   - 'dynamic' package memory usage: if available RAM ... => ... : >=8 GiB => -N -A128M, <8 GiB => -N -A64M, <4 GiB => -A16M, <2 GiB => no options
+5x	|   - server logging: 'debug' vs 'info' level configurable
 		|   - show parsing status: server/package executable should occasionally print their status to a file in the local/share dir
 6		|   - if parsing a file fails, try parsing only imports-exports
 		|     - consider caching last known 'good' version of file local declarations
+    |   - if there's no resolution cache, try building it dynamically?
+    |   - Cabal support:
+    |     - `cabal.project`
+    |     - `common` in `*.cabal`
+    |     - `haskell-language-server.cabal`: `build-depends` without version predicates
 		| - undecided:
-7		|   - consider supporting projects where:
+		|   - consider supporting projects where:
 		|     - there's no `.cabal` file (base only?)
 		|     - there's a `.cabal` file, but it's not in the root directory
 		|       `./src/A/B/C/D.hs` -> check for `.cabal` in `.`, `.src`, ...; use the first that has `A.B.C.D` resolvable through `src-dirs`
   	| - both:
   	|   - follow lsp instead of custom protocol
+7		|   - support `~/.cabal/bin/...` and PATH for `haskell-gtd-server` and `haskell-gtd-package`

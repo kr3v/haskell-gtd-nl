@@ -7,25 +7,25 @@
 
 module GTD.Server where
 
-import Control.Lens (over, view, (%=), use, (.=))
+import Control.Lens (over, use, view, (%=), (.=))
 import Control.Monad (forM, forM_, join, mapAndUnzipM, unless, void, (<=<))
 import Control.Monad.Except (MonadError (..), MonadIO (..))
 import Control.Monad.Logger (MonadLoggerIO)
-import Control.Monad.RWS (MonadReader (..), MonadState (..), gets)
+import Control.Monad.RWS (MonadReader (..), MonadState (..), gets, asks)
 import Control.Monad.State (evalStateT, modify)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT (..))
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Bifunctor (Bifunctor (..))
 import qualified Data.Cache.LRU as LRU
-import Data.List (find, isPrefixOf)
+import Data.List (find, isPrefixOf, intercalate)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes, fromMaybe)
 import qualified Data.Set as Set
 import GHC.Generics (Generic)
 import GTD.Cabal (ModuleNameS)
 import qualified GTD.Cabal as Cabal
-import GTD.Configuration (GTDConfiguration (..), root)
+import GTD.Configuration (GTDConfiguration (..), isDynamicMemoryUsageByPackage, root, logLevel)
 import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Identifier, SourceSpan (..), asDeclsMap, emptySourceSpan)
 import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule)
 import qualified GTD.Haskell.Module as HsModule
@@ -36,7 +36,7 @@ import qualified GTD.Resolution.State as Package
 import qualified GTD.Resolution.State.Caching.Cabal as CabalCache
 import qualified GTD.Resolution.State.Caching.Package as PackageCache
 import GTD.Resolution.Utils (ParallelizedState (..), SchemeState (..), parallelized, scheme)
-import GTD.Utils (logDebugNSS, modifyMS, stats)
+import GTD.Utils (getUsableFreeMemory, logDebugNSS, modifyMS, stats)
 import System.FilePath (normalise, (</>))
 import System.IO (IOMode (..), withFile)
 import System.Process (CreateProcess (..), StdStream (..), createProcess, proc, waitForProcess)
@@ -190,11 +190,27 @@ package'resolution'withDependencies'forked :: Cabal.PackageWithResolvedDependenc
 package'resolution'withDependencies'forked p = do
   let d = Cabal._root p
   r <- view root
+  dm <- view isDynamicMemoryUsageByPackage
+
+  let pArgs' memFree
+        | memFree > 8 * 1024 = ["-N -A128M"]
+        | memFree > 4 * 1024 = ["-N -A32M"]
+        | memFree > 2 * 1024 = ["-N -A4M"]
+        | otherwise = []
+      pArgs = do
+        memFree <- liftIO getUsableFreeMemory
+        let a = pArgs' memFree
+        logDebugNSS "haskell-gtd-package" $ printf "given getUsableFreeMemory=%s and memFree=%s, rts = %s" (show dm) (show memFree) (show a)
+        return a
+  rts <- if dm then pArgs else return []
+  ll <- asks _logLevel
+  let args = ["--dir", d, "--log-level", show ll] ++ if null rts then [] else ["+RTS"] ++ rts ++ ["-RTS"]
+
   ec <- liftIO $
     withFile (r </> "package.stdout.log") AppendMode $ \hout -> withFile (r </> "package.stderr.log") AppendMode $ \herr -> do
-      (_, _, _, h) <- createProcess (proc "haskell-gtd-package" ["--dir", d]) {std_out = UseHandle hout, std_err = UseHandle herr}
+      (_, _, _, h) <- createProcess (proc "haskell-gtd-package" args) {std_out = UseHandle hout, std_err = UseHandle herr}
       waitForProcess h
-  logDebugNSS "haskell-gtd-package" $ printf "%s -> %s" d (show ec)
+  logDebugNSS "haskell-gtd-package" $ printf "args %s + %s -> %s" (show args) d (show ec)
 
 package ::
   Cabal.PackageWithResolvedDependencies ->
@@ -217,19 +233,21 @@ resolution Declarations {_decls = ds, _dataTypes = dts} =
 
 definition ::
   DefinitionRequest ->
-  ((MS m), MonadError String m) => m DefinitionResponse
-definition (DefinitionRequest {workDir = wd, file = rf, word = w}) = do
+  (MS m, MonadError String m) => m DefinitionResponse
+definition (DefinitionRequest {workDir = wd, file = rf0, word = w}) = do
+  let rf = normalise rf0
   cPkgs <- CabalCache.findAtF wd
   forM_ cPkgs $ \cPkg -> do
     e <- PackageCache.pExists cPkg
     unless e $ void $ package cPkg
+  let srcDirs c = (\d -> normalise $ wd </> d) <$> (Cabal._srcDirs . Cabal._modules $ c)
   logDebugNSS "definition" $
     printf
-      "rf = %s\nsource dirs=%s\n"
+      "wd=%s\nrf = %s\nsource dirs=%s\n"
+      wd
       rf
-      (show $ (\m -> (,) (Cabal.key m) (Cabal._srcDirs . Cabal._modules $ m)) <$> cPkgs)
-  let cPkgM = flip find cPkgs $ \c -> do
-        any (\d -> normalise (Cabal._root c </> d) `isPrefixOf` rf) $ Cabal._srcDirs . Cabal._modules $ c
+      (intercalate "\n" $ intercalate "," . srcDirs <$> cPkgs)
+  let cPkgM = find (any (`isPrefixOf` rf) . srcDirs) cPkgs
   cPkg <- maybe (throwError "cannot find a cabal 'item' with source directory that owns given file") return cPkgM
 
   (l, mL) <- gets $ LRU.lookup rf . _cResolution

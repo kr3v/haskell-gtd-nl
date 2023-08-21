@@ -2,6 +2,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
 {-# HLINT ignore "Use section" #-}
 
 module Main where
@@ -10,7 +11,7 @@ import Control.Exception (try)
 import Control.Lens ((^.))
 import Control.Monad (forM_)
 import Control.Monad.Except (MonadError (..), MonadIO (..), runExceptT)
-import Control.Monad.Logger (runStderrLoggingT)
+import Control.Monad.Logger (runStderrLoggingT, LogLevel (LevelDebug))
 import Control.Monad.Reader (ReaderT (..))
 import Control.Monad.State (evalStateT)
 import Control.Monad.Trans.Maybe (MaybeT (..))
@@ -43,7 +44,7 @@ import GTD.Resolution.Module (module'Dependencies)
 import GTD.Resolution.State (ccGet, emptyContext)
 import qualified GTD.Resolution.State.Caching.Cabal as CabalCache
 import GTD.Server (modulesOrdered, package'dependencies'ordered, package'order'default)
-import GTD.Utils (ultraZoom)
+import GTD.Utils (getUsableFreeMemory, ultraZoom)
 import Options.Applicative (Parser, ParserInfo, auto, command, execParser, fullDesc, help, helper, info, long, metavar, option, progDesc, strOption, subparser, (<**>))
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.FilePath ((</>))
@@ -58,6 +59,7 @@ data Type = Package | Module deriving (Show, Read, Enum, Bounded)
 data Args
   = ResolutionOrder {_pkgN :: String, _pkgV :: String, _type :: Type}
   | Identifier {_text :: String}
+  | ParseHeader {_file :: String}
   deriving (Show)
 
 ro :: Parser Args
@@ -70,11 +72,15 @@ ro =
 idP :: Parser Args
 idP = Identifier <$> strOption (long "text" <> help "kekw")
 
+ph :: Parser Args
+ph = ParseHeader <$> strOption (long "file" <> help "kekw")
+
 args :: Parser Args
 args = do
   let commands =
         [ command "order" (info ro (fullDesc <> progDesc "kekw")),
-          command "identifier" (info idP (fullDesc <> progDesc "kekw"))
+          command "identifier" (info idP (fullDesc <> progDesc "kekw")),
+          command "header" (info ph (fullDesc <> progDesc "kekw"))
         ]
   subparser (mconcat commands)
 
@@ -98,7 +104,7 @@ main = do
   case a of
     ResolutionOrder {_pkgN = pkgN, _pkgV = pkgV, _type = t} -> do
       init <- getCurrentDirectory
-      constants <- prepareConstants
+      constants <- prepareConstants False LevelDebug
       setCurrentDirectory (constants ^. repos)
       getCurrentDirectory >>= print
       print constants
@@ -155,12 +161,30 @@ main = do
 
       print languagePragmas
 
-      let opts = GHC.initParserOpts dynFlags
-          location = GHC.mkRealSrcLoc (GHC.mkFastString ".") 1 1
-          buffer = GHC.stringToStringBuffer text
-          parseState = GHC.initParserState opts buffer location
-          r = GHC.unP GHC.parseIdentifier parseState
+      let o = GHC.initParserOpts dynFlags
+          l = GHC.mkRealSrcLoc (GHC.mkFastString ".") 1 1
+          b = GHC.stringToStringBuffer text
+          s = GHC.initParserState o b l
+          r = GHC.unP GHC.parseIdentifier s
 
       print $ case r of
         POk _ (L _ e) -> printf ":t %s => %s" (showConstr . toConstr $ e) (showO e)
-        PFailed s -> showO $ errors s
+        PFailed e -> showO $ errors e
+    ParseHeader {_file = file} -> do
+      content <- readFile file
+
+      let dynFlags0 = GHC.defaultDynFlags fakeSettings
+      fM <- try (parsePragmasIntoDynFlags dynFlags0 "." content) :: IO (Either SourceError (Maybe (DynFlags, [String])))
+      let (dynFlags, languagePragmas) = fromMaybe (dynFlags0, []) $ fromRight Nothing fM
+
+      print languagePragmas
+
+      let o = GHC.initParserOpts dynFlags
+          l = GHC.mkRealSrcLoc (GHC.mkFastString file) 1 1
+          b = GHC.stringToStringBuffer content
+          s = GHC.initParserState o b l
+          r = GHC.unP GHC.parseHeader s
+
+      print $ case r of
+        POk _ (L _ e) -> printf ":t %s => %s" (showConstr . toConstr $ e) (showO e)
+        PFailed e -> showO $ errors e

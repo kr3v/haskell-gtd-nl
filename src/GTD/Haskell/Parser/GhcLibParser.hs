@@ -8,7 +8,7 @@ module GTD.Haskell.Parser.GhcLibParser where
 import Control.Exception (try)
 import Control.Monad (forM_, unless, (>=>))
 import Control.Monad.Logger (MonadLoggerIO)
-import Control.Monad.State (MonadState (..), execStateT, modify)
+import Control.Monad.State (MonadState (..), execStateT, modify, MonadIO (liftIO))
 import Control.Monad.Writer (MonadWriter (..))
 import Data.Either (fromRight)
 import Data.Foldable (Foldable (..))
@@ -36,6 +36,7 @@ import GTD.Cabal (ModuleNameS)
 import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Exports, Imports, Module (..), SourceSpan (..), asDeclsMap, emptySourceSpan)
 import qualified GTD.Haskell.Declaration as Declarations
 import Text.Printf (printf)
+import GTD.Utils (logDebugNSS)
 
 showO :: Outputable a => a -> String
 showO = renderWithContext defaultSDocContext {sdocErrorSpans = True} . ppr
@@ -65,23 +66,29 @@ name :: HsModuleX -> String
 name (HsModuleX HsModule {hsmodName = Just (L _ (ModuleName n))} _) = unpackFS n
 name _ = ""
 
-parse :: FilePath -> String -> IO (Either String HsModuleX)
+parse :: FilePath -> String -> (MonadLoggerIO m) => m (Either String HsModuleX)
 parse p content = do
   let dynFlags0 = defaultDynFlags fakeSettings
-  fM <- try (parsePragmasIntoDynFlags dynFlags0 p content) :: IO (Either SourceError (Maybe (DynFlags, [String])))
+  fM <- liftIO (try (parsePragmasIntoDynFlags dynFlags0 p content) :: IO (Either SourceError (Maybe (DynFlags, [String]))))
   let (dynFlags, languagePragmas) = fromMaybe (dynFlags0, []) $ fromRight Nothing fM
 
-  printf "language pragmas: module %s -> %s\n" p (show languagePragmas)
+  logDebugNSS "GHC.parse" $ printf "language pragmas: module %s -> %s\n" p (show languagePragmas)
 
-  let opts = initParserOpts dynFlags
-      location = mkRealSrcLoc (mkFastString p) 1 1
+  let o = initParserOpts dynFlags
+      l = mkRealSrcLoc (mkFastString p) 1 1
       b = stringToStringBuffer content
-      parseState = initParserState opts b location
-      r = unP parseModule parseState
+      s = initParserState o b l
+      r = unP parseModule s
 
-  return $ case r of
-    POk _ (L _ e) -> Right $ HsModuleX e languagePragmas
-    PFailed s -> Left $ showO $ errors s
+  case r of
+    POk _ (L _ e) -> return $ Right $ HsModuleX e languagePragmas
+    PFailed e -> do
+      let s' = initParserState o b l
+          r' = unP parseModule s'
+      logDebugNSS "parse" $ printf "failed to parse %s: %s" p (showO $ errors e)
+      return $ case r' of
+        POk _ (L _ e') -> Right $ HsModuleX e' languagePragmas
+        PFailed _ -> Left $ showO $ errors e
 
 ---
 

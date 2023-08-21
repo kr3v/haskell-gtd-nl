@@ -20,9 +20,7 @@ function refreshSubPaths() {
 	serverPortF = path.join(serverRoot, 'port');
 }
 
-let port = 0;
-let stdout: number | null = null, stderr: number | null = null;
-let server: ChildProcess | null = null;
+///
 
 function isParentOf(p1: string, p2: string) {
 	const relative = path.relative(p1, p2);
@@ -37,9 +35,22 @@ async function createSymlink(src: string, dst: string) {
 	try {
 		await fs.promises.symlink(src, dst, 'file');
 	} catch (error) {
-		outputChannel.appendLine(util.format('symlink %s -> %s failed: %s', src, dst, error));
+		outputChannel.appendLine(util.format('repos %s -> %s failed: %s', src, dst, error));
 	}
 }
+
+const haskellExtensionID = "haskell.haskell";
+
+function isMainHaskellExtensionActive(): boolean {
+	const extension = vscode.extensions.getExtension(haskellExtensionID);
+	return extension?.isActive ?? false;
+}
+
+///
+
+let port = 0;
+let stdout: number | null = null, stderr: number | null = null;
+let server: ChildProcess | null = null;
 
 async function sendHeartbeat() {
 	fs.readFile(serverPortF, "utf8", (err, data) => { port = parseInt(data, 10); });
@@ -88,14 +99,8 @@ async function startServerIfRequired() {
 	);
 	server.unref();
 
-
-	try {
-		for await (const {} of watcher) {
-			break;
-		}
-	} catch (err) {
-		outputChannel.appendLine(util.format("serverPortF watcher: %s", err));
-	}
+	try { for await (const { } of watcher) break; }
+	catch (err) { outputChannel.appendLine(util.format("serverPortF watcher: %s", err)); }
 
 	await sendHeartbeat();
 }
@@ -107,8 +112,11 @@ async function stopServer() {
 	process.kill(pid);
 }
 
-// https://www.haskell.org/onlinereport/haskell2010/haskellch2.html#x7-140002
+///
+
 // `identifier` returns the longest identifier that contains the given position.
+// Implemented here instead of server because of server-client communication model. Has to be moved to the server eventually (LSP).
+//
 // Examples:
 // `(.=)`, `.=` 			  => `.=`
 // `(Prelude..)`, `Prelude..` => `Prelude..`
@@ -120,10 +128,9 @@ async function stopServer() {
 // `a.b` 					  => `b` (if the cursor is on `b`)
 // `(a).(b)` 				  => `b` (if the cursor is on `b`)
 // `A.a'b+c` 					  => `A.a'b` (if the cursor is on `A.a'b`)
-//
-// ```
+// More examples can be found in tests.
 /* This 	Lexes as this
-	
+https://www.haskell.org/onlinereport/haskell2010/haskellch2.html#x7-140002
 f.g 	f . g (three tokens)e
 F.g 	F.g (qualified ‘g’)
 f.. 	f .. (two tokens)
@@ -280,11 +287,17 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 		position: vscode.Position,
 		token: vscode.CancellationToken
 	): Promise<vscode.Definition> {
-		let currentDocument = vscode.window.activeTextEditor?.document;
-		if (!currentDocument) return Promise.resolve([]);
-		let workspaceFolder = vscode.workspace.getWorkspaceFolder(currentDocument.uri);
-		if (!workspaceFolder) return Promise.resolve([]);
 
+		// figure out 'working directory' in multi-root workspace
+		let doc = vscode.window.activeTextEditor?.document;
+		if (!doc) return Promise.resolve([]);
+		let docF = vscode.workspace.getWorkspaceFolder(doc.uri);
+		if (!docF) return Promise.resolve([]);
+		let wd = docF.uri.fsPath;
+		let repos = path.join(wd, "./.repos");
+		let file = document.uri.fsPath;
+
+		// figure out the word under the cursor
 		let [word,] = identifier(document.lineAt(position.line).text, position.character);
 		if (word == "") {
 			[word,] = identifier(document.lineAt(position.line).text, position.character - 1);
@@ -292,26 +305,13 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 		if (word == "") {
 			return Promise.resolve([]);
 		}
+		outputChannel.appendLine(util.format("getting a definition for %s...", word));
 
-		console.log("identifier: %s", word);
-		outputChannel.appendLine(util.format("%s", word));
-
-		if (!vscode.workspace.workspaceFolders) {
-			return Promise.resolve([]);
-		}
-
-		let workspacePath = workspaceFolder.uri.fsPath;
-		let docPath = document.uri.fsPath;
-
-		if (!isParentOf(workspacePath, docPath)) {
-			outputChannel.appendLine(util.format("workspacePath is not parent of docPath, this case is broken right now"));
-			return Promise.resolve([]);
-		}
-
+		// send a request to the server
 		await startServerIfRequired();
 		let body = {
-			workDir: workspacePath,
-			file: docPath,
+			workDir: wd,
+			file: file,
 			word: word
 		};
 		let res = await axios.
@@ -321,7 +321,7 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 				return { "data": {} };
 			});
 		let data = res.data;
-		if (data.err != "" && data.err != undefined) {
+		if (data.err != undefined && data.err != "") {
 			outputChannel.appendLine(util.format("%s -> err=%s (data=%s)", word, data.err, JSON.stringify(data)));
 			return Promise.resolve([]);
 		}
@@ -329,27 +329,38 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 			outputChannel.appendLine(util.format("%s -> no srcSpan (data=%s)", word, JSON.stringify(data)));
 			return Promise.resolve([]);
 		}
-		outputChannel.appendLine(util.format(data));
+		outputChannel.appendLine(util.format("response = %s", data));
 
-		let symlink = path.join(workspacePath, "./.repos");
-		let filePath = data.srcSpan.sourceSpanFileName;
-		let filePathU;
-		if (isParentOf(workspacePath, filePath)) {
-			filePathU = filePath;
-		} else if (isParentOf(serverRepos, filePath)) {
-			filePathU = path.resolve(symlink, path.relative(serverRepos, filePath))
+		// HLS BUG #1: in case definition is located at `repos` directory, rewrite the path to local symlink to `repos` (named `./{wd}/.repos`) to prevent Haskell VS Code extension from spawning a new instance of the HLS
+		// HLS interoperability: if HLS is provided via `haskell.haskell` extension, then this extension should not provide local resolutions until they become the same as the ones provided by `haskell.haskell` extension
+		let wordSourcePathO = data.srcSpan.sourceSpanFileName;
+		let wordSourcePath;
+		if (isParentOf(wd, wordSourcePathO)) {
+			wordSourcePath = wordSourcePathO;
+			if (isMainHaskellExtensionActive()) {
+				let conf = vscode.workspace.getConfiguration('hs-gtd');
+				let disableLocDefs = conf.get<boolean>("extension.disable-local-definitions-when-hls-is-active") ?? true;
+				if (disableLocDefs) {
+					return Promise.resolve([]);
+				}
+			}
+		} else if (wordSourcePathO == file) {
+			wordSourcePath = wordSourcePathO;
+		} else if (isParentOf(serverRepos, wordSourcePathO)) {
+			wordSourcePath = path.resolve(repos, path.relative(serverRepos, wordSourcePathO))
 		} else {
-			outputChannel.appendLine(util.format("filePath is not parent of workspacePath or serverRepos"));
+			outputChannel.appendLine(util.format("BUG: wordSourcePathO (%s) is neither original file (%s) nor is present in neither serverRepos (%s) nor current work directory (%s)", wordSourcePathO, file, serverRepos, wd));
 			return Promise.resolve([]);
 		}
-		let fileUri = vscode.Uri.file(path.normalize(filePathU));
+		wordSourcePath = path.normalize(wordSourcePath);
+		outputChannel.appendLine(util.format("path rewritten: %s -> %s", wordSourcePathO, wordSourcePath));
+		let wordSourceURI = vscode.Uri.file(path.normalize(wordSourcePath));
 
+		// return the actual definition location
 		let line = data.srcSpan.sourceSpanStartLine - 1; // 0-based line number
 		let character = data.srcSpan.sourceSpanStartColumn - 1; // 0-based character position
 		let definitionPosition = new vscode.Position(line, character);
-		let definitionLocation = new vscode.Location(fileUri, definitionPosition);
-
-		outputChannel.appendLine(util.format("%s -> %s", filePath, filePathU));
+		let definitionLocation = new vscode.Location(wordSourceURI, definitionPosition);
 		return Promise.resolve(definitionLocation);
 	}
 }
@@ -359,23 +370,24 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	outputChannel.appendLine(userHomeDir);
 
+	// reset current working directory cache whenever a Cabal or Haskell file is saved
 	context.subscriptions.push(
 		vscode.workspace.onDidSaveTextDocument(async (document: vscode.TextDocument) => {
-			let workspaceFolders = vscode.workspace.workspaceFolders;
-			if (!workspaceFolders) {
-				return;
-			}
-			let workspacePath = workspaceFolders[0].uri.fsPath;
-			let symlink = path.join(workspacePath, "./.repos");
+			let doc = vscode.window.activeTextEditor?.document;
+			if (!doc) return Promise.resolve([]);
+			let docF = vscode.workspace.getWorkspaceFolder(doc.uri);
+			if (!docF) return Promise.resolve([]);
+			let wd = docF.uri.fsPath;
+			let repos = path.join(wd, "./.repos");
 
 			outputChannel.appendLine(util.format("saved languageId=%s: %s", document.languageId, document.uri.fsPath));
-			if (isParentOf(symlink, document.uri.fsPath) ||
+			if (isParentOf(repos, document.uri.fsPath) ||
 				!(document.languageId == "haskell" || document.languageId == "cabal") ||
-				!isParentOf(workspacePath, document.uri.fsPath)) return;
+				!isParentOf(wd, document.uri.fsPath)) return;
 			outputChannel.appendLine(util.format("resetting workspace extension cache"));
 
 			await startServerIfRequired();
-			let body = { dir: workspacePath };
+			let body = { dir: wd };
 			let res = await axios.post(`http://localhost:${port}/dropcache`, body);
 			outputChannel.appendLine(util.format("resetting workspace extension cache: %s", res.data));
 		})
@@ -388,11 +400,24 @@ export async function activate(context: vscode.ExtensionContext) {
 		)
 	);
 
+	// see HLS BUG #1
 	let workspaceFolders = vscode.workspace.workspaceFolders;
-	if (workspaceFolders) {
-		let workspacePath = workspaceFolders[0].uri.fsPath;
-		let symlink = path.join(workspacePath, "./.repos");
-		await createSymlink(serverRepos, symlink);
+	for (let wd in workspaceFolders) {
+		let repos = path.join(wd, "./.repos");
+		await createSymlink(serverRepos, repos);
+
+		let files = vscode.workspace.getConfiguration('files');
+		let watcherExclude: any = files.get('watcherExclude');
+		watcherExclude['**/path/to/exclude'] = true;
+		files.update('watcherExclude', watcherExclude, vscode.ConfigurationTarget.WorkspaceFolder);
+		let exclude: any = files.get('exclude');
+		exclude['**/path/to/exclude'] = true;
+		files.update('exclude',exclude, vscode.ConfigurationTarget.WorkspaceFolder);
+
+		let search = vscode.workspace.getConfiguration('search');
+		let excludeS: any = search.get('exclude');
+		excludeS['**/path/to/exclude'] = true;
+		search.update('exclude', excludeS, vscode.ConfigurationTarget.WorkspaceFolder);
 	}
 
 	context.subscriptions.push(vscode.commands.registerCommand('hs-gtd.server.restart', stopServer));
@@ -403,13 +428,14 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 		let conf = vscode.workspace.getConfiguration('hs-gtd', vscode.window.activeTextEditor?.document?.uri);
 		serverRoot = conf.get<string>('server.root') ?? path.join(userHomeDir, "/.local/share/haskell-gtd-extension-server-root");
-		serverExe = conf.get<string>('server.path') ?? "hs-gtd-server";
+		serverExe = conf.get<string>('server.path') ?? "haskell-gtd-server";
+		serverExe = conf.get<string>('package.path') ?? "haskell-gtd-server";
 		if (!path.isAbsolute(serverExe)) {
 			serverExe = path.normalize(path.join(serverRoot, serverExe));
 		}
 		refreshSubPaths();
 
-		if (e.affectsConfiguration("hs-gtd.server.rts") || e.affectsConfiguration("hs-gtd.server.args")) {
+		if (e.affectsConfiguration("hs-gtd.package.args") || e.affectsConfiguration("hs-gtd.server.args")) {
 			stopServer();
 		}
 	});

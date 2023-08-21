@@ -4,7 +4,7 @@
 {-# LANGUAGE TupleSections #-}
 
 import Control.Exception (IOException, try)
-import Control.Monad.Logger (runStderrLoggingT, runStdoutLoggingT)
+import Control.Monad.Logger (LogLevel (LevelDebug), NoLoggingT (runNoLoggingT), runStderrLoggingT, runStdoutLoggingT)
 import Control.Monad.Logger.CallStack (runFileLoggingT)
 import Control.Monad.RWS (MonadIO (liftIO), MonadState (get), forM, forM_, join)
 import Control.Monad.State (StateT (..), evalStateT, execStateT)
@@ -25,9 +25,9 @@ import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule, parseMo
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import GTD.Resolution.Module (figureOutExports, figureOutExports0)
 import GTD.Resolution.State (emptyContext)
-import GTD.Resolution.State.Caching.Cabal (cabalCacheFetch, cabalCacheStore)
+import GTD.Resolution.State.Caching.Cabal as Cabal (load, store)
 import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), definition)
-import System.Directory (listDirectory)
+import System.Directory (getCurrentDirectory, listDirectory)
 import System.FilePath ((</>))
 import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
 import Test.Hspec (Spec, describe, expectationFailure, it, runIO, shouldBe)
@@ -84,15 +84,14 @@ haskellGetIdentifiersSpec = do
                   let m :: Maybe Declarations = decode s
                   fromMaybe mempty m
 
-        result <- liftIO $ p srcPath src
+        result <- p srcPath src
         case result of
           Left e -> expectationFailure $ printf "failed to parse %s: %s" srcPath e
-          Right identifiersM -> do
-            identifiers <- identifiersM
+          Right identifiers -> do
             BS.writeFile dstPath $ encode identifiers
             identifiers `shouldBe` expected
 
-  let ghcP a b = mapRight (runStderrLoggingT . execWriterT . GHC.identifiers) <$> GHC.parse a b
+  let ghcP a b = mapM (runNoLoggingT . execWriterT . GHC.identifiers) =<< runNoLoggingT (GHC.parse a b)
   let parsers = [("ghc-lib-parser", ghcP)]
 
   forM_ parsers $ \(n, p) -> do
@@ -126,7 +125,7 @@ haskellGetExportsSpec = do
             BS.writeFile dstPath $ encode identifiers
             identifiers `shouldBe` expected
 
-  let ghcP a b = mapRight (runStderrLoggingT . flip execStateT Map.empty . GHC.exports) <$> GHC.parse a b
+  let ghcP a b = mapRight (runStderrLoggingT . execWriterT . GHC.imports) <$> runNoLoggingT (GHC.parse a b)
   let parsers = [("ghc-lib-parser", ghcP)]
 
   forM_ parsers $ \(n, p) -> do
@@ -157,7 +156,7 @@ haskellGetImportsSpec = do
             BS.writeFile dstPath $ encode identifiers
             identifiers `shouldBe` expected
 
-  let ghcP a b = mapRight (runStderrLoggingT . execWriterT . GHC.imports) <$> GHC.parse a b
+  let ghcP a b = mapRight (runStderrLoggingT . execWriterT . GHC.imports) <$> runNoLoggingT (GHC.parse a b)
   let parsers = [("ghc-lib-parser", ghcP)]
 
   forM_ parsers $ \(n, p) -> do
@@ -170,6 +169,8 @@ haskellGetImportsSpec = do
 
 figureOutExportsTest :: Spec
 figureOutExportsTest = do
+  consts <- runIO $ prepareConstants False LevelDebug
+
   let descr = "figureOutExports"
       root = "./test/samples/" </> descr
   tests <- runIO $ listDirectory root
@@ -199,7 +200,7 @@ figureOutExportsTest = do
         join $ case mainModuleE of
           Left e -> return $ expectationFailure $ printf "failed to parse %s: %s" mainFileP e
           Right mainModule -> do
-            liftIO $ runStdoutLoggingT $ flip evalStateT Map.empty $ do
+            liftIO $ runStdoutLoggingT $ flip evalStateT Map.empty $ flip runReaderT consts $ do
               forM_ importedModules $ \(p, m) -> do
                 _ <- figureOutExports m
                 liftIO $ BS.writeFile (p ++ ".out.json") $ encode m
@@ -215,12 +216,13 @@ figureOutExportsTest = do
 
 definitionsSpec :: Spec
 definitionsSpec = do
-  consts <- runIO prepareConstants
+  consts <- runIO $ prepareConstants False LevelDebug
 
   let descr = "definitions"
-  let workDir = "./test/integrationTestRepo/sc-ea-hs"
+  pwd <- runIO getCurrentDirectory
+  let workDir = pwd </> "./test/integrationTestRepo/sc-ea-hs"
   let file = workDir </> "app/game/Main.hs"
-  let req = DefinitionRequest {workDir = "./test/integrationTestRepo/sc-ea-hs", file = file, word = ""}
+  let req = DefinitionRequest {workDir = workDir, file = file, word = ""}
 
   let eval0 w = runExceptT $ definition req {word = w}
       eval w r = eval0 w >>= (\d -> return $ d `shouldBe` r)
@@ -309,11 +311,11 @@ definitionsSpec = do
   let noDefErr = Left "No definition found"
 
   let st0 = emptyContext
-  st1 <- runIO $ mstack (`execStateT` st0) cabalCacheFetch
+  st1 <- runIO $ mstack (`execStateT` st0) Cabal.load
   (a, serverState) <- runIO $ mstack (`runStateT` st1) $ eval0 "playIO"
   runIO $ print a
   -- TODO: check the warning
-  _ <- runIO $ mstack (`execStateT` serverState) cabalCacheStore
+  _ <- runIO $ mstack (`execStateT` serverState) Cabal.store
 
   describe descr $ do
     it "directly exported regular function `playIO`" $ do
