@@ -20,7 +20,7 @@ import GHC.Driver.Config.Parser (initParserOpts)
 import GHC.Driver.Session (DynFlags (..), PlatformMisc (..), Settings (..), defaultDynFlags, parseDynamicFilePragma)
 import GHC.Fingerprint (fingerprint0)
 import GHC.Hs (ConDecl (..), ConDeclField (..), DataDefnCons (..), FamilyDecl (..), FieldOcc (..), GhcPs, HsConDetails (..), HsDataDefn (..), HsDecl (..), HsModule (..), IE (..), IEWrappedName (..), ImportDecl (..), ImportDeclQualifiedStyle (..), ImportListInterpretation (..), IsBootInterface (..), ModuleName (ModuleName), Sig (..), SrcSpanAnn' (..), TyClDecl (..), moduleNameString)
-import GHC.Parser (parseIdentifier, parseModule)
+import GHC.Parser (parseIdentifier, parseModule, parseHeader)
 import GHC.Parser.Header (getOptions)
 import GHC.Parser.Lexer (P (unP), PState (..), ParseResult (..), initParserState)
 import GHC.Platform (genericPlatform)
@@ -83,12 +83,14 @@ parse p content = do
   case r of
     POk _ (L _ e) -> return $ Right $ HsModuleX e languagePragmas
     PFailed e -> do
+      logDebugNSS "parse" $ printf "failed to parse %s via `parseModule`: %s" p (showO $ errors e)
       let s' = initParserState o b l
-          r' = unP parseModule s'
-      logDebugNSS "parse" $ printf "failed to parse %s: %s" p (showO $ errors e)
-      return $ case r' of
-        POk _ (L _ e') -> Right $ HsModuleX e' languagePragmas
-        PFailed _ -> Left $ showO $ errors e
+          r' = unP parseHeader s'
+      case r' of
+        POk _ (L _ e') -> return $ Right $ HsModuleX e' languagePragmas
+        PFailed e2 -> do
+          logDebugNSS "parse" $ printf "failed to parse %s via `parseHeader`: %s" p (showO $ errors e2)
+          return $ Left $ showO $ errors e
 
 ---
 

@@ -200,7 +200,7 @@ pKey k = _pkName k ++ "-" ++ _pkVersion k ++ "-" ++ dKey (_pkDesignation k)
 ---
 
 __read'cache'get :: FilePath -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m (Maybe [PackageWithUnresolvedDependencies])
-__read'cache'get = binaryGet
+__read'cache'get = binaryGet . pathAsFile
 
 __read'cache'put :: FilePath -> [PackageWithUnresolvedDependencies] -> (MonadIO m) => m ()
 __read'cache'put p r = liftIO $ encodeFile p r

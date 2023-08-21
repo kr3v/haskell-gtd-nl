@@ -79,8 +79,6 @@ pRemove cPkg = do
   path cPkg exportsN >>= liftIO . removeIfExists
   logDebugNSS "package cached remove" $ printf "%s" (show $ Cabal.key cPkg)
 
----
-
 get ::
   Context ->
   Cabal.PackageWithResolvedDependencies ->

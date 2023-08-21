@@ -193,9 +193,9 @@ package'resolution'withDependencies'forked p = do
   dm <- view isDynamicMemoryUsageByPackage
 
   let pArgs' memFree
-        | memFree > 8 * 1024 = ["-N -A128M"]
-        | memFree > 4 * 1024 = ["-N -A32M"]
-        | memFree > 2 * 1024 = ["-N -A4M"]
+        | memFree > 8 * 1024 = ["-N", "-A128M"]
+        | memFree > 4 * 1024 = ["-N", "-A32M"]
+        | memFree > 2 * 1024 = ["-N", "-A4M"]
         | otherwise = []
       pArgs = do
         memFree <- liftIO getUsableFreeMemory

@@ -5,6 +5,7 @@ import fs = require('node:fs');
 import { ChildProcess, exec, spawn } from 'child_process';
 import { homedir } from 'os'
 import * as util from 'util';
+import { FileHandle } from 'node:fs/promises';
 
 const userHomeDir = homedir();
 let serverRoot = path.join(userHomeDir, "/.local/share/haskell-gtd-extension-server-root");
@@ -21,6 +22,13 @@ function refreshSubPaths() {
 }
 
 ///
+
+function resolvePath(p: string): string {
+	if (p.startsWith('~')) {
+		return path.normalize(path.join(userHomeDir, p.slice(1)));
+	}
+	return p;
+}
 
 function isParentOf(p1: string, p2: string) {
 	const relative = path.relative(p1, p2);
@@ -49,11 +57,12 @@ function isMainHaskellExtensionActive(): boolean {
 ///
 
 let port = 0;
-let stdout: number | null = null, stderr: number | null = null;
+let stdout: FileHandle | null = null, stderr: FileHandle | null = null;
 let server: ChildProcess | null = null;
 
 async function sendHeartbeat() {
-	fs.readFile(serverPortF, "utf8", (err, data) => { port = parseInt(data, 10); });
+	let data = await fs.promises.readFile(serverPortF, "utf8");
+	port = parseInt(data, 10);
 	if (port <= 0) return false;
 
 	let res = await axios.
@@ -72,8 +81,8 @@ async function startServerIfRequired() {
 
 	outputChannel.appendLine(util.format("starting server"));
 
-	if (stdout != null) { fs.closeSync(stdout); stdout = null; }
-	if (stderr != null) { fs.closeSync(stderr); stderr = null; }
+	if (stdout != null) { await stdout.close(); stdout = null; }
+	if (stderr != null) { await stderr.close(); stderr = null; }
 	if (server != null) { server.kill(); server = null; stopServer(); }
 
 	let conf = vscode.workspace.getConfiguration('hs-gtd');
@@ -87,14 +96,14 @@ async function startServerIfRequired() {
 
 	const watcher = fs.promises.watch(serverPortF, { signal });
 
-	stdout = fs.openSync(path.join(serverRoot, 'stdout.log'), 'a');
-	stderr = fs.openSync(path.join(serverRoot, 'stderr.log'), 'a');
+	stdout = await fs.promises.open(path.join(serverRoot, 'stdout.log'), 'a');
+	stderr = await fs.promises.open(path.join(serverRoot, 'stderr.log'), 'a');
 	server = spawn(
 		serverExe,
 		args,
 		{
 			detached: true,
-			stdio: ['ignore', stdout, stderr],
+			stdio: ['ignore', stdout.fd, stderr.fd],
 		}
 	);
 	server.unref();
@@ -107,7 +116,8 @@ async function startServerIfRequired() {
 
 async function stopServer() {
 	let pid: number = -1;
-	fs.readFile(serverPidF, "utf8", (err, data) => pid = parseInt(data, 10));
+	let data = await fs.promises.readFile(serverPidF, "utf8");
+	pid = parseInt(data, 10);
 	if (pid <= 0) return;
 	process.kill(pid);
 }
@@ -341,6 +351,7 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 				let conf = vscode.workspace.getConfiguration('hs-gtd');
 				let disableLocDefs = conf.get<boolean>("extension.disable-local-definitions-when-hls-is-active") ?? true;
 				if (disableLocDefs) {
+					outputChannel.appendLine(util.format("HLS is active, disabling local definitions; got %s", wordSourcePathO));
 					return Promise.resolve([]);
 				}
 			}
@@ -412,7 +423,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		files.update('watcherExclude', watcherExclude, vscode.ConfigurationTarget.WorkspaceFolder);
 		let exclude: any = files.get('exclude');
 		exclude['**/path/to/exclude'] = true;
-		files.update('exclude',exclude, vscode.ConfigurationTarget.WorkspaceFolder);
+		files.update('exclude', exclude, vscode.ConfigurationTarget.WorkspaceFolder);
 
 		let search = vscode.workspace.getConfiguration('search');
 		let excludeS: any = search.get('exclude');
@@ -428,6 +439,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 		let conf = vscode.workspace.getConfiguration('hs-gtd', vscode.window.activeTextEditor?.document?.uri);
 		serverRoot = conf.get<string>('server.root') ?? path.join(userHomeDir, "/.local/share/haskell-gtd-extension-server-root");
+		serverRoot = resolvePath(serverRoot);
 		serverExe = conf.get<string>('server.path') ?? "haskell-gtd-server";
 		serverExe = conf.get<string>('package.path') ?? "haskell-gtd-server";
 		if (!path.isAbsolute(serverExe)) {

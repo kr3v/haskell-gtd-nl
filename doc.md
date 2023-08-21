@@ -27,8 +27,8 @@
 4x	|   - 'dynamic' package memory usage: if available RAM ... => ... : >=8 GiB => -N -A128M, <8 GiB => -N -A64M, <4 GiB => -A16M, <2 GiB => no options
 5x	|   - server logging: 'debug' vs 'info' level configurable
 		|   - show parsing status: server/package executable should occasionally print their status to a file in the local/share dir
-6		|   - if parsing a file fails, try parsing only imports-exports
-		|     - consider caching last known 'good' version of file local declarations
+6x	|   - if parsing a file fails, try parsing only imports-exports
+7		|     - consider caching last known 'good' version of file local declarations
     |   - if there's no resolution cache, try building it dynamically?
     |   - Cabal support:
     |     - `cabal.project`
