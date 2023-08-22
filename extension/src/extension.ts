@@ -8,26 +8,27 @@ import * as util from 'util';
 import { FileHandle } from 'node:fs/promises';
 
 const userHomeDir = homedir();
-let serverRoot = path.join(userHomeDir, "/.local/share/haskell-gtd-extension-server-root");
-let serverExe = path.join(serverRoot, "haskell-gtd-server");
-let serverRepos = path.join(serverRoot, "repos");
-let serverPidF = path.join(serverRoot, 'pid');
-let serverPortF = path.join(serverRoot, 'port');
+const cabalDir = path.join(userHomeDir, ".cabal/bin");
+let serverRoot: string, serverExe: string, packageExe: string, serverRepos: string, serverPidF: string, serverPortF: string;
 let outputChannel: vscode.OutputChannel;
-
-function refreshSubPaths() {
-	serverRepos = path.join(serverRoot, "repos");
-	serverPidF = path.join(serverRoot, 'pid');
-	serverPortF = path.join(serverRoot, 'port');
-}
 
 ///
 
-function resolvePath(p: string): string {
-	if (p.startsWith('~')) {
-		return path.normalize(path.join(userHomeDir, p.slice(1)));
+function isExecutableInPath(executable: string): Promise<boolean> {
+	return new Promise((resolve, _) => exec(
+		`command -v ${executable} || which ${executable}`,
+		(error, _,) => { return resolve(error ? false : true); })
+	);
+}
+
+async function exists(p: string): Promise<boolean> {
+	try {
+		await fs.promises.access(p, fs.constants.X_OK);
+		return true;
 	}
-	return p;
+	catch (error) {
+		return false;
+	}
 }
 
 function isParentOf(p1: string, p2: string) {
@@ -45,6 +46,27 @@ async function createSymlink(src: string, dst: string) {
 	} catch (error) {
 		outputChannel.appendLine(util.format('repos %s -> %s failed: %s', src, dst, error));
 	}
+}
+
+async function supernormalize(p: string, executable: boolean): Promise<string> {
+	if (path.isAbsolute(p)) return path.normalize(p);
+
+	if (executable) {
+		if (await isExecutableInPath(p)) {
+			return p;
+		}
+		if (await exists(path.join(serverRoot, p))) {
+			return path.join(serverRoot, p);
+		}
+		if (await exists(path.join(cabalDir, p))) {
+			return path.join(cabalDir, p);
+		}
+		return p;
+	}
+	if (p.startsWith('~')) {
+		return path.normalize(path.join(userHomeDir, p.slice(1)));
+	}
+	return path.normalize(path.join(serverRoot, p));
 }
 
 const haskellExtensionID = "haskell.haskell";
@@ -89,6 +111,7 @@ async function startServerIfRequired() {
 	let serverArgs = conf.get<string[]>("server.args") ?? [];
 	let packageArgs = conf.get<string[]>("package.args") ?? [];
 	let args = serverArgs.concat(packageArgs.length > 0 ? ["--package", ...packageArgs] : []);
+	args = args.concat(["--package-exe", packageExe]);
 
 	const ac = new AbortController();
 	const { signal } = ac;
@@ -376,10 +399,24 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 	}
 }
 
+async function initConfig() {
+	let conf = vscode.workspace.getConfiguration('hs-gtd', vscode.window.activeTextEditor?.document?.uri);
+	serverRoot = await supernormalize(conf.get<string>('server.root') ?? path.join(userHomeDir, "/.local/share/haskell-gtd-extension-server-root"), false);
+	serverExe = await supernormalize(conf.get<string>('server.path') ?? "haskell-gtd-server", true);
+	packageExe = await supernormalize(conf.get<string>('package.path') ?? "haskell-gtd-package", true);
+	serverRepos = path.join(serverRoot, "repos");
+	serverPidF = path.join(serverRoot, 'pid');
+	serverPortF = path.join(serverRoot, 'port');
+
+	outputChannel.appendLine(util.format("serverRoot=%s", serverRoot));
+	outputChannel.appendLine(util.format("serverExe=%s", serverExe));
+	outputChannel.appendLine(util.format("packageExe=%s", packageExe));
+}
+
 export async function activate(context: vscode.ExtensionContext) {
 	outputChannel = vscode.window.createOutputChannel("haskell-gtd");
-
 	outputChannel.appendLine(userHomeDir);
+	await initConfig();
 
 	// reset current working directory cache whenever a Cabal or Haskell file is saved
 	context.subscriptions.push(
@@ -433,20 +470,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(vscode.commands.registerCommand('hs-gtd.server.restart', stopServer));
 
-	vscode.workspace.onDidChangeConfiguration((e) => {
+	vscode.workspace.onDidChangeConfiguration(async (e) => {
 		if (!e.affectsConfiguration('hs-gtd')) {
 			return;
 		}
-		let conf = vscode.workspace.getConfiguration('hs-gtd', vscode.window.activeTextEditor?.document?.uri);
-		serverRoot = conf.get<string>('server.root') ?? path.join(userHomeDir, "/.local/share/haskell-gtd-extension-server-root");
-		serverRoot = resolvePath(serverRoot);
-		serverExe = conf.get<string>('server.path') ?? "haskell-gtd-server";
-		serverExe = conf.get<string>('package.path') ?? "haskell-gtd-server";
-		if (!path.isAbsolute(serverExe)) {
-			serverExe = path.normalize(path.join(serverRoot, serverExe));
-		}
-		refreshSubPaths();
-
+		initConfig();
 		if (e.affectsConfiguration("hs-gtd.package.args") || e.affectsConfiguration("hs-gtd.server.args")) {
 			stopServer();
 		}

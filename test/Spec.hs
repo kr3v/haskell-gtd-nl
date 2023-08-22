@@ -18,7 +18,7 @@ import Data.Either.Combinators (mapLeft, mapRight)
 import Data.List (isPrefixOf, isSuffixOf)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust, fromMaybe)
-import GTD.Configuration (GTDConfiguration (..), prepareConstants)
+import GTD.Configuration (GTDConfiguration (..), prepareConstants, defaultArgs)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (Declarations (..), Exports, Imports, SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine))
 import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule, parseModule)
@@ -169,7 +169,7 @@ haskellGetImportsSpec = do
 
 figureOutExportsTest :: Spec
 figureOutExportsTest = do
-  consts <- runIO $ prepareConstants False LevelDebug
+  consts <- runIO $ prepareConstants =<< defaultArgs
 
   let descr = "figureOutExports"
       root = "./test/samples/" </> descr
@@ -216,7 +216,7 @@ figureOutExportsTest = do
 
 definitionsSpec :: Spec
 definitionsSpec = do
-  consts <- runIO $ prepareConstants False LevelDebug
+  consts <- runIO $ prepareConstants =<< defaultArgs
 
   let descr = "definitions"
   pwd <- runIO getCurrentDirectory

@@ -34,7 +34,7 @@
           },
           "hs-gtd.package.path": {
             "type": "string",
-            "default": "./haskell-gtd-server"
+            "default": "./haskell-gtd-package"
           },
           "hs-gtd.server.args": {
             "type": "array",

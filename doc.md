@@ -28,8 +28,8 @@
 5x	|   - server logging: 'debug' vs 'info' level configurable
 		|   - show parsing status: server/package executable should occasionally print their status to a file in the local/share dir
 6x	|   - if parsing a file fails, try parsing only imports-exports
-7		|     - consider caching last known 'good' version of file local declarations
-    |   - if there's no resolution cache, try building it dynamically?
+8		|     - consider caching last known 'good' version of file local declarations
+9   |   - if there's no resolution cache, try building it dynamically?
     |   - Cabal support:
     |     - `cabal.project`
     |     - `common` in `*.cabal`
@@ -41,4 +41,4 @@
 		|       `./src/A/B/C/D.hs` -> check for `.cabal` in `.`, `.src`, ...; use the first that has `A.B.C.D` resolvable through `src-dirs`
   	| - both:
   	|   - follow lsp instead of custom protocol
-7		|   - support `~/.cabal/bin/...` and PATH for `haskell-gtd-server` and `haskell-gtd-package`
+7x	|   - support `~/.cabal/bin/...` and PATH for `haskell-gtd-server` and `haskell-gtd-package`

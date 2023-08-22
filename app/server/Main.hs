@@ -13,20 +13,20 @@ import Control.Concurrent (MVar, forkIO, modifyMVar_, newMVar, putMVar, readMVar
 import Control.Lens (makeLenses, (<+=), (^.))
 import Control.Monad.Except (runExceptT)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Logger (runFileLoggingT, runStdoutLoggingT, LogLevel (..), filterLogger)
+import Control.Monad.Logger (filterLogger, runFileLoggingT, runStdoutLoggingT)
 import Control.Monad.Reader (ReaderT (runReaderT))
 import Control.Monad.State (StateT (runStateT), execStateT)
 import Control.Monad.State.Lazy (evalStateT)
 import Data.Proxy (Proxy (..))
 import GHC.TypeLits (KnownSymbol)
-import GTD.Configuration (GTDConfiguration (..), prepareConstants, root)
+import GTD.Configuration (Args (..), GTDConfiguration (..), prepareConstants, argsP, args)
 import GTD.Resolution.State (Context, emptyContext)
 import qualified GTD.Resolution.State.Caching.Cabal as CabalCache
 import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), DropCacheRequest, definition, resetCache)
 import GTD.Utils (ultraZoom)
 import Network.Socket (Family (AF_INET), SockAddr (SockAddrInet), SocketType (Stream), bind, defaultProtocol, listen, socket, socketPort, tupleToHostAddress, withSocketsDo)
 import Network.Wai.Handler.Warp (defaultSettings, runSettingsSocket)
-import Options.Applicative (Parser, ParserInfo, auto, execParser, fullDesc, help, helper, info, long, option, showDefault, value, (<**>), switch)
+import Options.Applicative (ParserInfo, execParser, fullDesc, helper, info, (<**>))
 import Servant (Header, Headers, JSON, Post, ReqBody, addHeader, (:<|>) (..), (:>))
 import Servant.Server (Handler, serve)
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
@@ -71,15 +71,15 @@ nt s x = liftIO (evalStateT x s)
 
 ---
 
-h a c m respP1 respP2 req = do
+h c m respP1 respP2 req = do
   s <- liftIO $ takeMVar m
   (r, s') <- flip runStateT s $ do
     rq <- reqId <+= 1
     let reqId :: String = printf "%06d" rq
-    let logP = _root c </> "server.log"
+    let logP = (_root . _args $ c) </> "server.log"
     liftIO $ putStrLn $ "Got request with ID:" ++ show reqId
 
-    r' <- ultraZoom context $ runFileLoggingT logP $ filterLogger (\_ l -> l >= logLevel a) $ flip runReaderT c $ runExceptT $ respP1 req
+    r' <- ultraZoom context $ runFileLoggingT logP $ filterLogger (\_ l -> l >= (_logLevel . _args $ c)) $ flip runReaderT c $ runExceptT $ respP1 req
     return $ respP2 reqId r'
   liftIO $ putMVar m s'
   return r
@@ -88,14 +88,13 @@ h a c m respP1 respP2 req = do
 
 definitionH ::
   KnownSymbol hs =>
-  Args ->
   GTDConfiguration ->
   MVar ServerState ->
   DefinitionRequest ->
   Handler (Headers '[Header hs String] DefinitionResponse)
-definitionH a c m req = do
+definitionH c m req = do
   let defH = either (\e -> DefinitionResponse {err = Just e, srcSpan = Nothing}) id
-  h a c m definition (\r e -> addHeader r $ defH e) req
+  h c m definition (\r e -> addHeader r $ defH e) req
 
 pingH :: MVar ServerState -> Handler String
 pingH m = do
@@ -103,14 +102,13 @@ pingH m = do
   return "pong"
 
 dropCacheH ::
-  Args ->
   GTDConfiguration ->
   MVar ServerState ->
   DropCacheRequest ->
   Handler String
-dropCacheH a c m req = do
+dropCacheH c m req = do
   let defH = either id id
-  h a c m resetCache (\_ e -> defH e) req
+  h c m resetCache (\_ e -> defH e) req
 
 ---
 
@@ -128,24 +126,10 @@ selfKiller m ttl = do
       putMVar m m'
       selfKiller m ttl
 
-data Args = Args
-  { ttl :: Int,
-    dynamicMemoryUsage :: Bool,
-    logLevel :: LogLevel
-  }
-  deriving (Show)
-
-args :: Parser Args
-args =
-  Args
-    <$> option auto (long "ttl" <> help "how long to wait before dying when idle (in seconds)" <> showDefault <> value 60)
-    <*> switch (long "dynamic-memory-usage" <> help "whether to use dynamic memory usage" <> showDefault)
-    <*> option auto (long "log-level" <> help "" <> showDefault <> value LevelInfo)
-
 opts :: ParserInfo Args
 opts =
   info
-    (args <**> helper)
+    (argsP <**> helper)
     fullDesc
 
 main :: IO ()
@@ -163,17 +147,18 @@ main = withSocketsDo $ do
   port <- socketPort sock
   printf "port=%s\n" (show port)
 
-  constants <- prepareConstants (dynamicMemoryUsage as) (logLevel as)
-  setCurrentDirectory (constants ^. root)
+  constants <- prepareConstants as
+  let root = _root . _args $ constants
+  setCurrentDirectory root
   getCurrentDirectory >>= print
   print constants
 
   pid <- getProcessID
 
-  writeFile (constants ^. root </> "pid") (show pid)
-  writeFile (constants ^. root </> "port") (show port)
+  writeFile (root </> "pid") (show pid)
+  writeFile (root </> "port") (show port)
 
   s0 <- flip runReaderT constants $ runStdoutLoggingT $ flip execStateT emptyServerState $ ultraZoom context CabalCache.load
   s <- newMVar s0
-  _ <- forkIO $ selfKiller s (ttl as)
-  runSettingsSocket defaultSettings sock $ serve api (definitionH as constants s :<|> pingH s :<|> dropCacheH as constants s)
+  _ <- forkIO $ selfKiller s (_ttl as)
+  runSettingsSocket defaultSettings sock $ serve api (definitionH constants s :<|> pingH s :<|> dropCacheH constants s)

@@ -7,25 +7,26 @@
 
 module GTD.Server where
 
-import Control.Lens (over, use, view, (%=), (.=))
+import Control.Exception.Safe (tryAny)
+import Control.Lens (over, view, (%=), (.=))
 import Control.Monad (forM, forM_, join, mapAndUnzipM, unless, void, (<=<))
 import Control.Monad.Except (MonadError (..), MonadIO (..))
 import Control.Monad.Logger (MonadLoggerIO)
-import Control.Monad.RWS (MonadReader (..), MonadState (..), gets, asks)
+import Control.Monad.RWS (MonadReader (..), MonadState (..), gets)
 import Control.Monad.State (evalStateT, modify)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Reader (ReaderT (..))
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Bifunctor (Bifunctor (..))
 import qualified Data.Cache.LRU as LRU
-import Data.List (find, isPrefixOf, intercalate)
+import Data.List (find, intercalate, isPrefixOf)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes, fromMaybe)
 import qualified Data.Set as Set
 import GHC.Generics (Generic)
 import GTD.Cabal (ModuleNameS)
 import qualified GTD.Cabal as Cabal
-import GTD.Configuration (GTDConfiguration (..), isDynamicMemoryUsageByPackage, root, logLevel)
+import GTD.Configuration (Args (..), GTDConfiguration (..), args)
 import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Identifier, SourceSpan (..), asDeclsMap, emptySourceSpan)
 import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule)
 import qualified GTD.Haskell.Module as HsModule
@@ -38,7 +39,7 @@ import qualified GTD.Resolution.State.Caching.Package as PackageCache
 import GTD.Resolution.Utils (ParallelizedState (..), SchemeState (..), parallelized, scheme)
 import GTD.Utils (getUsableFreeMemory, logDebugNSS, modifyMS, stats)
 import System.FilePath (normalise, (</>))
-import System.IO (IOMode (..), withFile)
+import System.IO (IOMode (AppendMode), withFile)
 import System.Process (CreateProcess (..), StdStream (..), createProcess, proc, waitForProcess)
 import Text.Printf (printf)
 
@@ -189,8 +190,7 @@ package'resolution'withDependencies'concurrently cPkg0 = do
 package'resolution'withDependencies'forked :: Cabal.PackageWithResolvedDependencies -> (MS m) => m ()
 package'resolution'withDependencies'forked p = do
   let d = Cabal._root p
-  r <- view root
-  dm <- view isDynamicMemoryUsageByPackage
+  Args {_dynamicMemoryUsage = dm, _logLevel = ll, _packageExe = pe, _root = r} <- view args
 
   let pArgs' memFree
         | memFree > 8 * 1024 = ["-N", "-A128M"]
@@ -203,14 +203,17 @@ package'resolution'withDependencies'forked p = do
         logDebugNSS "haskell-gtd-package" $ printf "given getUsableFreeMemory=%s and memFree=%s, rts = %s" (show dm) (show memFree) (show a)
         return a
   rts <- if dm then pArgs else return []
-  ll <- asks _logLevel
-  let args = ["--dir", d, "--log-level", show ll] ++ if null rts then [] else ["+RTS"] ++ rts ++ ["-RTS"]
+  let a = ["--dir", d, "--log-level", show ll] ++ if null rts then [] else ["+RTS"] ++ rts ++ ["-RTS"]
 
-  ec <- liftIO $
-    withFile (r </> "package.stdout.log") AppendMode $ \hout -> withFile (r </> "package.stderr.log") AppendMode $ \herr -> do
-      (_, _, _, h) <- createProcess (proc "haskell-gtd-package" args) {std_out = UseHandle hout, std_err = UseHandle herr}
-      waitForProcess h
-  logDebugNSS "haskell-gtd-package" $ printf "args %s + %s -> %s" (show args) d (show ec)
+  l <- liftIO $ withFile (r </> "package.stdout.log") AppendMode $ \hout -> withFile (r </> "package.stderr.log") AppendMode $ \herr -> do
+    e <- liftIO $ tryAny $ createProcess (proc pe a) {std_out = UseHandle hout, std_err = UseHandle herr}
+    x <- case e of
+      Left e -> return $ show e
+      Right (_, _, _, h) -> do
+        x <- liftIO $ waitForProcess h
+        return $ show x
+    return $ printf "exe=%s args=%s -> %s" (show a) d x
+  logDebugNSS "haskell-gtd-package" l
 
 package ::
   Cabal.PackageWithResolvedDependencies ->
