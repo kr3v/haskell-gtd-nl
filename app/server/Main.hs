@@ -9,7 +9,7 @@
 
 module Main where
 
-import Control.Concurrent (MVar, forkIO, modifyMVar_, newMVar, putMVar, readMVar, takeMVar, threadDelay)
+import Control.Concurrent (MVar, forkIO, modifyMVar_, newMVar, putMVar, readMVar, takeMVar, modifyMVar, threadDelay)
 import Control.Lens (makeLenses, (<+=), (^.))
 import Control.Monad.Except (runExceptT)
 import Control.Monad.IO.Class (liftIO)
@@ -21,7 +21,7 @@ import Data.Proxy (Proxy (..))
 import GHC.TypeLits (KnownSymbol)
 import GTD.Configuration (Args (..), GTDConfiguration (..), prepareConstants, argsP, args)
 import GTD.Resolution.State (Context, emptyContext)
-import qualified GTD.Resolution.State.Caching.Cabal as CabalCache
+import qualified GTD.Cabal.Cache as CabalCache
 import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), DropCacheRequest, definition, resetCache)
 import GTD.Utils (ultraZoom)
 import Network.Socket (Family (AF_INET), SockAddr (SockAddrInet), SocketType (Stream), bind, defaultProtocol, listen, socket, socketPort, tupleToHostAddress, withSocketsDo)
@@ -71,18 +71,17 @@ nt s x = liftIO (evalStateT x s)
 
 ---
 
-h c m respP1 respP2 req = do
-  s <- liftIO $ takeMVar m
-  (r, s') <- flip runStateT s $ do
-    rq <- reqId <+= 1
-    let reqId :: String = printf "%06d" rq
-    let logP = (_root . _args $ c) </> "server.log"
-    liftIO $ putStrLn $ "Got request with ID:" ++ show reqId
+h c m respP1 respP2 req =
+  liftIO $ modifyMVar m $ \s -> do
+    (r, s') <- flip runStateT s $ do
+      rq <- reqId <+= 1
+      let reqId :: String = printf "%06d" rq
+      let logP = (_root . _args $ c) </> "server.log"
+      liftIO $ putStrLn $ "Got request with ID:" ++ show reqId
 
-    r' <- ultraZoom context $ runFileLoggingT logP $ filterLogger (\_ l -> l >= (_logLevel . _args $ c)) $ flip runReaderT c $ runExceptT $ respP1 req
-    return $ respP2 reqId r'
-  liftIO $ putMVar m s'
-  return r
+      r' <- ultraZoom context $ runFileLoggingT logP $ filterLogger (\_ l -> l >= (_logLevel . _args $ c)) $ flip runReaderT c $ runExceptT $ respP1 req
+      return $ respP2 reqId r'
+    return (s', r)
 
 ---
 

@@ -13,6 +13,7 @@ import Control.Monad.State (StateT (..))
 import Control.Monad.Trans.Except (catchE, mapExceptT)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import qualified Data.Map.Strict as Map
+import Data.Maybe
 import qualified Data.Text as T
 import Data.Time.Clock.POSIX (getPOSIXTime)
 import GHC.Stats (RTSStats (..), getRTSStats, getRTSStatsEnabled)
@@ -96,7 +97,7 @@ stats = do
   statsE <- liftIO getRTSStatsEnabled
   when statsE $ do
     let showF2 :: Float -> String = flip (showFFloat (Just 2)) ""
-    stats@RTSStats
+    s@RTSStats
       { init_cpu_ns = ic,
         init_elapsed_ns = ie,
         mutator_cpu_ns = mc,
@@ -111,13 +112,16 @@ stats = do
     let eI = fromIntegral e
     liftIO $ putStrLn $ printf "CPU : i:%s m:%s g:%s r:%s" (showF2 $ fromIntegral ic / cI) (showF2 $ fromIntegral mc / cI) (showF2 $ fromIntegral gc / cI) (showF2 $ fromIntegral (c - ic - mc - gc) / cI)
     liftIO $ putStrLn $ printf "Wall: i:%s m:%s g:%s r:%s" (showF2 $ fromIntegral ie / eI) (showF2 $ fromIntegral me / eI) (showF2 $ fromIntegral ge / eI) (showF2 $ fromIntegral (e - ie - me - ge) / eI)
-    liftIO $ putStrLn $ "GCs: " ++ show stats
+    liftIO $ putStrLn $ "GCs: " ++ show s
 
 getUsableFreeMemory :: IO Int
 getUsableFreeMemory = do
   content <- readFile "/proc/meminfo"
-  let memInfo = (\[name, val, _] -> (name, read val :: Int)) . words <$> lines content
-      lookupVal name = maybe 0 id (lookup name memInfo)
+  let line [name, val, _] = Just (name, read val :: Int)
+      line [name, val] = Just (name, read val :: Int)
+      line _ = Nothing
+      memInfo = mapMaybe (line . words) $ lines content
+      lookupVal name = fromMaybe 0 (lookup name memInfo)
       freeMem = lookupVal "MemFree:"
       buffers = lookupVal "Buffers:"
       cached = lookupVal "Cached:"

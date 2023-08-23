@@ -32,8 +32,8 @@
 9   |   - if there's no resolution cache, try building it dynamically?
     |   - Cabal support:
     |     - `cabal.project`
-    |     - `common` in `*.cabal`
-    |     - `haskell-language-server.cabal`: `build-depends` without version predicates
+x?  |     - `common` in `*.cabal`
+x?  |     - `haskell-language-server.cabal`: `build-depends` without version predicates
 		| - undecided:
 		|   - consider supporting projects where:
 		|     - there's no `.cabal` file (base only?)
@@ -42,3 +42,7 @@
   	| - both:
   	|   - follow lsp instead of custom protocol
 7x	|   - support `~/.cabal/bin/...` and PATH for `haskell-gtd-server` and `haskell-gtd-package`
+
+---
+
+DistDirLayout -> err=cannot find a cabal 'item' with source directory that owns given file (data={"err":"cannot find a cabal 'item' with source directory that owns given file","srcSpan":null})

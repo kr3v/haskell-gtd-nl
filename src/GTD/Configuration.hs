@@ -5,7 +5,7 @@ module GTD.Configuration where
 import Control.Lens (makeLenses, (^.))
 import Control.Monad.Logger (LogLevel (..))
 import Data.Time.Clock.POSIX (getPOSIXTime)
-import Options.Applicative (Parser, auto, help, long, option, showDefault, switch, value)
+import Options.Applicative (Parser, auto, help, long, option, showDefault, switch, value, strOption)
 import System.Directory (createDirectoryIfMissing, getHomeDirectory)
 import System.FilePath ((</>))
 
@@ -24,8 +24,8 @@ argsP =
     <$> option auto (long "ttl" <> help "how long to wait before dying when idle (in seconds)" <> showDefault <> value 60)
     <*> switch (long "dynamic-memory-usage" <> help "whether to use dynamic memory usage" <> showDefault)
     <*> option auto (long "log-level" <> help "" <> showDefault <> value LevelInfo)
-    <*> option auto (long "package-exe" <> help "" <> showDefault <> value "./haskell-gtd-package")
-    <*> option auto (long "root" <> help "" <> showDefault)
+    <*> strOption (long "package-exe" <> help "" <> showDefault <> value "./haskell-gtd-package")
+    <*> strOption (long "root" <> help "" <> showDefault)
 
 defaultArgs :: IO Args
 defaultArgs = do

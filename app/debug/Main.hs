@@ -11,7 +11,7 @@ import Control.Exception (try)
 import Control.Lens ((^.))
 import Control.Monad (forM_)
 import Control.Monad.Except (MonadError (..), MonadIO (..), runExceptT)
-import Control.Monad.Logger (runStderrLoggingT, LogLevel (LevelDebug))
+import Control.Monad.Logger (runStderrLoggingT)
 import Control.Monad.Reader (ReaderT (..))
 import Control.Monad.State (evalStateT)
 import Control.Monad.Trans.Maybe (MaybeT (..))
@@ -25,6 +25,10 @@ import Data.GraphViz.Types.Monadic (digraph, edge, graphAttrs)
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 import Data.Text.Lazy as L (pack)
+import Distribution.Client.DistDirLayout
+import Distribution.Client.ProjectConfig (readGlobalConfig)
+import Distribution.Client.RebuildMonad (runRebuild)
+import Distribution.Simple.Flag (Flag (..))
 import qualified GHC.Data.FastString as GHC
 import qualified GHC.Data.StringBuffer as GHC
 import qualified GHC.Driver.Config.Parser as GHC
@@ -37,19 +41,19 @@ import GHC.Types.SourceError (SourceError)
 import GHC.Types.SrcLoc (GenLocated (..))
 import qualified GHC.Types.SrcLoc as GHC
 import qualified GTD.Cabal as Cabal
-import GTD.Configuration (prepareConstants, repos)
+import GTD.Configuration (defaultArgs, prepareConstants, repos)
 import qualified GTD.Haskell.Module as HsModule
 import GTD.Haskell.Parser.GhcLibParser (fakeSettings, parsePragmasIntoDynFlags, showO)
 import GTD.Resolution.Module (module'Dependencies)
 import GTD.Resolution.State (ccGet, emptyContext)
-import qualified GTD.Resolution.State.Caching.Cabal as CabalCache
 import GTD.Server (modulesOrdered, package'dependencies'ordered, package'order'default)
-import GTD.Utils (getUsableFreeMemory, ultraZoom)
+import GTD.Utils (ultraZoom)
 import Options.Applicative (Parser, ParserInfo, auto, command, execParser, fullDesc, help, helper, info, long, metavar, option, progDesc, strOption, subparser, (<**>))
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.FilePath ((</>))
 import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
 import Text.Printf (printf)
+import Distribution.Parsec (explicitEitherParsec, eitherParsec)
 
 showT2 :: (String, String) -> String
 showT2 (a, b) = "(" ++ a ++ "," ++ b ++ ")"
@@ -60,6 +64,7 @@ data Args
   = ResolutionOrder {_pkgN :: String, _pkgV :: String, _type :: Type}
   | Identifier {_text :: String}
   | ParseHeader {_file :: String}
+  | CabalProject {_file :: String, _root :: String}
   deriving (Show)
 
 ro :: Parser Args
@@ -75,12 +80,16 @@ idP = Identifier <$> strOption (long "text" <> help "kekw")
 ph :: Parser Args
 ph = ParseHeader <$> strOption (long "file" <> help "kekw")
 
+cp :: Parser Args
+cp = CabalProject <$> strOption (long "file" <> help "kekw") <*> strOption (long "root" <> help "kekw")
+
 args :: Parser Args
 args = do
   let commands =
         [ command "order" (info ro (fullDesc <> progDesc "kekw")),
           command "identifier" (info idP (fullDesc <> progDesc "kekw")),
-          command "header" (info ph (fullDesc <> progDesc "kekw"))
+          command "header" (info ph (fullDesc <> progDesc "kekw")),
+          command "cabal" (info cp (fullDesc <> progDesc "kekw"))
         ]
   subparser (mconcat commands)
 
@@ -104,13 +113,13 @@ main = do
   case a of
     ResolutionOrder {_pkgN = pkgN, _pkgV = pkgV, _type = t} -> do
       init <- getCurrentDirectory
-      constants <- prepareConstants False LevelDebug
+      constants <- prepareConstants =<< defaultArgs
       setCurrentDirectory (constants ^. repos)
       getCurrentDirectory >>= print
       print constants
 
       x :: Either String () <- runStderrLoggingT $ runExceptT $ flip runReaderT constants $ flip evalStateT emptyContext $ do
-        CabalCache.load
+        Cabal.load
         cPkgM <- ultraZoom ccGet $ runMaybeT $ Cabal.get pkgN pkgV
         cPkgP <- case cPkgM of
           Nothing -> throwError "Cabal.get: no package found"
@@ -146,8 +155,8 @@ main = do
               return ()
 
         case t of
-          Module -> h HsModule._name module'Dependencies modulesOrdered CabalCache.findAtF
-          Package -> h (show . Cabal.key) (fmap show . Cabal._dependencies) (flip package'dependencies'ordered package'order'default) CabalCache.findAt
+          Module -> h HsModule._name module'Dependencies modulesOrdered Cabal.findAtF
+          Package -> h (show . Cabal.key) (fmap show . Cabal._dependencies) (flip package'dependencies'ordered package'order'default) Cabal.findAt
 
       case x of
         Left e -> print e
@@ -188,3 +197,11 @@ main = do
       print $ case r of
         POk _ (L _ e) -> printf ":t %s => %s" (showConstr . toConstr $ e) (showO e)
         PFailed e -> showO $ errors e
+    CabalProject {_file = file, _root = root} -> do
+      let ddl = defaultDistDirLayout (ProjectRootImplicit root) Nothing
+      let vE = eitherParsec "normal"
+      case vE of
+        Left e -> print e
+        Right v -> do
+          c <- runRebuild root $ readGlobalConfig v (Flag file)
+          print c

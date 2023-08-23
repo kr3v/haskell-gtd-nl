@@ -18,7 +18,6 @@ import Data.Aeson (FromJSON, ToJSON)
 import Data.Either.Combinators (mapLeft)
 import qualified Data.Map.Strict as Map
 import GHC.Generics (Generic)
-import GTD.Cabal (ModuleNameS, PackageNameS)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (ClassOrData (_cdtName), Declaration (_declModule, _declName), Declarations (..), Exports, Imports)
 import qualified GTD.Haskell.Declaration as Declarations
@@ -26,7 +25,7 @@ import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import GTD.Utils (logDebugNSS)
 import Language.Haskell.Exts (Module (Module), SrcSpan (..), SrcSpanInfo (..))
 import Data.Binary (Binary)
-import qualified GTD.Cabal as Cabal
+import qualified GTD.Cabal.Package as Cabal
 
 newtype HsModuleParams = HsModuleParams
   { _isImplicitExportAll :: Bool
@@ -55,9 +54,9 @@ emptyData :: HsModuleData
 emptyData = HsModuleData {_exports0 = Map.empty, _imports = Map.empty, _locals = Declarations {_decls = Map.empty, _dataTypes = Map.empty}}
 
 data HsModule = HsModule
-  { _package :: PackageNameS,
+  { _package :: Cabal.PackageNameS,
     _pkgK :: Cabal.PackageKey,
-    _name :: ModuleNameS,
+    _name :: Cabal.ModuleNameS,
     _path :: FilePath,
     _info :: HsModuleData,
     _params :: HsModuleParams
@@ -129,12 +128,12 @@ instance Binary HsModuleP
 
 ---
 
-resolve :: Map.Map ModuleNameS HsModuleP -> Declaration -> Maybe Declaration
+resolve :: Map.Map Cabal.ModuleNameS HsModuleP -> Declaration -> Maybe Declaration
 resolve moduleDecls orig = do
   m <- _declModule orig `Map.lookup` moduleDecls
   _declName orig `Map.lookup` (Declarations._decls . _exports) m
 
-resolveCDT :: Map.Map ModuleNameS HsModuleP -> ClassOrData -> Maybe ClassOrData
+resolveCDT :: Map.Map Cabal.ModuleNameS HsModuleP -> ClassOrData -> Maybe ClassOrData
 resolveCDT moduleDecls orig = do
   m <- (_declModule . _cdtName) orig `Map.lookup` moduleDecls
   (_declName . _cdtName) orig `Map.lookup` (Declarations._dataTypes . _exports) m

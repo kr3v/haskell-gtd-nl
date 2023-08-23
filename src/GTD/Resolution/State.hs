@@ -4,13 +4,14 @@
 module GTD.Resolution.State where
 
 import Control.Lens (makeLenses)
+import qualified Data.Cache.LRU as LRU
 import qualified Data.Map.Strict as Map
 import GHC.Generics (Generic)
-import GTD.Cabal (ModuleNameS)
-import qualified GTD.Cabal as Cabal
-import GTD.Haskell.Module (HsModuleP)
-import qualified Data.Cache.LRU as LRU
+import GTD.Cabal.Get as Cabal (GetCache (..))
+import GTD.Cabal.Package (ModuleNameS)
+import qualified GTD.Cabal.Package as Cabal
 import GTD.Haskell.Declaration (Declarations)
+import GTD.Haskell.Module (HsModuleP)
 
 data Package = Package
   { _cabalPackage :: Cabal.PackageWithResolvedDependencies,

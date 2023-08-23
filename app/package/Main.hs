@@ -13,10 +13,11 @@ import Control.Monad.Except (runExceptT, when)
 import Control.Monad.Logger (LogLevel (LevelInfo), filterLogger, runFileLoggingT)
 import Control.Monad.Reader (ReaderT (runReaderT))
 import Control.Monad.State (execStateT)
-import qualified GTD.Cabal as Cabal
-import GTD.Configuration (GTDConfiguration (..), prepareConstants, root)
+import qualified GTD.Cabal.Cache as Cabal ( load, store )
+import qualified GTD.Cabal.FindAt as Cabal ( findAt )
+import qualified GTD.Cabal.Get as Cabal ( changed )
+import qualified GTD.Configuration as Conf (GTDConfiguration (..), defaultArgs, Args(..), prepareConstants)
 import GTD.Resolution.State (ccGet, emptyContext)
-import qualified GTD.Resolution.State.Caching.Cabal as CabalCache
 import GTD.Server (package'resolution'withDependencies'concurrently)
 import GTD.Utils (logErrorNSS, stats)
 import Options.Applicative (Parser, ParserInfo, auto, execParser, fullDesc, help, helper, info, long, option, showDefault, strOption, value, (<**>))
@@ -49,18 +50,19 @@ main = do
 
   Args {dir = d, logLevel = ll} <- execParser opts
 
-  constants <- prepareConstants False ll
-  setCurrentDirectory (constants ^. root)
+  constants <- Conf.prepareConstants =<< Conf.defaultArgs
+  let r = Conf._root . Conf._args $ constants
+  setCurrentDirectory r
   getCurrentDirectory >>= print
   print constants
 
-  runFileLoggingT (_root constants </> "package.log") $ filterLogger (\_ l -> l >= ll) $ do
+  runFileLoggingT (r </> "package.log") $ filterLogger (\_ l -> l >= ll) $ do
     e <- runExceptT $ flip runReaderT constants $ flip execStateT emptyContext $ do
-      CabalCache.load
-      pkg <- CabalCache.findAt d
+      Cabal.load
+      pkg <- Cabal.findAt d
       forM_ pkg $ \p -> package'resolution'withDependencies'concurrently p
       ccGC <- use $ ccGet . Cabal.changed
-      when ccGC CabalCache.store
+      when ccGC Cabal.store
     case e of
       Left err -> logErrorNSS d err
       Right _ -> pure ()

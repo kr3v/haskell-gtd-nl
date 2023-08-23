@@ -112,6 +112,7 @@ async function startServerIfRequired() {
 	let packageArgs = conf.get<string[]>("package.args") ?? [];
 	let args = serverArgs.concat(packageArgs.length > 0 ? ["--package", ...packageArgs] : []);
 	args = args.concat(["--package-exe", packageExe]);
+	args = args.concat(["--root", serverRoot]);
 
 	const ac = new AbortController();
 	const { signal } = ac;
@@ -428,16 +429,17 @@ export async function activate(context: vscode.ExtensionContext) {
 			let wd = docF.uri.fsPath;
 			let repos = path.join(wd, "./.repos");
 
-			outputChannel.appendLine(util.format("saved languageId=%s: %s", document.languageId, document.uri.fsPath));
 			if (isParentOf(repos, document.uri.fsPath) ||
 				!(document.languageId == "haskell" || document.languageId == "cabal") ||
 				!isParentOf(wd, document.uri.fsPath)) return;
-			outputChannel.appendLine(util.format("resetting workspace extension cache"));
+			outputChannel.appendLine(util.format("resetting workspace cache..."));
 
 			await startServerIfRequired();
 			let body = { dir: wd };
-			let res = await axios.post(`http://localhost:${port}/dropcache`, body);
-			outputChannel.appendLine(util.format("resetting workspace extension cache: %s", res.data));
+			let res = await axios
+				.post(`http://localhost:${port}/dropcache`, body)
+				.catch(function (error) { return { "data": error }; });
+			outputChannel.appendLine(util.format("cache reset result: %s", res.data));
 		})
 	);
 

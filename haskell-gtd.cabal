@@ -13,6 +13,7 @@ common common-deps
         base ^>= 4.16.4.0
 
         , Cabal ^>= 3.10.1.0
+        , cabal-install ^>= 3.10.1.0
         , cpphs ^>= 1.20.9.1
         , ghc-lib-parser ^>= 9.6.2.20230523
         , haskell-src-exts ^>= 1.23.1
@@ -73,7 +74,7 @@ executable haskell-gtd-server
 
     hs-source-dirs:   app/server
 
-    ghc-options: -O2 -g1 -threaded -Wall -rtsopts "-with-rtsopts=-N -A128M -T"
+    ghc-options: -O2 -g1 -threaded -Wall -rtsopts "-with-rtsopts=-N -A1M -T"
 
 executable haskell-gtd-package
     import:           common-deps
@@ -91,16 +92,21 @@ library
 
     exposed-modules:
         GTD.Cabal
+        GTD.Cabal.Cache
+        GTD.Cabal.FindAt
+        GTD.Cabal.Full
+        GTD.Cabal.Get
+        GTD.Cabal.Package
+        GTD.Cabal.Parse
         GTD.Configuration
         GTD.Haskell.Cpphs
         GTD.Haskell.Declaration
         GTD.Haskell.Module
         GTD.Haskell.Parser.GhcLibParser
+        GTD.Resolution.Cache
+        GTD.Resolution.Caching.Utils
         GTD.Resolution.Module
         GTD.Resolution.State
-        GTD.Resolution.State.Caching.Cabal
-        GTD.Resolution.State.Caching.Package
-        GTD.Resolution.State.Caching.Utils
         GTD.Resolution.Utils
         GTD.Server
         GTD.Utils

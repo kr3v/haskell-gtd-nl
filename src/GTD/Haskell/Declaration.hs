@@ -8,7 +8,7 @@ import Control.Lens (makeLenses)
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Map.Strict as Map
 import GHC.Generics (Generic)
-import GTD.Cabal (ModuleNameS)
+import GTD.Cabal.Package (ModuleNameS)
 import Language.Haskell.Exts (ModuleName (..), Name (..), SrcSpan (..), SrcSpanInfo (srcInfoSpan))
 import Data.Binary (Binary)
 

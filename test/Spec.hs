@@ -25,7 +25,7 @@ import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule, parseMo
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import GTD.Resolution.Module (figureOutExports, figureOutExports0)
 import GTD.Resolution.State (emptyContext)
-import GTD.Resolution.State.Caching.Cabal as Cabal (load, store)
+import GTD.Cabal.Cache as Cabal (load, store)
 import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), definition)
 import System.Directory (getCurrentDirectory, listDirectory)
 import System.FilePath ((</>))

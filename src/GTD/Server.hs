@@ -34,14 +34,15 @@ import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import GTD.Resolution.Module (figureOutExports1, module'Dependencies, moduleR)
 import GTD.Resolution.State (Context (..), Package (Package, _cabalPackage, _modules), cExports, cResolution)
 import qualified GTD.Resolution.State as Package
-import qualified GTD.Resolution.State.Caching.Cabal as CabalCache
-import qualified GTD.Resolution.State.Caching.Package as PackageCache
+import qualified GTD.Cabal.Cache as CabalCache
+import qualified GTD.Resolution.Cache as PackageCache
 import GTD.Resolution.Utils (ParallelizedState (..), SchemeState (..), parallelized, scheme)
 import GTD.Utils (getUsableFreeMemory, logDebugNSS, modifyMS, stats)
 import System.FilePath (normalise, (</>))
 import System.IO (IOMode (AppendMode), withFile)
 import System.Process (CreateProcess (..), StdStream (..), createProcess, proc, waitForProcess)
 import Text.Printf (printf)
+import qualified GTD.Cabal as CabalCache
 
 data DefinitionRequest = DefinitionRequest
   { workDir :: FilePath,
@@ -300,6 +301,7 @@ resetCache (DropCacheRequest {dir = d}) = do
   forM_ cPkgs $ \cPkg -> do
     PackageCache.pRemove cPkg
     PackageCache.resolution'remove cPkg
+    CabalCache.dropCache cPkg
     cExports %= fst . LRU.delete (Cabal.key cPkg)
     cResolution %= LRU.newLRU . LRU.maxSize
   return "OK"
