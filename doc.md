@@ -30,10 +30,10 @@
 6x	|   - if parsing a file fails, try parsing only imports-exports
 8		|     - consider caching last known 'good' version of file local declarations
 9   |   - if there's no resolution cache, try building it dynamically?
+    |   - dropcache tests
     |   - Cabal support:
-    |     - `cabal.project`
-x?  |     - `common` in `*.cabal`
-x?  |     - `haskell-language-server.cabal`: `build-depends` without version predicates
+x?  |     - `cabal.project`
+    |     - locally resolved libraries should override `cabal get`
 		| - undecided:
 		|   - consider supporting projects where:
 		|     - there's no `.cabal` file (base only?)
@@ -42,7 +42,3 @@ x?  |     - `haskell-language-server.cabal`: `build-depends` without version pre
   	| - both:
   	|   - follow lsp instead of custom protocol
 7x	|   - support `~/.cabal/bin/...` and PATH for `haskell-gtd-server` and `haskell-gtd-package`
-
----
-
-DistDirLayout -> err=cannot find a cabal 'item' with source directory that owns given file (data={"err":"cannot find a cabal 'item' with source directory that owns given file","srcSpan":null})

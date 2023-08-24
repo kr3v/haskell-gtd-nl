@@ -19,30 +19,22 @@ import Data.Data (Data (..), showConstr)
 import Data.Either (fromRight)
 import Data.Foldable (foldrM)
 import Data.GraphViz (GraphID (Str), GraphvizOutput (..), X11Color (..), runGraphviz)
-import qualified Data.GraphViz.Attributes.Colors as Color
 import Data.GraphViz.Attributes.Complete (Attribute (..), RankDir (FromLeft), toColorList)
 import Data.GraphViz.Types.Monadic (digraph, edge, graphAttrs)
 import Data.Maybe (fromMaybe)
-import qualified Data.Set as Set
 import Data.Text.Lazy as L (pack)
 import Distribution.Client.DistDirLayout
-import Distribution.Client.ProjectConfig (readGlobalConfig)
+import Distribution.Client.HttpUtils
+import Distribution.Client.ProjectConfig
 import Distribution.Client.RebuildMonad (runRebuild)
+import Distribution.Parsec (explicitEitherParsec, eitherParsec)
 import Distribution.Simple.Flag (Flag (..))
-import qualified GHC.Data.FastString as GHC
-import qualified GHC.Data.StringBuffer as GHC
-import qualified GHC.Driver.Config.Parser as GHC
+import Distribution.Types.CondTree
 import GHC.Driver.Session (DynFlags)
-import qualified GHC.Driver.Session as GHC
-import qualified GHC.Parser as GHC
 import GHC.Parser.Lexer
-import qualified GHC.Parser.Lexer as GHC
 import GHC.Types.SourceError (SourceError)
 import GHC.Types.SrcLoc (GenLocated (..))
-import qualified GHC.Types.SrcLoc as GHC
-import qualified GTD.Cabal as Cabal
 import GTD.Configuration (defaultArgs, prepareConstants, repos)
-import qualified GTD.Haskell.Module as HsModule
 import GTD.Haskell.Parser.GhcLibParser (fakeSettings, parsePragmasIntoDynFlags, showO)
 import GTD.Resolution.Module (module'Dependencies)
 import GTD.Resolution.State (ccGet, emptyContext)
@@ -53,7 +45,18 @@ import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.FilePath ((</>))
 import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
 import Text.Printf (printf)
-import Distribution.Parsec (explicitEitherParsec, eitherParsec)
+import qualified Data.GraphViz.Attributes.Colors as Color
+import qualified Data.Set as Set
+import qualified GHC.Data.FastString as GHC
+import qualified GHC.Data.StringBuffer as GHC
+import qualified GHC.Driver.Config.Parser as GHC
+import qualified GHC.Driver.Session as GHC
+import qualified GHC.Parser as GHC
+import qualified GHC.Parser.Lexer as GHC
+import qualified GHC.Types.SrcLoc as GHC
+import qualified GTD.Cabal as Cabal
+import qualified GTD.Haskell.Module as HsModule
+import qualified Data.Map as Map
 
 showT2 :: (String, String) -> String
 showT2 (a, b) = "(" ++ a ++ "," ++ b ++ ")"
@@ -198,10 +201,14 @@ main = do
         POk _ (L _ e) -> printf ":t %s => %s" (showConstr . toConstr $ e) (showO e)
         PFailed e -> showO $ errors e
     CabalProject {_file = file, _root = root} -> do
-      let ddl = defaultDistDirLayout (ProjectRootImplicit root) Nothing
+      Right r <- findProjectRoot (Just root) Nothing
+      let ddl = defaultDistDirLayout r Nothing
       let vE = eitherParsec "normal"
       case vE of
         Left e -> print e
         Right v -> do
-          c <- runRebuild root $ readGlobalConfig v (Flag file)
-          print c
+          http <- configureTransport v [] (Just "curl")
+          CondNode{condTreeData=pc} <- runRebuild root $ readProjectConfig v http NoFlag NoFlag ddl
+          print pc
+          locs <- runRebuild root $ findProjectPackages ddl pc
+          print locs

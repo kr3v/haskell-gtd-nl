@@ -4,7 +4,7 @@
 module GTD.Utils where
 
 import Control.Concurrent (myThreadId)
-import Control.Exception (catch, throwIO)
+import Control.Exception (catch, throwIO, try)
 import Control.Lens (Lens', use, (.=))
 import Control.Monad.Except (ExceptT, MonadIO (liftIO), when)
 import Control.Monad.Logger (MonadLogger, MonadLoggerIO, logDebugNS, logErrorNS)
@@ -86,11 +86,18 @@ modifyMS f = do
   put s1
 
 removeIfExists :: FilePath -> IO ()
-removeIfExists fileName = removeFile fileName `catch` handleExists
+removeIfExists n = removeFile n `catch` handleExists
   where
     handleExists e
       | isDoesNotExistError e = return ()
       | otherwise = throwIO e
+
+removeIfExistsL :: FilePath -> (MonadLoggerIO m) => m ()
+removeIfExistsL n = do
+  x :: Either IOError () <- liftIO $ try $ removeFile n
+  case x of
+    Left e -> logErrorNSS "removeIfExistsL" $ printf "%s -> %s" n (show e)
+    Right _ -> logErrorNSS "removeIfExistsL" $ printf "%s -> success" n
 
 stats :: IO ()
 stats = do
