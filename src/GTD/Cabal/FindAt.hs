@@ -5,6 +5,7 @@
 
 module GTD.Cabal.FindAt where
 
+import Control.Exception (catch)
 import Control.Lens (At (at), use, (%=))
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.IO.Class (liftIO)
@@ -15,7 +16,7 @@ import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
 import Distribution.Client.DistDirLayout (defaultDistDirLayout)
 import Distribution.Client.HttpUtils (configureTransport)
-import Distribution.Client.ProjectConfig (ProjectPackageLocation (ProjectPackageLocalCabalFile, ProjectPackageLocalDirectory), findProjectPackages, findProjectRoot, readProjectConfig)
+import Distribution.Client.ProjectConfig (BadPackageLocations, ProjectPackageLocation (ProjectPackageLocalCabalFile, ProjectPackageLocalDirectory), findProjectPackages, findProjectRoot, readProjectConfig)
 import Distribution.Client.RebuildMonad (runRebuild)
 import Distribution.Parsec (eitherParsec)
 import Distribution.Simple.Flag (Flag (..))
@@ -24,8 +25,9 @@ import GTD.Cabal.Package (PackageWithUnresolvedDependencies)
 import GTD.Cabal.Parse (parse)
 import GTD.Configuration (GTDConfiguration (..))
 import GTD.Resolution.State (Context, ccFindAt)
-import GTD.Utils (logDebugNSS)
-import System.FilePath ((</>))
+import GTD.Utils (concatMapM, logDebugNSS)
+import System.Directory (listDirectory)
+import System.FilePath (takeExtension, (</>))
 import Text.Printf (printf)
 
 findAt ::
@@ -36,7 +38,8 @@ findAt p = do
   case e of
     Just d -> return d
     Nothing -> do
-      d <- __findAt p
+      d0 <- findAt'cabalProject p
+      d <- if null d0 then findAt'regular p else return d0
       ccFindAt %= Map.insert p d
       return d
 
@@ -45,10 +48,22 @@ __location (ProjectPackageLocalCabalFile p) = Just p
 __location (ProjectPackageLocalDirectory _ p) = Just p
 __location _ = Nothing
 
-__findAt ::
+findAt'regular ::
   FilePath ->
   (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadError String m) => m [PackageWithUnresolvedDependencies]
-__findAt wd = do
+findAt'regular wd = do
+  cabalFiles <- liftIO $ filter (\x -> takeExtension x == ".cabal") <$> listDirectory wd
+  cabalFile <- case length cabalFiles of
+    0 -> throwError "No cabal file found"
+    1 -> return $ wd </> head cabalFiles
+    _ -> throwError "Multiple cabal files found"
+  logDebugNSS "definition" $ "Found cabal file: " ++ cabalFile
+  parse cabalFile
+
+findAt'cabalProject ::
+  FilePath ->
+  (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m, MonadError String m) => m [PackageWithUnresolvedDependencies]
+findAt'cabalProject wd = do
   let logTag = "findAt"
       handleError e = do
         logDebugNSS logTag $ printf "error: %s" (show e)
@@ -59,7 +74,7 @@ __findAt wd = do
   v <- either handleError return $ eitherParsec "normal"
   http <- liftIO $ configureTransport v [] (Just "curl")
   CondNode {condTreeData = pc} <- liftIO $ runRebuild wd $ readProjectConfig v http NoFlag NoFlag ddl
-  locs <- liftIO $ runRebuild wd $ findProjectPackages ddl pc
+  locs :: [ProjectPackageLocation] <- liftIO $ runRebuild wd (findProjectPackages ddl pc) `catch` (\(_ :: BadPackageLocations) -> return [])
   let locsP = (wd </>) <$> mapMaybe __location locs
   logDebugNSS logTag $ printf "%s -> %s" wd (show locsP)
-  concat <$> mapM parse locsP
+  concatMapM parse locsP

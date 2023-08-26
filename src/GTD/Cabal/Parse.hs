@@ -27,7 +27,7 @@ import GTD.Cabal.Package (Dependency (..), Designation (Designation, _desName, _
 import GTD.Configuration (GTDConfiguration (..))
 import GTD.Resolution.Caching.Utils (binaryGet, pathAsFile)
 import GTD.Utils (logDebugNSS, removeIfExistsL)
-import System.FilePath (takeDirectory, (</>))
+import System.FilePath (takeDirectory, (</>), normalise)
 import System.IO (IOMode (ReadMode), hGetContents, openFile)
 
 ---
@@ -55,13 +55,17 @@ remove p = do
   let pc = c </> pathAsFile p
   removeIfExistsL pc
 
-__read'direct :: FilePath -> (MonadLoggerIO m) => m [PackageWithUnresolvedDependencies]
-__read'direct p = do
-  logDebugNSS "cabal read" p
+__read'packageDescription :: FilePath -> (MonadLoggerIO m) => m Cabal.PackageDescription
+__read'packageDescription p = do
   handle <- liftIO $ openFile p ReadMode
   (warnings, epkg) <- liftIO $ runParseResult . parseGenericPackageDescription . BS.fromString <$> hGetContents handle
   forM_ warnings (\w -> logDebugNSS "cabal read" $ "got warnings for `" ++ p ++ "`: " ++ show w)
-  pd <- liftIO $ either (fail . show) (return . flattenPackageDescription) epkg
+  liftIO $ either (fail . show) (return . flattenPackageDescription) epkg
+
+__read'direct :: FilePath -> (MonadLoggerIO m) => m [PackageWithUnresolvedDependencies]
+__read'direct p = do
+  logDebugNSS "cabal read" p
+  pd <- __read'packageDescription p
 
   execWriterT $ do
     -- TODO: benchmarks, test suites
@@ -69,7 +73,7 @@ __read'direct p = do
           Package
             { _name = unPackageName $ packageName pd,
               _version = prettyShow $ pkgVersion $ Cabal.package pd,
-              _root = takeDirectory p,
+              _root = normalise $ takeDirectory p,
               _path = p,
               _designation = Designation {_desType = Library, _desName = Nothing},
               _modules = emptyPackageModules,
@@ -118,4 +122,4 @@ __depsU :: BuildInfo -> [Dependency]
 __depsU i = execWriter $
   forM_ (targetBuildDepends i) $ \(Cabal.Dependency p vP ns) ->
     forM_ ns \n ->
-      tell $ pure $ Dependency {_dName = Cabal.unPackageName p, _dVersion = prettyShow vP, _dSubname = libraryNameToDesignationName n}
+      tell $ pure $ Dependency {_dName = Cabal.unPackageName p, _dVersion = vP, _dSubname = libraryNameToDesignationName n}

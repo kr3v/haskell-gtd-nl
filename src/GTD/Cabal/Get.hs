@@ -15,7 +15,7 @@
 module GTD.Cabal.Get where
 
 import Control.Lens (At (..), makeLenses, use, view, (%=), (.=))
-import Control.Monad.Logger (MonadLogger)
+import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (MonadReader (..), MonadState)
 import Control.Monad.Trans (MonadIO (liftIO))
 import Control.Monad.Trans.Maybe (MaybeT (..))
@@ -25,6 +25,7 @@ import qualified Data.Map as Map
 import Distribution.Compat.Prelude (Generic)
 import GTD.Configuration (GTDConfiguration (..), repos)
 import GTD.Utils (logDebugNSS')
+import System.Exit (ExitCode)
 import System.IO (hGetContents)
 import System.Process (CreateProcess (..), StdStream (CreatePipe), createProcess, proc, waitForProcess)
 import Text.Printf (printf)
@@ -50,8 +51,21 @@ instance Monoid GetCache where
   mempty :: GetCache
   mempty = GetCache mempty False
 
+get'direct :: String -> String -> (MonadIO m, MonadFail m) => m (ExitCode, Maybe String)
+get'direct pkg reposR = do
+  (_, Just hout, Just herr, h) <- liftIO $ createProcess (proc "cabal" ["get", pkg, "--destdir", reposR]) {std_out = CreatePipe, std_err = CreatePipe}
+  stdout <- liftIO $ hGetContents hout
+  stderr <- liftIO $ hGetContents herr
+  let content = stdout ++ stderr
+  let re = pkg ++ "-" ++ "[^\\/]*\\/"
+  let packageVersion :: [String] = (=~ re) <$> lines content
+  let r = find (not . null) packageVersion
+  ec <- liftIO $ waitForProcess h
+  return (ec, r)
+
 -- executes `cabal get` on given `pkg + pkgVerPredicate`
-get :: String -> String -> (MonadIO m, MonadLogger m, MonadState GetCache m, MonadReader GTDConfiguration m) => MaybeT m FilePath
+-- returns version that matches given predicate
+get :: String -> String -> (MonadLoggerIO m, MonadState GetCache m, MonadReader GTDConfiguration m) => MaybeT m String
 get pkg pkgVerPredicate = do
   let k = pkg ++ pkgVerPredicate
   r0 <- use $ vs . at k
@@ -59,17 +73,8 @@ get pkg pkgVerPredicate = do
     Just p -> MaybeT $ return p
     Nothing -> do
       reposR <- view repos
-      (_, Just hout, Just herr, h) <- liftIO $ createProcess (proc "cabal" ["get", k, "--destdir", reposR]) {std_out = CreatePipe, std_err = CreatePipe}
-      stdout <- liftIO $ hGetContents hout
-      stderr <- liftIO $ hGetContents herr
-      let content = stdout ++ stderr
-      let re = pkg ++ "-" ++ "[^\\/]*\\/"
-      let packageVersion :: [String] = (=~ re) <$> lines content
-      ec <- liftIO $ waitForProcess h
+      (ec, r) <- get'direct pkg reposR
       logDebugNSS' "cabal get" $ printf "cabal get %s %s: exit code %s" pkg pkgVerPredicate (show ec)
-
-      let r = find (not . null) packageVersion
       vs %= Map.insert k r
       changed .= True
-
       MaybeT $ return r

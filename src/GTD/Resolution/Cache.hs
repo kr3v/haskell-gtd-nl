@@ -37,7 +37,7 @@ path :: Cabal.Package a -> FilePath -> (MonadReader GTDConfiguration m) => m Fil
 path cPkg f = do
   c <- asks _cache
   let r = pathAsFile $ Cabal._root cPkg
-      p = Cabal.dKey (Cabal._designation cPkg)
+      p = Cabal.dKey . Cabal._designation $ cPkg
   return $ c </> (r ++ ":" ++ p ++ ":" ++ f)
 
 __pGet :: Cabal.Package b -> FilePath -> (MonadLoggerIO m, MonadReader GTDConfiguration m, Binary a) => m (Maybe a)

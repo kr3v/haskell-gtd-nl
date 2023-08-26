@@ -6,7 +6,7 @@ module GTD.Utils where
 import Control.Concurrent (myThreadId)
 import Control.Exception (catch, throwIO, try)
 import Control.Lens (Lens', use, (.=))
-import Control.Monad.Except (ExceptT, MonadIO (liftIO), when)
+import Control.Monad.Except (ExceptT, MonadIO (liftIO), forM, when)
 import Control.Monad.Logger (MonadLogger, MonadLoggerIO, logDebugNS, logErrorNS)
 import Control.Monad.RWS (MonadState (..))
 import Control.Monad.State (StateT (..))
@@ -133,3 +133,9 @@ getUsableFreeMemory = do
       buffers = lookupVal "Buffers:"
       cached = lookupVal "Cached:"
   return ((freeMem + buffers + cached) `div` 1024)
+
+concatMapM :: (Traversable t, Monad f) => (a -> f [b]) -> t a -> f [b]
+concatMapM a b = concat <$> mapM a b
+
+concatForM :: (Traversable t, Monad f) => t a -> (a -> f [b]) -> f [b]
+concatForM a b = concat <$> forM a b

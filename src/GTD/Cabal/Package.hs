@@ -18,6 +18,7 @@ import Control.Lens (makeLenses)
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Set as Set
 import Distribution.Compat.Prelude (Binary, Generic, fromMaybe)
+import Distribution.Types.VersionRange (VersionRange)
 
 type PackageNameS = String
 
@@ -50,7 +51,7 @@ dKey d = case _desType d of
 
 data Dependency = Dependency
   { _dName :: PackageNameS,
-    _dVersion :: String,
+    _dVersion :: VersionRange,
     _dSubname :: Maybe String
   }
   deriving (Show, Eq, Ord, Generic)
@@ -58,9 +59,6 @@ data Dependency = Dependency
 $(makeLenses ''Dependency)
 
 instance Binary Dependency
-
-dAsT :: Dependency -> (PackageNameS, String, Maybe String)
-dAsT d = (_dName d, _dVersion d, _dSubname d)
 
 data PackageModules = PackageModules
   { _srcDirs :: [FilePath],

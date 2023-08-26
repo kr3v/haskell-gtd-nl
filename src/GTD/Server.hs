@@ -4,11 +4,13 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use tuple-section" #-}
 
 module GTD.Server where
 
 import Control.Exception.Safe (tryAny)
-import Control.Lens (over, view, (%=), (.=))
+import Control.Lens (over, view, (%=), (.=), use)
 import Control.Monad (forM, forM_, join, mapAndUnzipM, unless, void, (<=<))
 import Control.Monad.Except (MonadError (..), MonadIO (..))
 import Control.Monad.Logger (MonadLoggerIO)
@@ -32,7 +34,7 @@ import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule)
 import qualified GTD.Haskell.Module as HsModule
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import GTD.Resolution.Module (figureOutExports1, module'Dependencies, moduleR)
-import GTD.Resolution.State (Context (..), Package (Package, _cabalPackage, _modules), cExports, cResolution)
+import GTD.Resolution.State (Context (..), Package (Package, _cabalPackage, _modules), cExports, cResolution, cLocalPackages)
 import qualified GTD.Resolution.State as Package
 import qualified GTD.Cabal.Cache as CabalCache
 import qualified GTD.Resolution.Cache as PackageCache
@@ -240,17 +242,26 @@ definition ::
   (MS m, MonadError String m) => m DefinitionResponse
 definition (DefinitionRequest {workDir = wd, file = rf0, word = w}) = do
   let rf = normalise rf0
-  cPkgs <- CabalCache.findAtF wd
+  cPkgsU :: [Cabal.PackageWithUnresolvedDependencies] <- CabalCache.findAt wd
+  cLocalPackages .= mempty
+  -- TODO: figure out processing order here
+  cPkgs :: [Cabal.PackageWithResolvedDependencies] <- forM cPkgsU $ \cPkg -> do
+    cLocalPackages %= Map.unionWith (<>) (Map.singleton (Cabal._name cPkg) (Map.singleton (Cabal._version cPkg) cPkg))
+    Cabal.full cPkg
+
   forM_ cPkgs $ \cPkg -> do
     e <- PackageCache.pExists cPkg
     unless e $ void $ package cPkg
-  let srcDirs c = (\d -> normalise $ wd </> d) <$> (Cabal._srcDirs . Cabal._modules $ c)
+  let srcDirs p = (\d -> normalise $ Cabal._root p </> d) <$> (Cabal._srcDirs . Cabal._modules $ p)
+
+  _locs <- use cLocalPackages
   logDebugNSS "definition" $
     printf
-      "wd=%s\nrf = %s\nsource dirs=%s\n"
+      "wd=%s\nrf = %s\nsource dirs=%s\nlocalPackages=%s\n"
       wd
       rf
       (intercalate "\n" $ intercalate "," . srcDirs <$> cPkgs)
+      (show $ (\(n, vs) -> (\v -> (n, v)) <$> Map.keys vs) <$> Map.assocs _locs)
   let cPkgM = find (any (`isPrefixOf` rf) . srcDirs) cPkgs
   cPkg <- maybe (throwError "cannot find a cabal 'item' with source directory that owns given file") return cPkgM
 

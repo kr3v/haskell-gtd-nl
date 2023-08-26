@@ -1,9 +1,9 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
 {-# HLINT ignore "Use section" #-}
+{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 module Main where
 
@@ -11,7 +11,7 @@ import Control.Exception (try)
 import Control.Lens ((^.))
 import Control.Monad (forM_)
 import Control.Monad.Except (MonadError (..), MonadIO (..), runExceptT)
-import Control.Monad.Logger (runStderrLoggingT)
+import Control.Monad.Logger (runStderrLoggingT, runStdoutLoggingT)
 import Control.Monad.Reader (ReaderT (..))
 import Control.Monad.State (evalStateT)
 import Control.Monad.Trans.Maybe (MaybeT (..))
@@ -19,22 +19,45 @@ import Data.Data (Data (..), showConstr)
 import Data.Either (fromRight)
 import Data.Foldable (foldrM)
 import Data.GraphViz (GraphID (Str), GraphvizOutput (..), X11Color (..), runGraphviz)
+import qualified Data.GraphViz.Attributes.Colors as Color
 import Data.GraphViz.Attributes.Complete (Attribute (..), RankDir (FromLeft), toColorList)
 import Data.GraphViz.Types.Monadic (digraph, edge, graphAttrs)
 import Data.Maybe (fromMaybe)
+import qualified Data.Set as Set
 import Data.Text.Lazy as L (pack)
-import Distribution.Client.DistDirLayout
-import Distribution.Client.HttpUtils
-import Distribution.Client.ProjectConfig
+import Distribution.Backpack.ComponentsGraph (componentsGraphToList, mkComponentsGraph)
+import Distribution.Client.DistDirLayout (defaultDistDirLayout)
+import Distribution.Client.HttpUtils (configureTransport)
+import Distribution.Client.ProjectConfig (findProjectPackages, findProjectRoot, readProjectConfig)
 import Distribution.Client.RebuildMonad (runRebuild)
-import Distribution.Parsec (explicitEitherParsec, eitherParsec)
+import Distribution.PackageDescription (ComponentName (..), LibraryName (..))
+import Distribution.Parsec (eitherParsec)
+import Distribution.Simple.Compiler (PackageDB (..))
 import Distribution.Simple.Flag (Flag (..))
-import Distribution.Types.CondTree
+import Distribution.Simple.GHC (configure, getInstalledPackages)
+import Distribution.Simple.PackageIndex (allPackages)
+import Distribution.Simple.Program (defaultProgramDb)
+import Distribution.Types.ComponentRequestedSpec (ComponentRequestedSpec (OneComponentRequestedSpec))
+import Distribution.Types.CondTree (CondTree (CondNode, condTreeData))
+import Distribution.Verbosity (Verbosity)
+import qualified GHC.Data.FastString as GHC
+import qualified GHC.Data.StringBuffer as GHC
+import qualified GHC.Driver.Config.Parser as GHC
 import GHC.Driver.Session (DynFlags)
-import GHC.Parser.Lexer
+import qualified GHC.Driver.Session as GHC
+import qualified GHC.Parser as GHC
+import GHC.Parser.Lexer (PState (errors), ParseResult (PFailed, POk))
+import qualified GHC.Parser.Lexer as GHC
 import GHC.Types.SourceError (SourceError)
 import GHC.Types.SrcLoc (GenLocated (..))
+import qualified GHC.Types.SrcLoc as GHC
+import qualified GTD.Cabal.Cache as Cabal (findAtF, load)
+import qualified GTD.Cabal.FindAt as Cabal (findAt)
+import qualified GTD.Cabal.Get as Cabal (get)
+import qualified GTD.Cabal.Package as Cabal (Package (_dependencies), key)
+import qualified GTD.Cabal.Parse as Cabal (__read'packageDescription)
 import GTD.Configuration (defaultArgs, prepareConstants, repos)
+import qualified GTD.Haskell.Module as HsModule
 import GTD.Haskell.Parser.GhcLibParser (fakeSettings, parsePragmasIntoDynFlags, showO)
 import GTD.Resolution.Module (module'Dependencies)
 import GTD.Resolution.State (ccGet, emptyContext)
@@ -45,18 +68,6 @@ import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.FilePath ((</>))
 import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
 import Text.Printf (printf)
-import qualified Data.GraphViz.Attributes.Colors as Color
-import qualified Data.Set as Set
-import qualified GHC.Data.FastString as GHC
-import qualified GHC.Data.StringBuffer as GHC
-import qualified GHC.Driver.Config.Parser as GHC
-import qualified GHC.Driver.Session as GHC
-import qualified GHC.Parser as GHC
-import qualified GHC.Parser.Lexer as GHC
-import qualified GHC.Types.SrcLoc as GHC
-import qualified GTD.Cabal as Cabal
-import qualified GTD.Haskell.Module as HsModule
-import qualified Data.Map as Map
 
 showT2 :: (String, String) -> String
 showT2 (a, b) = "(" ++ a ++ "," ++ b ++ ")"
@@ -67,7 +78,7 @@ data Args
   = ResolutionOrder {_pkgN :: String, _pkgV :: String, _type :: Type}
   | Identifier {_text :: String}
   | ParseHeader {_file :: String}
-  | CabalProject {_file :: String, _root :: String}
+  | Cabal {_fileC :: String, _fileP :: String, _root :: String}
   deriving (Show)
 
 ro :: Parser Args
@@ -84,7 +95,11 @@ ph :: Parser Args
 ph = ParseHeader <$> strOption (long "file" <> help "kekw")
 
 cp :: Parser Args
-cp = CabalProject <$> strOption (long "file" <> help "kekw") <*> strOption (long "root" <> help "kekw")
+cp =
+  Cabal
+    <$> strOption (long "fileC" <> help "kekw")
+    <*> strOption (long "fileP" <> help "kekw")
+    <*> strOption (long "root" <> help "kekw")
 
 args :: Parser Args
 args = do
@@ -200,15 +215,23 @@ main = do
       print $ case r of
         POk _ (L _ e) -> printf ":t %s => %s" (showConstr . toConstr $ e) (showO e)
         PFailed e -> showO $ errors e
-    CabalProject {_file = file, _root = root} -> do
+    Cabal {_fileP = fileP, _fileC = fileC, _root = root} -> do
+      let Right (v :: Verbosity) = eitherParsec "normal"
       Right r <- findProjectRoot (Just root) Nothing
       let ddl = defaultDistDirLayout r Nothing
-      let vE = eitherParsec "normal"
-      case vE of
+      http <- configureTransport v [] (Just "curl")
+
+      CondNode {condTreeData = pc} <- runRebuild root $ readProjectConfig v http NoFlag NoFlag ddl
+      print pc
+      locs <- runRebuild root $ findProjectPackages ddl pc
+      print locs
+
+      let cs = OneComponentRequestedSpec $ CLibName LMainLibName
+      pd <- runStdoutLoggingT $ Cabal.__read'packageDescription fileC
+      case mkComponentsGraph cs pd of
         Left e -> print e
-        Right v -> do
-          http <- configureTransport v [] (Just "curl")
-          CondNode{condTreeData=pc} <- runRebuild root $ readProjectConfig v http NoFlag NoFlag ddl
-          print pc
-          locs <- runRebuild root $ findProjectPackages ddl pc
-          print locs
+        Right r -> print $ componentsGraphToList r
+
+      (c, _, d) <- configure v Nothing Nothing defaultProgramDb
+      idx <- getInstalledPackages v c [GlobalPackageDB, UserPackageDB] d
+      forM_ (allPackages idx) print

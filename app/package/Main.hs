@@ -48,7 +48,8 @@ main = do
   hSetBuffering stdout LineBuffering
   hSetBuffering stderr LineBuffering
 
-  Args {dir = d, logLevel = ll} <- execParser opts
+  a@Args {dir = d, logLevel = ll} <- execParser opts
+  print a
 
   constants <- Conf.prepareConstants =<< Conf.defaultArgs
   let r = Conf._root . Conf._args $ constants
