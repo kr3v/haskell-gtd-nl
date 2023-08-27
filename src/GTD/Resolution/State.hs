@@ -12,7 +12,6 @@ import GTD.Cabal.Package (ModuleNameS, PackageNameS)
 import qualified GTD.Cabal.Package as Cabal
 import GTD.Haskell.Declaration (Declarations)
 import GTD.Haskell.Module (HsModuleP)
-import GTD.Haskell.Lines (Lines)
 
 data Package = Package
   { _cabalPackage :: Cabal.PackageWithResolvedDependencies,
@@ -30,7 +29,7 @@ data Context = Context
     _ccFull :: Map.Map Cabal.PackageKey Cabal.PackageWithResolvedDependencies,
     _ccGet :: Cabal.GetCache,
     _cExports :: LRU.LRU Cabal.PackageKey (Map.Map ModuleNameS HsModuleP),
-    _cResolution :: LRU.LRU FilePath (Maybe (Map.Map ModuleNameS Declarations), Maybe Lines),
+    _cResolution :: LRU.LRU FilePath (Maybe (Map.Map ModuleNameS Declarations)),
     _cLocalPackages :: Map.Map PackageNameS (Map.Map String Cabal.PackageWithUnresolvedDependencies)
   }
   deriving (Show, Generic)

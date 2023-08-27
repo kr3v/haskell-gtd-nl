@@ -496,24 +496,31 @@ export async function activate(context: vscode.ExtensionContext) {
 		)
 	);
 
-	// see HLS BUG #1
-	let workspaceFolders = vscode.workspace.workspaceFolders;
-	for (let wd in workspaceFolders) {
-		let repos = path.join(wd, "./.repos");
-		await createSymlink(serverRepos, repos);
+	{
+		// see HLS BUG #1
+		let workspaceFolders: readonly vscode.WorkspaceFolder[] | undefined = vscode.workspace.workspaceFolders;
+		if (!workspaceFolders) return;
+		for (const wdV of workspaceFolders) {
+			const excludedPath = "**/.repos";
 
-		let files = vscode.workspace.getConfiguration('files');
-		let watcherExclude: any = files.get('watcherExclude');
-		watcherExclude['**/path/to/exclude'] = true;
-		files.update('watcherExclude', watcherExclude, vscode.ConfigurationTarget.WorkspaceFolder);
-		let exclude: any = files.get('exclude');
-		exclude['**/path/to/exclude'] = true;
-		files.update('exclude', exclude, vscode.ConfigurationTarget.WorkspaceFolder);
+			let wd = wdV.uri.fsPath;
+			let repos = path.join(wd, "./.repos");
+			outputChannel.appendLine(util.format("creating symlink %s -> %s", serverRepos, repos));
+			await createSymlink(serverRepos, repos);
 
-		let search = vscode.workspace.getConfiguration('search');
-		let excludeS: any = search.get('exclude');
-		excludeS['**/path/to/exclude'] = true;
-		search.update('exclude', excludeS, vscode.ConfigurationTarget.WorkspaceFolder);
+			let files = vscode.workspace.getConfiguration('files', wdV);
+			let watcherExclude: any = files.get('watcherExclude');
+			watcherExclude[excludedPath] = true;
+			files.update('watcherExclude', watcherExclude, vscode.ConfigurationTarget.WorkspaceFolder);
+			let exclude: any = files.get('exclude');
+			exclude[excludedPath] = true;
+			files.update('exclude', exclude, vscode.ConfigurationTarget.WorkspaceFolder);
+
+			let search = vscode.workspace.getConfiguration('search', wdV);
+			let excludeS: any = search.get('exclude');
+			excludeS[excludedPath] = true;
+			search.update('exclude', excludeS, vscode.ConfigurationTarget.WorkspaceFolder);
+		}
 	}
 
 	context.subscriptions.push(vscode.commands.registerCommand('hs-gtd.server.restart', stopServer));

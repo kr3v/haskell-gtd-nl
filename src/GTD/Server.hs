@@ -10,11 +10,10 @@
 
 module GTD.Server where
 
-import Control.Exception (Exception, try)
-import Control.Exception.Safe (IOException, catch, tryAny)
+import Control.Exception.Safe (tryAny)
 import Control.Lens (over, use, view, (%=), (.=))
-import Control.Monad (forM, forM_, join, mapAndUnzipM, unless, void, (<=<), (>=>))
-import Control.Monad.Except (MonadError (..), MonadIO (..), liftEither)
+import Control.Monad (forM, forM_, join, mapAndUnzipM, unless, void, (<=<))
+import Control.Monad.Except (MonadError (..), MonadIO (..))
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (MonadReader (..), MonadState (..), gets)
 import Control.Monad.State (evalStateT, modify)
@@ -283,17 +282,14 @@ definition (DefinitionRequest {workDir = wd, file = rf0, word = w}) = do
 
   (l, mL) <- gets $ LRU.lookup rf . _cResolution
   cResolution .= l
-  (resM, linesM) <- case mL of
+  resM <- case mL of
     Just x -> return x
     Nothing -> do
       let m = emptyHsModule {_path = rf, HsModule._pkgK = Cabal.key cPkg}
       r <- PackageCache.resolution'get m
-      l <- PackageCache.resolution'get'lines m
-      cResolution %= LRU.insert rf (r, l)
-      return (r, l)
-
+      cResolution %= LRU.insert rf r
+      return r
   resolutionMap <- maybe noDefinitionFoundError return resM
-  lines <- maybe noDefinitionFoundError return linesM
 
   r <- case w `Map.lookup` resolutionMap of
     Just d -> do

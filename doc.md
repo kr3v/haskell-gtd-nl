@@ -40,4 +40,4 @@ x - apply cpphs via command
   	|   - follow lsp instead of custom protocol
 
 `concat`?
-`normalise` `System.OsPath`?
+`*.hsc` files
