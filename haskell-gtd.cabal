@@ -101,6 +101,7 @@ library
         GTD.Configuration
         GTD.Haskell.Cpphs
         GTD.Haskell.Declaration
+        GTD.Haskell.Lines 
         GTD.Haskell.Module
         GTD.Haskell.Parser.GhcLibParser
         GTD.Resolution.Cache

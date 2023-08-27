@@ -1,16 +1,20 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module GTD.Haskell.Declaration where
 
-import Control.Lens (makeLenses)
+import Control.Lens (Each (..), makeLenses, over, (%=))
 import Data.Aeson (FromJSON, ToJSON)
+import Data.Binary (Binary)
 import qualified Data.Map.Strict as Map
 import GHC.Generics (Generic)
 import GTD.Cabal.Package (ModuleNameS)
 import Language.Haskell.Exts (ModuleName (..), Name (..), SrcSpan (..), SrcSpanInfo (srcInfoSpan))
-import Data.Binary (Binary)
+import Control.Monad.RWS (MonadState)
+import Control.Monad.State (evalStateT, execState)
 
 data SourceSpan = SourceSpan
   { sourceSpanFileName :: FilePath,
@@ -136,6 +140,15 @@ asResolutionMap Declarations {_decls = ds, _dataTypes = dts} =
 
 asDeclsMap :: [Declaration] -> Map.Map Identifier Declaration
 asDeclsMap ds = Map.fromList $ (\d -> (_declName d, d)) <$> ds
+
+declarationsT :: (Declaration -> Declaration) -> (Declarations -> Declarations)
+declarationsT d = execState (declarationsTS d)
+
+declarationsTS :: (Declaration -> Declaration) -> (MonadState Declarations m) => m ()
+declarationsTS d = do
+  (decls . each) %= d
+  (dataTypes . each . cdtFields . each) %= d
+  (dataTypes . each . cdtName) %= d
 
 ---
 

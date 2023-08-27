@@ -9,7 +9,7 @@
 
 module Main where
 
-import Control.Concurrent (MVar, forkIO, modifyMVar_, newMVar, putMVar, readMVar, takeMVar, modifyMVar, threadDelay)
+import Control.Concurrent (MVar, forkIO, modifyMVar, modifyMVar_, newMVar, putMVar, readMVar, takeMVar, threadDelay)
 import Control.Lens (makeLenses, (<+=), (^.))
 import Control.Monad.Except (runExceptT)
 import Control.Monad.IO.Class (liftIO)
@@ -19,10 +19,10 @@ import Control.Monad.State (StateT (runStateT), execStateT)
 import Control.Monad.State.Lazy (evalStateT)
 import Data.Proxy (Proxy (..))
 import GHC.TypeLits (KnownSymbol)
-import GTD.Configuration (Args (..), GTDConfiguration (..), prepareConstants, argsP, args)
-import GTD.Resolution.State (Context, emptyContext)
 import qualified GTD.Cabal.Cache as CabalCache
-import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), DropCacheRequest, definition, resetCache)
+import GTD.Configuration (Args (..), GTDConfiguration (..), args, argsP, prepareConstants)
+import GTD.Resolution.State (Context, emptyContext)
+import GTD.Server (CpphsRequest, CpphsResponse (..), DefinitionRequest (..), DefinitionResponse (..), DropCacheRequest, cpphs, definition, resetCache)
 import GTD.Utils (ultraZoom)
 import Network.Socket (Family (AF_INET), SockAddr (SockAddrInet), SocketType (Stream), bind, defaultProtocol, listen, socket, socketPort, tupleToHostAddress, withSocketsDo)
 import Network.Wai.Handler.Warp (defaultSettings, runSettingsSocket)
@@ -58,6 +58,9 @@ type API =
     :<|> "dropcache"
       :> ReqBody '[JSON] DropCacheRequest
       :> Post '[JSON] String
+    :<|> "cpphs"
+      :> ReqBody '[JSON] CpphsRequest
+      :> Post '[JSON] CpphsResponse
 
 api :: Proxy API
 api = Proxy
@@ -108,6 +111,15 @@ dropCacheH ::
 dropCacheH c m req = do
   let defH = either id id
   h c m resetCache (\_ e -> defH e) req
+
+runCpphsH ::
+  GTDConfiguration ->
+  MVar ServerState ->
+  CpphsRequest ->
+  Handler CpphsResponse
+runCpphsH c m req = do
+  let defH = either (\e -> CpphsResponse {crErr = Just e, crContent = Nothing}) id
+  h c m cpphs (\_ e -> defH e) req
 
 ---
 
@@ -160,4 +172,4 @@ main = withSocketsDo $ do
   s0 <- flip runReaderT constants $ runStdoutLoggingT $ flip execStateT emptyServerState $ ultraZoom context CabalCache.load
   s <- newMVar s0
   _ <- forkIO $ selfKiller s (_ttl as)
-  runSettingsSocket defaultSettings sock $ serve api (definitionH constants s :<|> pingH s :<|> dropCacheH constants s)
+  runSettingsSocket defaultSettings sock $ serve api (definitionH constants s :<|> pingH s :<|> dropCacheH constants s :<|> runCpphsH constants s)

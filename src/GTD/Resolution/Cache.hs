@@ -17,11 +17,12 @@ import Data.Maybe (isJust)
 import qualified GTD.Cabal as Cabal
 import GTD.Configuration (GTDConfiguration (..))
 import GTD.Haskell.Declaration (Declarations)
+import GTD.Haskell.Lines (Lines)
 import GTD.Haskell.Module (HsModule)
 import qualified GTD.Haskell.Module as HsModule
+import GTD.Resolution.Caching.Utils (binaryGet, pathAsFile)
 import GTD.Resolution.State (Context, Package (..), cExports)
 import qualified GTD.Resolution.State as Package
-import GTD.Resolution.Caching.Utils ( pathAsFile, binaryGet )
 import GTD.Utils (logDebugNSS, removeIfExistsL)
 import System.Directory (createDirectoryIfMissing, doesFileExist, removeDirectoryRecursive)
 import System.FilePath.Posix ((</>))
@@ -115,21 +116,38 @@ __resolution'dir k = do
   liftIO $ createDirectoryIfMissing False d
   return d
 
-__resolution'path :: HsModule -> (MonadIO m, MonadReader GTDConfiguration m) => m FilePath
-__resolution'path m = do
+__resolution'path :: String -> HsModule -> (MonadIO m, MonadReader GTDConfiguration m) => m FilePath
+__resolution'path n m = do
   d <- __resolution'dir $ HsModule._pkgK m
   let r = pathAsFile $ HsModule._path m
-  return $ d </> (r ++ ":" ++ "resolution.binary")
+  return $ d </> (r ++ ":" ++ n)
 
-resolution'get :: HsModule -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m (Maybe (Map.Map Cabal.ModuleNameS Declarations))
-resolution'get m = do
-  p <- __resolution'path m
+resolution'get'generic :: String -> HsModule -> (MonadLoggerIO m, MonadReader GTDConfiguration m, Binary a) => m (Maybe a)
+resolution'get'generic n m = do
+  p <- __resolution'path n m
   binaryGet p
 
-resolution'put :: HsModule -> Map.Map Cabal.ModuleNameS Declarations -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m ()
-resolution'put m r = do
-  p <- __resolution'path m
+resolution'put'generic :: String -> HsModule -> (Binary a) => a -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m ()
+resolution'put'generic n m r = do
+  p <- __resolution'path n m
   liftIO $ encodeFile p r
+
+resolution'exists'generic :: String -> HsModule -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m Bool
+resolution'exists'generic n m = do
+  p <- __resolution'path n m
+  liftIO $ doesFileExist p
+
+resolution'get :: HsModule -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m (Maybe (Map.Map Cabal.ModuleNameS Declarations))
+resolution'get = resolution'get'generic "resolution.binary"
+
+resolution'get'lines :: HsModule -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m (Maybe Lines)
+resolution'get'lines = resolution'get'generic "lines.binary"
+
+resolution'put :: HsModule -> Map.Map Cabal.ModuleNameS Declarations -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m ()
+resolution'put = resolution'put'generic "resolution.binary"
+
+resolution'put'lines :: HsModule -> Lines -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m ()
+resolution'put'lines = resolution'put'generic "lines.binary"
 
 resolution'remove :: Cabal.Package a -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m ()
 resolution'remove cPkg = do
@@ -138,6 +156,7 @@ resolution'remove cPkg = do
   liftIO $ removeDirectoryRecursive d
 
 resolution'exists :: HsModule -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m Bool
-resolution'exists m = do
-  p <- __resolution'path m
-  liftIO $ doesFileExist p
+resolution'exists = resolution'exists'generic "resolution.binary"
+
+resolution'exists'lines :: HsModule -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m Bool
+resolution'exists'lines = resolution'exists'generic "lines.binary"

@@ -330,6 +330,10 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 		let wd = docF.uri.fsPath;
 		let repos = path.join(wd, "./.repos");
 		let file = document.uri.fsPath;
+		if (isParentOf(repos, file)) {
+			wd = path.join(repos, path.relative(repos, file).split(path.sep)[0]);
+			outputChannel.appendLine(util.format("%s is in %s, so wd=%s", file, repos, wd));
+		}
 
 		// figure out the word under the cursor
 		let [word,] = identifier(document.lineAt(position.line).text, position.character);
@@ -339,7 +343,7 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 		if (word == "") {
 			return Promise.resolve([]);
 		}
-		outputChannel.appendLine(util.format("getting a definition for %s...", word));
+		outputChannel.appendLine(util.format("getting a definition for %s @ %s...", word, wd));
 
 		// send a request to the server
 		await startServerIfRequired();
@@ -398,6 +402,48 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 		let definitionLocation = new vscode.Location(wordSourceURI, definitionPosition);
 		return Promise.resolve(definitionLocation);
 	}
+}
+
+async function cpphs() {
+	let editor = vscode.window.activeTextEditor;
+	if (!editor) return Promise.resolve([]);
+	let doc = editor.document;
+	let docF = vscode.workspace.getWorkspaceFolder(doc.uri);
+	if (!docF) return Promise.resolve([]);
+	let wd = docF.uri.fsPath;
+	let repos = path.join(wd, "./.repos");
+	let file = doc.uri.fsPath;
+	if (isParentOf(repos, file)) {
+		wd = path.join(repos, path.relative(repos, file).split(path.sep)[0]);
+		outputChannel.appendLine(util.format("%s is in %s, so wd=%s", file, repos, wd));
+	}
+
+	await startServerIfRequired();
+	let body = { crWorkDir: wd, crFile: file };
+	let url = `http://localhost:${port}/cpphs`;
+	let res = await axios.post(url, body).catch(function (error) {
+		outputChannel.appendLine(util.format("%s -> %s", body, error));
+		return { "data": {} };
+	});
+	let data = res.data;
+	if (data.crErr != undefined && data.crErr != "") {
+		outputChannel.appendLine(util.format("%s -> err=%s (data=%s)", data.crErr, JSON.stringify(data)));
+		return Promise.resolve([]);
+	}
+	if (data.crContent == undefined) {
+		outputChannel.appendLine(util.format("%s -> no content (data=%s)", JSON.stringify(data)));
+		return Promise.resolve([]);
+	}
+	outputChannel.appendLine(util.format("response = %s", data));
+	let newContent = data.crContent;
+
+	const fullRange = new vscode.Range(
+		doc.positionAt(0),
+		doc.positionAt(doc.getText().length)
+	);
+	editor.edit(editBuilder => {
+		editBuilder.replace(fullRange, newContent);
+	});
 }
 
 async function initConfig() {
@@ -471,6 +517,8 @@ export async function activate(context: vscode.ExtensionContext) {
 	}
 
 	context.subscriptions.push(vscode.commands.registerCommand('hs-gtd.server.restart', stopServer));
+
+	context.subscriptions.push(vscode.commands.registerCommand('hs-gtd.cpphs', cpphs));
 
 	vscode.workspace.onDidChangeConfiguration(async (e) => {
 		if (!e.affectsConfiguration('hs-gtd')) {

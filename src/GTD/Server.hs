@@ -5,14 +5,16 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
 {-# HLINT ignore "Use tuple-section" #-}
 
 module GTD.Server where
 
-import Control.Exception.Safe (tryAny)
-import Control.Lens (over, view, (%=), (.=), use)
-import Control.Monad (forM, forM_, join, mapAndUnzipM, unless, void, (<=<))
-import Control.Monad.Except (MonadError (..), MonadIO (..))
+import Control.Exception (Exception, try)
+import Control.Exception.Safe (IOException, catch, tryAny)
+import Control.Lens (over, use, view, (%=), (.=))
+import Control.Monad (forM, forM_, join, mapAndUnzipM, unless, void, (<=<), (>=>))
+import Control.Monad.Except (MonadError (..), MonadIO (..), liftEither)
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (MonadReader (..), MonadState (..), gets)
 import Control.Monad.State (evalStateT, modify)
@@ -26,49 +28,29 @@ import qualified Data.Map as Map
 import Data.Maybe (catMaybes, fromMaybe)
 import qualified Data.Set as Set
 import GHC.Generics (Generic)
-import GTD.Cabal (ModuleNameS)
-import qualified GTD.Cabal as Cabal
+import qualified GTD.Cabal.Cache as CabalCache
+import qualified GTD.Cabal.FindAt as CabalCache (findAt)
+import qualified GTD.Cabal.Full as Cabal (full)
+import qualified GTD.Cabal.Full as CabalCache (full)
+import qualified GTD.Cabal.Get as Cabal (GetCache (_vs))
+import GTD.Cabal.Package (ModuleNameS, PackageWithResolvedDependencies)
+import qualified GTD.Cabal.Package as Cabal (Dependency, Package (_dependencies, _modules, _name, _root, _version), PackageModules (_exports, _reExports, _srcDirs), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, key)
 import GTD.Configuration (Args (..), GTDConfiguration (..), args)
+import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Identifier, SourceSpan (..), asDeclsMap, emptySourceSpan)
 import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule)
 import qualified GTD.Haskell.Module as HsModule
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
-import GTD.Resolution.Module (figureOutExports1, module'Dependencies, moduleR)
-import GTD.Resolution.State (Context (..), Package (Package, _cabalPackage, _modules), cExports, cResolution, cLocalPackages)
-import qualified GTD.Resolution.State as Package
-import qualified GTD.Cabal.Cache as CabalCache
 import qualified GTD.Resolution.Cache as PackageCache
+import GTD.Resolution.Module (figureOutExports1, module'Dependencies, moduleR)
+import GTD.Resolution.State (Context (..), Package (Package, _cabalPackage, _modules), cExports, cLocalPackages, cResolution)
+import qualified GTD.Resolution.State as Package
 import GTD.Resolution.Utils (ParallelizedState (..), SchemeState (..), parallelized, scheme)
-import GTD.Utils (getUsableFreeMemory, logDebugNSS, modifyMS, stats)
+import GTD.Utils (getUsableFreeMemory, logDebugNSS, modifyMS, stats, storeIOExceptionToMonadError)
 import System.FilePath (normalise, (</>))
 import System.IO (IOMode (AppendMode), withFile)
 import System.Process (CreateProcess (..), StdStream (..), createProcess, proc, waitForProcess)
 import Text.Printf (printf)
-import qualified GTD.Cabal as CabalCache
-
-data DefinitionRequest = DefinitionRequest
-  { workDir :: FilePath,
-    file :: FilePath,
-    word :: String
-  }
-  deriving (Show, Generic)
-
-data DefinitionResponse = DefinitionResponse
-  { srcSpan :: Maybe SourceSpan,
-    err :: Maybe String
-  }
-  deriving (Show, Generic, Eq)
-
-instance ToJSON DefinitionRequest
-
-instance FromJSON DefinitionRequest
-
-instance ToJSON DefinitionResponse
-
-instance FromJSON DefinitionResponse
-
-noDefinitionFoundError :: MonadError String m => m a
-noDefinitionFoundError = throwError "No definition found"
 
 ---
 
@@ -237,42 +219,81 @@ resolution Declarations {_decls = ds, _dataTypes = dts} =
       dts' = concatMap (\cd -> [_cdtName cd] <> Map.elems (_cdtFields cd)) (Map.elems dts)
    in asDeclsMap $ ds' <> dts'
 
+---
+
+data DefinitionRequest = DefinitionRequest
+  { workDir :: FilePath,
+    file :: FilePath,
+    word :: String
+  }
+  deriving (Show, Generic)
+
+data DefinitionResponse = DefinitionResponse
+  { srcSpan :: Maybe SourceSpan,
+    err :: Maybe String
+  }
+  deriving (Show, Generic, Eq)
+
+instance ToJSON DefinitionRequest
+
+instance FromJSON DefinitionRequest
+
+instance ToJSON DefinitionResponse
+
+instance FromJSON DefinitionResponse
+
+noDefinitionFoundError :: MonadError String m => m a
+noDefinitionFoundError = throwError "No definition found"
+
+cabalPackage'unresolved :: FilePath -> (MS m, MonadError String m) => m [Cabal.PackageWithUnresolvedDependencies]
+cabalPackage'unresolved = CabalCache.findAt
+
+cabalPackage'resolved :: (MS m) => [Cabal.Package Cabal.Dependency] -> m [PackageWithResolvedDependencies]
+cabalPackage'resolved cPkgsU = do
+  cLocalPackages .= mempty
+  forM cPkgsU $ \cPkg -> do
+    cLocalPackages %= Map.unionWith (<>) (Map.singleton (Cabal._name cPkg) (Map.singleton (Cabal._version cPkg) cPkg))
+    Cabal.full cPkg
+
+cabalPackage :: FilePath -> FilePath -> (MS m, MonadError String m) => m PackageWithResolvedDependencies
+cabalPackage wd rf = do
+  cPkgsU <- cabalPackage'unresolved wd
+  -- TODO: figure out processing order here
+  cPkgs <- cabalPackage'resolved cPkgsU
+  forM_ cPkgs $ \cPkg -> do
+    e <- PackageCache.pExists cPkg
+    unless e $ void $ package cPkg
+  let srcDirs p = (\d -> normalise $ Cabal._root p </> d) <$> (Cabal._srcDirs . Cabal._modules $ p)
+  _locs <- use cLocalPackages
+  logDebugNSS "prepare cPkg" $
+    printf
+      "wd=%s\nsource dirs=%s\nlocalPackages=%s\n"
+      wd
+      (intercalate "\n" $ intercalate "," . srcDirs <$> cPkgs)
+      (show $ (\(n, vs) -> (\v -> (n, v)) <$> Map.keys vs) <$> Map.assocs _locs)
+  let cPkgM = find (any (`isPrefixOf` rf) . srcDirs) cPkgs
+  maybe (throwError "cannot find a cabal 'item' with source directory that owns given file") return cPkgM
+
 definition ::
   DefinitionRequest ->
   (MS m, MonadError String m) => m DefinitionResponse
 definition (DefinitionRequest {workDir = wd, file = rf0, word = w}) = do
   let rf = normalise rf0
-  cPkgsU :: [Cabal.PackageWithUnresolvedDependencies] <- CabalCache.findAt wd
-  cLocalPackages .= mempty
-  -- TODO: figure out processing order here
-  cPkgs :: [Cabal.PackageWithResolvedDependencies] <- forM cPkgsU $ \cPkg -> do
-    cLocalPackages %= Map.unionWith (<>) (Map.singleton (Cabal._name cPkg) (Map.singleton (Cabal._version cPkg) cPkg))
-    Cabal.full cPkg
-
-  forM_ cPkgs $ \cPkg -> do
-    e <- PackageCache.pExists cPkg
-    unless e $ void $ package cPkg
-  let srcDirs p = (\d -> normalise $ Cabal._root p </> d) <$> (Cabal._srcDirs . Cabal._modules $ p)
-
-  _locs <- use cLocalPackages
-  logDebugNSS "definition" $
-    printf
-      "wd=%s\nrf = %s\nsource dirs=%s\nlocalPackages=%s\n"
-      wd
-      rf
-      (intercalate "\n" $ intercalate "," . srcDirs <$> cPkgs)
-      (show $ (\(n, vs) -> (\v -> (n, v)) <$> Map.keys vs) <$> Map.assocs _locs)
-  let cPkgM = find (any (`isPrefixOf` rf) . srcDirs) cPkgs
-  cPkg <- maybe (throwError "cannot find a cabal 'item' with source directory that owns given file") return cPkgM
+  cPkg <- cabalPackage wd rf
 
   (l, mL) <- gets $ LRU.lookup rf . _cResolution
   cResolution .= l
-  resolutionMap <- case join mL of
+  (resM, linesM) <- case mL of
     Just x -> return x
     Nothing -> do
-      m' <- PackageCache.resolution'get emptyHsModule {_path = rf, HsModule._pkgK = Cabal.key cPkg}
-      cResolution %= LRU.insert rf m'
-      maybe noDefinitionFoundError return m'
+      let m = emptyHsModule {_path = rf, HsModule._pkgK = Cabal.key cPkg}
+      r <- PackageCache.resolution'get m
+      l <- PackageCache.resolution'get'lines m
+      cResolution %= LRU.insert rf (r, l)
+      return (r, l)
+
+  resolutionMap <- maybe noDefinitionFoundError return resM
+  lines <- maybe noDefinitionFoundError return linesM
 
   r <- case w `Map.lookup` resolutionMap of
     Just d -> do
@@ -292,6 +313,7 @@ definition (DefinitionRequest {workDir = wd, file = rf0, word = w}) = do
       case catMaybes casesM of
         (x : _) -> return x
         _ -> noDefinitionFoundError
+  
   liftIO stats
   return r
 
@@ -316,3 +338,34 @@ resetCache (DropCacheRequest {dir = d}) = do
     cExports %= fst . LRU.delete (Cabal.key cPkg)
     cResolution %= LRU.newLRU . LRU.maxSize
   return "OK"
+
+---
+
+data CpphsRequest = CpphsRequest
+  { crWorkDir :: FilePath,
+    crFile :: FilePath
+  }
+  deriving (Show, Generic)
+
+data CpphsResponse = CpphsResponse
+  { crContent :: Maybe String,
+    crErr :: Maybe String
+  }
+  deriving (Show, Generic)
+
+instance FromJSON CpphsRequest
+
+instance ToJSON CpphsRequest
+
+instance FromJSON CpphsResponse
+
+instance ToJSON CpphsResponse
+
+cpphs ::
+  CpphsRequest ->
+  (MS m, MonadError String m) => m CpphsResponse
+cpphs (CpphsRequest {crWorkDir = wd, crFile = rf}) = do
+  _ <- cabalPackage wd rf
+  content <- storeIOExceptionToMonadError $ readFile rf
+  r <- haskellApplyCppHs rf content
+  return $ CpphsResponse (Just r) Nothing

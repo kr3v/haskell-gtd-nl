@@ -1,0 +1,10 @@
+[
+  {
+    "_in": { "num": 16, "path": "" },
+    "_out": { "num": 8, "path": "test/samples/magic/in.0.header.hs" }
+  },
+  {
+    "_in": { "num": 200, "path": "" },
+    "_out": { "num": 9, "path": "in.0.hs" }
+  }
+]

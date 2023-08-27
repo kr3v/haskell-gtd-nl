@@ -1,36 +1,43 @@
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 
 import Control.Exception (IOException, try)
-import Control.Monad.Logger (LogLevel (LevelDebug), NoLoggingT (runNoLoggingT), runStderrLoggingT, runStdoutLoggingT)
+import Control.Monad.Logger (NoLoggingT (..), runStderrLoggingT, runStdoutLoggingT)
 import Control.Monad.Logger.CallStack (runFileLoggingT)
 import Control.Monad.RWS (MonadIO (liftIO), MonadState (get), forM, forM_, join)
 import Control.Monad.State (StateT (..), evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (ReaderT (..))
 import Control.Monad.Writer (execWriterT)
-import Data.Aeson (decode, encode)
+import Data.Aeson (FromJSON, ToJSON, decode, encode)
 import qualified Data.ByteString.Lazy as BS
 import Data.Either (partitionEithers)
 import Data.Either.Combinators (mapLeft, mapRight)
+import Data.Function ((&))
+import Data.Functor ((<&>))
 import Data.List (isPrefixOf, isSuffixOf)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust, fromMaybe)
-import GTD.Configuration (GTDConfiguration (..), prepareConstants, defaultArgs)
+import Data.Traversable (for)
+import GHC.Generics (Generic)
+import GTD.Cabal.Cache as Cabal (load, store)
+import GTD.Configuration (GTDConfiguration (..), defaultArgs, prepareConstants)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (Declarations (..), Exports, Imports, SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine))
+import GTD.Haskell.Lines (Line (..), buildMap, resolve)
 import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule, parseModule)
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import GTD.Resolution.Module (figureOutExports, figureOutExports0)
 import GTD.Resolution.State (emptyContext)
-import GTD.Cabal.Cache as Cabal (load, store)
 import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), definition)
+import GTD.Utils (storeIOExceptionToMonadError)
 import System.Directory (getCurrentDirectory, listDirectory)
 import System.FilePath ((</>))
 import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
-import Test.Hspec (Spec, describe, expectationFailure, it, runIO, shouldBe)
+import Test.Hspec (Expectation, Spec, describe, expectationFailure, it, runIO, shouldBe)
 import Test.Hspec.Runner (Config (configPrintCpuTime), defaultConfig, hspecWith)
 import Text.Printf (printf)
 
@@ -396,6 +403,59 @@ definitionsSpec = do
       join $ mstack (`evalStateT` serverState) $ do
         eval "try" expectedTry
 
+data MagicSpecTestCase = MagicSpecTestCase
+  { _in :: Line,
+    _out :: Line
+  }
+  deriving (Show, Generic)
+
+instance FromJSON MagicSpecTestCase
+
+instance ToJSON MagicSpecTestCase
+
+magicSpec :: Spec
+magicSpec = do
+  let descr = "magic"
+  let test i = runExceptT $ do
+        let iS = show i
+            sampleRoot = "./test/samples/" </> descr
+            srcFile = "in." ++ iS ++ ".hs"
+            srcPath = sampleRoot </> srcFile
+            dstPath = sampleRoot </> ("out." ++ iS ++ ".json")
+            expPath = sampleRoot </> ("exp." ++ iS ++ ".json")
+            testsPath = sampleRoot </> ("cases." ++ iS ++ ".json")
+            dstC1Path = sampleRoot </> ("out.c1." ++ iS ++ ".hs")
+
+        c0 <- liftIO $ readFile srcPath
+        c1 <- haskellApplyCppHs srcFile c0
+
+        liftIO $ writeFile dstC1Path c1
+
+        expectedS <- storeIOExceptionToMonadError $ BS.readFile expPath
+        let expected :: Map.Map Int Line = fromMaybe mempty $ decode expectedS
+
+        testsS <- storeIOExceptionToMonadError $ BS.readFile testsPath
+        let tests :: [MagicSpecTestCase] = fromMaybe mempty $ decode testsS
+
+        let result = buildMap c1
+        liftIO $ BS.writeFile dstPath $ encode result
+        let e1 = result `shouldBe` expected
+
+        let tst t =
+              let i = _in t
+                  o = _out t
+               in resolve result (num i) `shouldBe` Just o
+            es = tst <$> tests
+
+        return $ foldr (<>) e1 es
+
+  describe descr $ do
+    it "???" $ do
+      x <- test 0
+      case x of
+        Right x -> x
+        Left e -> expectationFailure $ show e
+
 integrationTestsSpec :: Spec
 integrationTestsSpec = do
   definitionsSpec
@@ -410,5 +470,6 @@ main = do
     haskellGetIdentifiersSpec
     haskellGetExportsSpec
     haskellGetImportsSpec
-    integrationTestsSpec
+    magicSpec
     figureOutExportsTest
+    integrationTestsSpec

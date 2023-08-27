@@ -2,30 +2,30 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 
 module GTD.Haskell.Module where
 
-import Control.Exception (IOException, try)
 import Control.Lens (makeLenses)
-import Control.Monad.Except (MonadError (..), liftEither)
+import Control.Monad.Except (MonadError (..))
 import Control.Monad.Logger (MonadLoggerIO)
-import Control.Monad.State (MonadIO (..), StateT (runStateT))
+import Control.Monad.State (StateT (runStateT))
 import Control.Monad.Trans.Writer (execWriterT)
 import Data.Aeson (FromJSON, ToJSON)
-import Data.Either.Combinators (mapLeft)
+import Data.Binary (Binary)
 import qualified Data.Map.Strict as Map
 import GHC.Generics (Generic)
-import GTD.Haskell.Cpphs (haskellApplyCppHs)
-import GTD.Haskell.Declaration (ClassOrData (_cdtName), Declaration (_declModule, _declName), Declarations (..), Exports, Imports)
-import qualified GTD.Haskell.Declaration as Declarations
-import qualified GTD.Haskell.Parser.GhcLibParser as GHC
-import GTD.Utils (logDebugNSS)
-import Language.Haskell.Exts (Module (Module), SrcSpan (..), SrcSpanInfo (..))
-import Data.Binary (Binary)
 import qualified GTD.Cabal.Package as Cabal
+import GTD.Haskell.Cpphs (haskellApplyCppHs)
+import GTD.Haskell.Declaration (ClassOrData (_cdtName), Declaration (..), Declarations (..), Exports, Imports, SourceSpan (..), declarationsT)
+import qualified GTD.Haskell.Declaration as Declarations
+import qualified GTD.Haskell.Lines as Lines
+import qualified GTD.Haskell.Parser.GhcLibParser as GHC
+import GTD.Utils (logDebugNSS, storeIOExceptionToMonadError)
+import Language.Haskell.Exts (Module (Module), SrcSpan (..), SrcSpanInfo (..))
 
 newtype HsModuleParams = HsModuleParams
   { _isImplicitExportAll :: Bool
@@ -59,7 +59,8 @@ data HsModule = HsModule
     _name :: Cabal.ModuleNameS,
     _path :: FilePath,
     _info :: HsModuleData,
-    _params :: HsModuleParams
+    _params :: HsModuleParams,
+    _lines :: Lines.Lines
   }
   deriving (Show, Eq, Generic)
 
@@ -86,7 +87,8 @@ emptyHsModule =
       _pkgK = Cabal.emptyPackageKey,
       _path = "",
       _info = emptyData,
-      _params = emptyParams
+      _params = emptyParams,
+      _lines = mempty
     }
 
 parseModule :: HsModule -> (MonadLoggerIO m, MonadError String m) => m HsModule
@@ -94,21 +96,28 @@ parseModule cm@HsModule {_path = srcP} = do
   let logTag = "parsing module " ++ srcP
   logDebugNSS logTag ""
 
-  src <- liftEither . mapLeft show =<< liftIO (try $ readFile srcP :: IO (Either IOException String))
+  src <- storeIOExceptionToMonadError $ readFile srcP
   srcPostCpp <- haskellApplyCppHs srcP src
+  let lines = Lines.buildMap srcPostCpp
+  let srcPostLines = Lines.dropDirectives srcPostCpp
 
-  aE <- GHC.parse srcP srcPostCpp
+  aE <- GHC.parse srcP srcPostLines
   a <- case aE of
     Left err -> throwError err
     Right a -> return a
   (iiea, es) <- runStateT (GHC.exports a) Map.empty
   is <- execWriterT $ GHC.imports a
-  locals <- execWriterT $ GHC.identifiers a
+  localsO <- execWriterT $ GHC.identifiers a
+  let locals = flip declarationsT localsO $ \d -> do
+        case Lines.resolve lines (sourceSpanStartLine . _declSrcOrig $ d) of
+          Just Lines.Line {..} -> d {_declSrcOrig = (_declSrcOrig d) {sourceSpanFileName = path, sourceSpanStartLine = num}}
+          Nothing -> d
   return $
     cm
       { _info = HsModuleData {_exports0 = es, _imports = is, _locals = locals},
         _params = HsModuleParams {_isImplicitExportAll = iiea},
-        _name = GHC.name a
+        _name = GHC.name a,
+        _lines = lines
       }
 
 ---

@@ -1,19 +1,20 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module GTD.Utils where
 
 import Control.Concurrent (myThreadId)
-import Control.Exception (catch, throwIO, try)
+import Control.Exception (IOException, catch, throwIO, try)
 import Control.Lens (Lens', use, (.=))
-import Control.Monad.Except (ExceptT, MonadIO (liftIO), forM, when)
+import Control.Monad.Except (ExceptT, MonadError (throwError), MonadIO (liftIO), forM, when)
 import Control.Monad.Logger (MonadLogger, MonadLoggerIO, logDebugNS, logErrorNS)
 import Control.Monad.RWS (MonadState (..))
 import Control.Monad.State (StateT (..))
 import Control.Monad.Trans.Except (catchE, mapExceptT)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import qualified Data.Map.Strict as Map
-import Data.Maybe
+import Data.Maybe (fromMaybe, mapMaybe)
 import qualified Data.Text as T
 import Data.Time.Clock.POSIX (getPOSIXTime)
 import GHC.Stats (RTSStats (..), getRTSStats, getRTSStatsEnabled)
@@ -139,3 +140,10 @@ concatMapM a b = concat <$> mapM a b
 
 concatForM :: (Traversable t, Monad f) => t a -> (a -> f [b]) -> f [b]
 concatForM a b = concat <$> forM a b
+
+storeIOExceptionToMonadError :: (MonadError String m, MonadIO m) => IO a -> m a
+storeIOExceptionToMonadError a = do
+  x :: Either IOException a <- liftIO $ try a
+  case x of
+    Left e -> throwError $ show e
+    Right x -> return x

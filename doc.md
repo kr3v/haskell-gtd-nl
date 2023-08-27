@@ -1,10 +1,12 @@
 - features:
   - when resolution fails, show the module for the requested word, if found;
     - consider caching the error(s) on per-module basis - like what lead to the error
-  - apply cpphs via command + allow specify 'defined' stuff
+x - apply cpphs via command
+    - allow specify 'defined' stuff
   - go to symbol command (local hoogle)
   - add 'usage cases' (reverse go to definition)
   - add 'instances' list
+  - goto for #include
 
 - performance:
   - when file is saved, the cache is dropped for the directory;
@@ -28,10 +30,14 @@
     |   - drop `Context` usage in `GTD.Cabal` package by replacing it with direct access
     |   - Cabal support:
     |     - locally resolved libraries should override `cabal get`
+    |     - 'global' Cabal language directives
 		| - undecided:
 		|   - consider supporting projects where:
 		|     - there's no `.cabal` file (base only?)
-		|     - there's a `.cabal` file, but it's not in the root directory
+		|     - there's a `.cabal` file, but it's not in the root directcory
 		|       `./src/A/B/C/D.hs` -> check for `.cabal` in `.`, `.src`, ...; use the first that has `A.B.C.D` resolvable through `src-dirs`
   	| - both:
   	|   - follow lsp instead of custom protocol
+
+`concat`?
+`normalise` `System.OsPath`?

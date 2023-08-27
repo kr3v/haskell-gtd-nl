@@ -100,13 +100,14 @@ cpp p syms path options (Keep ps) (l@('#':x):xs) =
         "endif"  -> skipn syms False (Keep (tail ps)) xs
         "pragma" -> skipn syms True  (Keep ps) xs
         ('!':_)  -> skipn syms False (Keep ps) xs       -- \#!runhs scripts
-        "include"-> do (inc,content) <- readFirst (file syms (unwords line))
+        "include"-> do let i = file syms (unwords line)
+                       (inc,content) <- readFirst i
                                                   p path
                                                   (warnings options)
+                       hPutStrLn stderr ("cpphs: "++i++" included as "++inc)
                        cpp p syms path options (Keep ps)
-                            --  (("#line 1 "++show inc): linesCpp content
-                            --                         ++ cppline (newline p): xs)
-                            ("":xs)
+                         (("#line 1 "++show inc): linesCpp content ++ cppline (newline p): xs)
+                        --  ("":xs)
         "warning"-> if warnings options then
                       do hPutStrLn stderr (l++"\nin "++show p)
                          skipn syms False (Keep ps) xs

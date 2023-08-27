@@ -55,6 +55,10 @@
       {
         "command": "hs-gtd.server.restart",
         "title": "hs-gtd: kill/stop backend server (it will be restarted automatically when a Haskell file is opened)"
+      },
+      {
+        "command": "hs-gtd.cpphs",
+        "title": "hs-gtd: applies `cpphs` to the current file"
       }
     ]
   },
