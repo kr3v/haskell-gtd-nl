@@ -206,7 +206,7 @@ instance Monoid ExportsOrImports where
 
 type Exports = Map.Map ModuleNameS Module
 
-type Imports = Map.Map ModuleNameS Module
+type Imports = [Module]
 
 allImportedModules :: Imports -> [ModuleNameS]
-allImportedModules = Map.keys
+allImportedModules = fmap _mName

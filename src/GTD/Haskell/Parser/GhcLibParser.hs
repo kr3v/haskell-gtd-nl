@@ -208,16 +208,16 @@ imports (HsModuleX HsModule {hsmodImports = is} ps) = do
 
         let e = mempty {_mName = imn, _mQualifier = mQ, _mAllowNoQualifier = notQ}
         case iIL of
-          Nothing -> tell $ Map.singleton imn e {_mType = Declarations.All}
+          Nothing -> tell [e {_mType = Declarations.All}]
           Just (x, L _ iis) -> do
             r <- fold <$> execStateT (forM_ (unLoc <$> iis) (ie imn)) Map.empty
             let eS = e {_mDecls = _mDecls r, _mCDs = _mCDs r}
             tell $ case x of
-              Exactly -> Map.singleton imn eS {_mType = Declarations.Exactly}
-              EverythingBut -> Map.singleton imn eS {_mType = Declarations.EverythingBut}
+              Exactly -> [eS {_mType = Declarations.Exactly}]
+              EverythingBut -> [eS {_mType = Declarations.EverythingBut}]
 
   unless ("-XNoImplicitPrelude" `elem` ps) $ do
-    tell $ Map.singleton "Prelude" mempty {_mName = "Prelude", _mQualifier = "Prelude"}
+    tell [mempty {_mName = "Prelude", _mQualifier = "Prelude"}]
 
 ---
 

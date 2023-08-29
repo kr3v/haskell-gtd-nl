@@ -375,7 +375,7 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 		// HLS interoperability: if HLS is provided via `haskell.haskell` extension, then this extension should not provide local resolutions until they become the same as the ones provided by `haskell.haskell` extension
 		let wordSourcePathO = data.srcSpan.sourceSpanFileName;
 		let wordSourcePath;
-		if (isParentOf(wd, wordSourcePathO)) {
+		if (isParentOf(wd, wordSourcePathO) && !isParentOf(repos, wd)) {
 			wordSourcePath = wordSourcePathO;
 			if (isMainHaskellExtensionActive()) {
 				let conf = vscode.workspace.getConfiguration('hs-gtd');

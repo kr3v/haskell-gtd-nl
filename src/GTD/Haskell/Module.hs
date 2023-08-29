@@ -51,7 +51,7 @@ instance FromJSON HsModuleData
 instance ToJSON HsModuleData
 
 emptyData :: HsModuleData
-emptyData = HsModuleData {_exports0 = Map.empty, _imports = Map.empty, _locals = Declarations {_decls = Map.empty, _dataTypes = Map.empty}}
+emptyData = HsModuleData {_exports0 = Map.empty, _imports = [], _locals = Declarations {_decls = Map.empty, _dataTypes = Map.empty}}
 
 data HsModule = HsModule
   { _package :: Cabal.PackageNameS,

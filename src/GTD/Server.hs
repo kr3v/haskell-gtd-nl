@@ -305,6 +305,7 @@ definition (DefinitionRequest {workDir = wd, file = rf0, word = w}) = do
       return r
   resolutionMap <- maybe noDefinitionFoundError return resM
 
+  -- TODO: check both? prioritize the latter?
   updateStatus $ printf "figuring out what `%s` is" w
   r <- case w `Map.lookup` resolutionMap of
     Just d -> do

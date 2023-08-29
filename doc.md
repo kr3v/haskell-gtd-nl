@@ -45,4 +45,4 @@ x		|   - show parsing status: server/package executable should occasionally prin
 ```
 import Data.Foldable    ( Foldable(..) )
 import qualified Data.Foldable as Foldable
-```
+``` <- partially done, need tests
