@@ -9,7 +9,9 @@ import { FileHandle } from 'node:fs/promises';
 
 const userHomeDir = homedir();
 const cabalDir = path.join(userHomeDir, ".cabal/bin");
-let serverRoot: string, serverExe: string, packageExe: string, serverRepos: string, serverPidF: string, serverPortF: string;
+let serverRoot: string, serverExe: string, packageExe: string, serverRepos: string, serverPidF: string, serverPortF: string, serverStatusD: string;
+let statusServerS = "", statusPackageS = "";
+let statusBar: vscode.StatusBarItem;
 let outputChannel: vscode.OutputChannel;
 
 ///
@@ -454,6 +456,25 @@ async function initConfig() {
 	serverRepos = path.join(serverRoot, "repos");
 	serverPidF = path.join(serverRoot, 'pid');
 	serverPortF = path.join(serverRoot, 'port');
+	fs.watch(
+		path.join(serverRoot, "status"),
+		async (eventType, filename) => {
+			if (!filename) return;
+			switch (filename) {
+				case "server":
+					statusServerS = (await fs.promises.readFile(path.join(serverRoot, "status", filename), "utf8")).trim();
+					break;
+				case "package":
+					statusPackageS = (await fs.promises.readFile(path.join(serverRoot, "status", filename), "utf8")).trim();
+					break;
+				default:
+					outputChannel.appendLine(util.format("unknown status file: %s", filename));
+			}
+			statusBar.text = `${statusServerS}`;
+			if (statusPackageS != "") statusBar.text += ` (${statusPackageS})`
+			outputChannel.appendLine(util.format("status: %s (pkg=`%s`, srv=`%s`)", statusBar.text, statusPackageS, statusServerS));
+			statusBar.show();
+		});
 
 	outputChannel.appendLine(util.format("serverRoot=%s", serverRoot));
 	outputChannel.appendLine(util.format("serverExe=%s", serverExe));
@@ -464,6 +485,9 @@ export async function activate(context: vscode.ExtensionContext) {
 	outputChannel = vscode.window.createOutputChannel("haskell-gtd");
 	outputChannel.appendLine(userHomeDir);
 	await initConfig();
+
+	statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, -100);
+	context.subscriptions.push(statusBar);
 
 	// reset current working directory cache whenever a Cabal or Haskell file is saved
 	context.subscriptions.push(

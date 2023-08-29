@@ -38,6 +38,7 @@ data GTDConfiguration = GTDConfiguration
     _repos :: FilePath,
     _cache :: FilePath,
     _ccGetPath :: FilePath,
+    _status :: FilePath,
     _args :: Args
   }
   deriving (Show)
@@ -53,6 +54,7 @@ prepareConstants a = do
           { _logs = dir </> "logs" </> show now,
             _repos = dir </> "repos",
             _cache = dir </> "cache",
+            _status = dir </> "status",
             _ccGetPath = dir </> "cc-get.json",
             _args = a
           }
@@ -60,4 +62,5 @@ prepareConstants a = do
   createDirectoryIfMissing True (constants ^. logs)
   createDirectoryIfMissing True (constants ^. repos)
   createDirectoryIfMissing True (constants ^. cache)
+  createDirectoryIfMissing True (constants ^. status)
   return constants

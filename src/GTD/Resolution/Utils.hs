@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -9,14 +10,14 @@ module GTD.Resolution.Utils where
 import Control.Concurrent.Async.Lifted (Async, async, wait)
 import Control.Lens (makeLenses, use, (%=), (.=))
 import Control.Monad.Logger (MonadLoggerIO)
-import Control.Monad.RWS (mapAndUnzipM)
-import Control.Monad.State (MonadIO (..), MonadTrans (..), StateT, execStateT, gets)
+import Control.Monad.RWS (mapAndUnzipM, MonadState (get))
+import Control.Monad.State (MonadIO (..), MonadTrans (..), StateT, execStateT, gets, when)
 import Control.Monad.Trans.Control (MonadBaseControl (..))
 import qualified Data.Graph as Graph
 import qualified Data.Map.Strict as Map
 import Data.Maybe (catMaybes, fromJust, mapMaybe)
 import qualified Data.Set as Set
-import GTD.Utils (flipTuple, logDebugNSS, mapFrom)
+import GTD.Utils (flipTuple, logDebugNSS, mapFrom, updateStatus)
 import Text.Printf (printf)
 
 data SchemeState k a b = SchemeState
@@ -79,11 +80,14 @@ scheme a ka kb p ks = do
   let graphS = concatMap (foldr (:) []) $ Graph.scc graph
   return $ fromJust . (`Map.lookup` iModules) <$> graphS
 
+---
+
 data ParallelizedState s k a b m = ParallelizedState
   { _queue :: [a],
     _processed :: Map.Map k b,
     _asyncs :: Map.Map k (Async (StM m (b, s -> s))),
-    _state :: s
+    _state :: s,
+    _shouldUpdateStatus :: Bool
   }
 
 $(makeLenses ''ParallelizedState)
@@ -100,7 +104,8 @@ parallelized ::
 parallelized s n f ps ka ds = _state <$> execStateT (parallelized0 n f ps ka ds) s
 
 parallelized0 ::
-  (Show a, Show b, Show n, Show k, MonadIO m, MonadLoggerIO m, MonadBaseControl IO m, Ord k) =>
+  (Show a, Show b, Show n, Show k, Ord k) =>
+  (MonadIO m, MonadLoggerIO m, MonadBaseControl IO m) =>
   n ->
   (s -> a -> m (b, s -> s)) ->
   (s -> String) ->
@@ -108,8 +113,8 @@ parallelized0 ::
   (a -> m [k]) ->
   StateT (ParallelizedState s k a b m) m ()
 parallelized0 n f ps ka ds = do
-  q <- use queue
-  a <- use asyncs
+  ParallelizedState{_queue=q, _asyncs=a, _shouldUpdateStatus=us} <- get
+  let logTag = printf "parallelized %s" (show n)
 
   case q of
     [] -> do
@@ -123,12 +128,12 @@ parallelized0 n f ps ka ds = do
       let is = Set.intersection (Set.fromList xD) (Map.keysSet a)
       if Set.null is
         then do
-          logDebugNSS ("parallelized " ++ show n) (printf "asyncs=%s, queue=%s" (show $ length a) (show $ length xs))
+          logDebugNSS logTag (printf "asyncs=%s, queue=%s" (show $ length a) (show $ length xs))
           s <- use state
           a <- lift $ async $ do
-            logDebugNSS (printf "parallelized %s %s" (show n) (show $ ka x)) $ printf "starting;\ndeps = %s\nstate = %s" (show xD) (ps s)
+            logDebugNSS logTag $ printf "%s starting;\ndeps = %s\nstate = %s" (show $ ka x) (show xD) (ps s)
             z <- f s x
-            logDebugNSS (printf "parallelized %s %s" (show n) (show $ ka x)) "finished"
+            logDebugNSS logTag $ printf "%s finished" (show $ ka x)
             return z
           asyncs %= Map.insert (ka x) a
           queue .= xs
@@ -143,15 +148,18 @@ parallelized0 n f ps ka ds = do
           state .= foldr ($) s0 ss
           s1 <- use state
 
-          logDebugNSS (printf "parallelized %s" (show n)) $
+          when us $
+            updateStatus $ printf "%s: %s tasks executing, %s in queue" logTag (show $ length a) (show $ length xs)
+          logDebugNSS logTag $
             printf
-              "asyncs=%s, queue=%s\nwaited for=%s\nss=%s\ns0=%s\ns1=%s"
+              "asyncs=%s, queue=%s\nwaited for=%s\nss=%s\ns0=%s\ns1=%s\nus=%s"
               (show $ length a)
               (show $ length xs)
               (show xD)
               (show $ length ss)
               (ps s0)
               (ps s1)
+              (show us)
 
       parallelized0 n f ps ka ds
 

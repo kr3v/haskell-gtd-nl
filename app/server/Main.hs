@@ -10,10 +10,11 @@
 module Main where
 
 import Control.Concurrent (MVar, forkIO, modifyMVar, modifyMVar_, newMVar, putMVar, readMVar, takeMVar, threadDelay)
+import Control.Exception.Lifted (bracket)
 import Control.Lens (makeLenses, (<+=), (^.))
 import Control.Monad.Except (runExceptT)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Logger (filterLogger, runFileLoggingT, runStdoutLoggingT)
+import Control.Monad.Logger (LoggingT (..), defaultOutput, filterLogger, runFileLoggingT, runStdoutLoggingT)
 import Control.Monad.Reader (ReaderT (runReaderT))
 import Control.Monad.State (StateT (runStateT), execStateT)
 import Control.Monad.State.Lazy (evalStateT)
@@ -23,7 +24,7 @@ import qualified GTD.Cabal.Cache as CabalCache
 import GTD.Configuration (Args (..), GTDConfiguration (..), args, argsP, prepareConstants)
 import GTD.Resolution.State (Context, emptyContext)
 import GTD.Server (CpphsRequest, CpphsResponse (..), DefinitionRequest (..), DefinitionResponse (..), DropCacheRequest, cpphs, definition, resetCache)
-import GTD.Utils (ultraZoom)
+import GTD.Utils (combine, statusL, ultraZoom, updateStatus)
 import Network.Socket (Family (AF_INET), SockAddr (SockAddrInet), SocketType (Stream), bind, defaultProtocol, listen, socket, socketPort, tupleToHostAddress, withSocketsDo)
 import Network.Wai.Handler.Warp (defaultSettings, runSettingsSocket)
 import Options.Applicative (ParserInfo, execParser, fullDesc, helper, info, (<**>))
@@ -32,7 +33,7 @@ import Servant.Server (Handler, serve)
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.Exit (ExitCode (..))
 import System.FilePath ((</>))
-import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
+import System.IO (BufferMode (LineBuffering), IOMode (..), hSetBuffering, stderr, stdout, withFile)
 import System.Posix (exitImmediately, getProcessID)
 import Text.Printf (printf)
 
@@ -74,17 +75,28 @@ nt s x = liftIO (evalStateT x s)
 
 ---
 
-h c m respP1 respP2 req =
-  liftIO $ modifyMVar m $ \s -> do
-    (r, s') <- flip runStateT s $ do
-      rq <- reqId <+= 1
-      let reqId :: String = printf "%06d" rq
-      let logP = (_root . _args $ c) </> "server.log"
-      liftIO $ putStrLn $ "Got request with ID:" ++ show reqId
-
-      r' <- ultraZoom context $ runFileLoggingT logP $ filterLogger (\_ l -> l >= (_logLevel . _args $ c)) $ flip runReaderT c $ runExceptT $ respP1 req
-      return $ respP2 reqId r'
-    return (s', r)
+h n c m respP1 respP2 req = do
+  let logP = (_root . _args $ c) </> "server.log"
+      statusP = (_root . _args $ c) </> "status" </> "server"
+  liftIO $
+    withFile logP AppendMode $ \h -> do
+      hSetBuffering h LineBuffering
+      modifyMVar m $ \s -> do
+        (r, s') <- flip runStateT s $ do
+          rq <- reqId <+= 1
+          let reqId :: String = printf "%06d" rq
+          liftIO $ putStrLn $ "Got request with ID:" ++ show reqId
+          r' <-
+            ultraZoom context $
+              (`runLoggingT` combine (statusL statusP) (defaultOutput h)) $ do
+                bracket (pure ()) (const $ updateStatus "") $ \_ -> do
+                  updateStatus $ printf "preparing to execute `%s`" n
+                  filterLogger (\_ l -> l >= (_logLevel . _args $ c)) $
+                    flip runReaderT c $
+                      runExceptT $
+                        respP1 req
+          return $ respP2 reqId r'
+        return (s', r)
 
 ---
 
@@ -96,7 +108,7 @@ definitionH ::
   Handler (Headers '[Header hs String] DefinitionResponse)
 definitionH c m req = do
   let defH = either (\e -> DefinitionResponse {err = Just e, srcSpan = Nothing}) id
-  h c m definition (\r e -> addHeader r $ defH e) req
+  h "definition" c m definition (\r e -> addHeader r $ defH e) req
 
 pingH :: MVar ServerState -> Handler String
 pingH m = do
@@ -110,7 +122,7 @@ dropCacheH ::
   Handler String
 dropCacheH c m req = do
   let defH = either id id
-  h c m resetCache (\_ e -> defH e) req
+  h "dropCache" c m resetCache (\_ e -> defH e) req
 
 runCpphsH ::
   GTDConfiguration ->
@@ -119,7 +131,7 @@ runCpphsH ::
   Handler CpphsResponse
 runCpphsH c m req = do
   let defH = either (\e -> CpphsResponse {crErr = Just e, crContent = Nothing}) id
-  h c m cpphs (\_ e -> defH e) req
+  h "runCpphs" c m cpphs (\_ e -> defH e) req
 
 ---
 

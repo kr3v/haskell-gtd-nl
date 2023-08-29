@@ -8,7 +8,7 @@ module GTD.Haskell.Parser.GhcLibParser where
 import Control.Exception (try)
 import Control.Monad (forM_, unless, (>=>))
 import Control.Monad.Logger (MonadLoggerIO)
-import Control.Monad.State (MonadState (..), execStateT, modify, MonadIO (liftIO))
+import Control.Monad.State (MonadIO (liftIO), MonadState (..), execStateT, modify)
 import Control.Monad.Writer (MonadWriter (..))
 import Data.Either (fromRight)
 import Data.Foldable (Foldable (..))
@@ -20,7 +20,7 @@ import GHC.Driver.Config.Parser (initParserOpts)
 import GHC.Driver.Session (DynFlags (..), PlatformMisc (..), Settings (..), defaultDynFlags, parseDynamicFilePragma)
 import GHC.Fingerprint (fingerprint0)
 import GHC.Hs (ConDecl (..), ConDeclField (..), DataDefnCons (..), FamilyDecl (..), FieldOcc (..), GhcPs, HsConDetails (..), HsDataDefn (..), HsDecl (..), HsModule (..), IE (..), IEWrappedName (..), ImportDecl (..), ImportDeclQualifiedStyle (..), ImportListInterpretation (..), IsBootInterface (..), ModuleName (ModuleName), Sig (..), SrcSpanAnn' (..), TyClDecl (..), moduleNameString)
-import GHC.Parser (parseIdentifier, parseModule, parseHeader)
+import GHC.Parser (parseHeader, parseIdentifier, parseModule)
 import GHC.Parser.Header (getOptions)
 import GHC.Parser.Lexer (P (unP), PState (..), ParseResult (..), initParserState)
 import GHC.Platform (genericPlatform)
@@ -35,8 +35,8 @@ import GHC.Utils.Outputable (Outputable (..), SDocContext (..), defaultSDocConte
 import GTD.Cabal.Package (ModuleNameS)
 import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Exports, Imports, Module (..), SourceSpan (..), asDeclsMap, emptySourceSpan)
 import qualified GTD.Haskell.Declaration as Declarations
-import Text.Printf (printf)
 import GTD.Utils (logDebugNSS)
+import Text.Printf (printf)
 
 showO :: Outputable a => a -> String
 showO = renderWithContext defaultSDocContext {sdocErrorSpans = True} . ppr
@@ -204,15 +204,17 @@ imports (HsModuleX HsModule {hsmodImports = is} ps) = do
       NotBoot -> do
         let imn = unpackFS iMN
             mQ = maybe imn (\(L _ n) -> moduleNameString n) iA
-            allowNoQ = iQ == NotQualified
+            notQ = iQ == NotQualified
 
+        let e = mempty {_mName = imn, _mQualifier = mQ, _mAllowNoQualifier = notQ}
         case iIL of
-          Nothing -> tell $ Map.singleton imn mempty {_mName = imn, _mQualifier = mQ, _mAllowNoQualifier = allowNoQ, _mType = Declarations.All}
+          Nothing -> tell $ Map.singleton imn e {_mType = Declarations.All}
           Just (x, L _ iis) -> do
-            r :: Module <- fold <$> execStateT (forM_ (unLoc <$> iis) (ie imn)) Map.empty
+            r <- fold <$> execStateT (forM_ (unLoc <$> iis) (ie imn)) Map.empty
+            let eS = e {_mDecls = _mDecls r, _mCDs = _mCDs r}
             tell $ case x of
-              Exactly -> Map.singleton imn mempty {_mName = imn, _mQualifier = mQ, _mAllowNoQualifier = allowNoQ, _mType = Declarations.Exactly, _mDecls = _mDecls r, _mCDs = _mCDs r}
-              EverythingBut -> Map.singleton imn mempty {_mName = imn, _mQualifier = mQ, _mAllowNoQualifier = allowNoQ, _mType = Declarations.EverythingBut, _mDecls = _mDecls r, _mCDs = _mCDs r}
+              Exactly -> Map.singleton imn eS {_mType = Declarations.Exactly}
+              EverythingBut -> Map.singleton imn eS {_mType = Declarations.EverythingBut}
 
   unless ("-XNoImplicitPrelude" `elem` ps) $ do
     tell $ Map.singleton "Prelude" mempty {_mName = "Prelude", _mQualifier = "Prelude"}

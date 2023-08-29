@@ -33,7 +33,7 @@ import qualified GTD.Cabal.Full as Cabal (full)
 import qualified GTD.Cabal.Full as CabalCache (full)
 import qualified GTD.Cabal.Get as Cabal (GetCache (_vs))
 import GTD.Cabal.Package (ModuleNameS, PackageWithResolvedDependencies)
-import qualified GTD.Cabal.Package as Cabal (Dependency, Package (_dependencies, _modules, _name, _root, _version), PackageModules (_exports, _reExports, _srcDirs), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, key)
+import qualified GTD.Cabal.Package as Cabal (Dependency, Package (_dependencies, _modules, _name, _root, _version), PackageModules (_exports, _reExports, _srcDirs), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, key, pKey)
 import GTD.Configuration (Args (..), GTDConfiguration (..), args)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Identifier, SourceSpan (..), asDeclsMap, emptySourceSpan)
@@ -45,7 +45,7 @@ import GTD.Resolution.Module (figureOutExports1, module'Dependencies, moduleR)
 import GTD.Resolution.State (Context (..), Package (Package, _cabalPackage, _modules), cExports, cLocalPackages, cResolution)
 import qualified GTD.Resolution.State as Package
 import GTD.Resolution.Utils (ParallelizedState (..), SchemeState (..), parallelized, scheme)
-import GTD.Utils (getUsableFreeMemory, logDebugNSS, modifyMS, stats, storeIOExceptionToMonadError)
+import GTD.Utils (getUsableFreeMemory, logDebugNSS, modifyMS, stats, storeIOExceptionToMonadError, updateStatus)
 import System.FilePath (normalise, (</>))
 import System.IO (IOMode (AppendMode), withFile)
 import System.Process (CreateProcess (..), StdStream (..), createProcess, proc, waitForProcess)
@@ -74,8 +74,13 @@ modules1 ::
   (MS m) => m (Map.Map ModuleNameS HsModuleP)
 modules1 pkg c = do
   modsO <- modulesOrdered c
-  let st = ParallelizedState modsO Map.empty Map.empty (_modules pkg)
-  parallelized st (Cabal.key c) figureOutExports1 (const "tbd") HsModule._name (return . module'Dependencies)
+  parallelized
+    (ParallelizedState modsO Map.empty Map.empty (_modules pkg) False)
+    ("modules", Cabal.key c)
+    figureOutExports1
+    (const "tbd")
+    HsModule._name
+    (return . module'Dependencies)
 
 ---
 
@@ -160,15 +165,20 @@ package'resolution'withDependencies'concurrently ::
   Cabal.PackageWithUnresolvedDependencies ->
   (MS m) => m (Maybe Package)
 package'resolution'withDependencies'concurrently cPkg0 = do
+  let k = Cabal.pKey . Cabal.key $ cPkg0
+  let logTag :: String = printf "Cabal dependencies for %s" k
+  updateStatus $ printf "resolving %s" logTag
   pkgsO <- package'dependencies'ordered cPkg0 package'order'ignoringAlreadyCached
+  updateStatus $ printf "parsing %s..." logTag
   modifyMS $ \st ->
     parallelized
-      (ParallelizedState pkgsO Map.empty Map.empty st)
-      ("packages", Cabal.key cPkg0)
+      (ParallelizedState pkgsO Map.empty Map.empty st True)
+      (printf "parsing %s" logTag :: String)
       package'resolution'withMutator
       package'concurrent'contextDebugInfo
       Cabal.key
       (return . fmap Cabal.key . Cabal._dependencies)
+  updateStatus $ printf "parsing %s..." k
   CabalCache.full cPkg0 >>= package'resolution
 
 package'resolution'withDependencies'forked :: Cabal.PackageWithResolvedDependencies -> (MS m) => m ()
@@ -189,6 +199,7 @@ package'resolution'withDependencies'forked p = do
   rts <- if dm then pArgs else return []
   let a = ["--dir", d, "--log-level", show ll] ++ if null rts then [] else ["+RTS"] ++ rts ++ ["-RTS"]
 
+  updateStatus $ printf "executing `package` on %s..." (Cabal.pKey . Cabal.key $ p)
   l <- liftIO $ withFile (r </> "package.stdout.log") AppendMode $ \hout -> withFile (r </> "package.stderr.log") AppendMode $ \herr -> do
     e <- liftIO $ tryAny $ createProcess (proc pe a) {std_out = UseHandle hout, std_err = UseHandle herr}
     x <- case e of
@@ -197,6 +208,7 @@ package'resolution'withDependencies'forked p = do
         x <- liftIO $ waitForProcess h
         return $ show x
     return $ printf "exe=%s args=%s -> %s" (show a) d x
+  updateStatus $ printf "executing `package` on %s... done" (Cabal.pKey . Cabal.key $ p)
   logDebugNSS "haskell-gtd-package" l
 
 package ::
@@ -278,8 +290,10 @@ definition ::
   (MS m, MonadError String m) => m DefinitionResponse
 definition (DefinitionRequest {workDir = wd, file = rf0, word = w}) = do
   let rf = normalise rf0
+  updateStatus $ printf "resolving Cabal package for %s" wd
   cPkg <- cabalPackage wd rf
 
+  updateStatus $ printf "fetching 'resolution' map for %s" rf
   (l, mL) <- gets $ LRU.lookup rf . _cResolution
   cResolution .= l
   resM <- case mL of
@@ -291,6 +305,7 @@ definition (DefinitionRequest {workDir = wd, file = rf0, word = w}) = do
       return r
   resolutionMap <- maybe noDefinitionFoundError return resM
 
+  updateStatus $ printf "figuring out what `%s` is" w
   r <- case w `Map.lookup` resolutionMap of
     Just d -> do
       let d0 = head $ Map.elems $ resolution d
@@ -309,7 +324,7 @@ definition (DefinitionRequest {workDir = wd, file = rf0, word = w}) = do
       case catMaybes casesM of
         (x : _) -> return x
         _ -> noDefinitionFoundError
-  
+
   liftIO stats
   return r
 
@@ -326,6 +341,7 @@ resetCache ::
   DropCacheRequest ->
   (MS m, MonadError String m) => m String
 resetCache (DropCacheRequest {dir = d}) = do
+  updateStatus $ printf "resetting cache on %s..." d
   cPkgs <- CabalCache.findAtF d
   forM_ cPkgs $ \cPkg -> do
     PackageCache.pRemove cPkg
@@ -333,6 +349,7 @@ resetCache (DropCacheRequest {dir = d}) = do
     CabalCache.dropCache cPkg
     cExports %= fst . LRU.delete (Cabal.key cPkg)
     cResolution %= LRU.newLRU . LRU.maxSize
+  updateStatus ""
   return "OK"
 
 ---
@@ -361,7 +378,9 @@ cpphs ::
   CpphsRequest ->
   (MS m, MonadError String m) => m CpphsResponse
 cpphs (CpphsRequest {crWorkDir = wd, crFile = rf}) = do
+  updateStatus $ printf "executing `cpphs` for %s..." rf
   _ <- cabalPackage wd rf
   content <- storeIOExceptionToMonadError $ readFile rf
   r <- haskellApplyCppHs rf content
+  updateStatus ""
   return $ CpphsResponse (Just r) Nothing

@@ -8,15 +8,19 @@ import Control.Concurrent (myThreadId)
 import Control.Exception (IOException, catch, throwIO, try)
 import Control.Lens (Lens', use, (.=))
 import Control.Monad.Except (ExceptT, MonadError (throwError), MonadIO (liftIO), forM, when)
-import Control.Monad.Logger (MonadLogger, MonadLoggerIO, logDebugNS, logErrorNS)
+import Control.Monad.Logger (LogLevel (..), MonadLogger, MonadLoggerIO, defaultLogStr, fromLogStr, logDebugNS, logErrorNS, logOtherNS)
+import qualified Control.Monad.Logger as Logger
 import Control.Monad.RWS (MonadState (..))
 import Control.Monad.State (StateT (..))
 import Control.Monad.Trans.Except (catchE, mapExceptT)
 import Control.Monad.Trans.Maybe (MaybeT (..))
+import qualified Data.ByteString as BS
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe, mapMaybe)
+import Data.Text (unpack)
 import qualified Data.Text as T
-import Data.Time.Clock.POSIX (getPOSIXTime)
+import Data.Time.Clock.POSIX (getCurrentTime)
+import Data.Time.Format.ISO8601 (iso8601Show)
 import GHC.Stats (RTSStats (..), getRTSStats, getRTSStatsEnabled)
 import Numeric (showFFloat)
 import System.Directory (removeFile)
@@ -35,21 +39,21 @@ ultraZoom l sa = do
 
 logDebugNSS :: MonadLoggerIO m => String -> String -> m ()
 logDebugNSS a b = do
-  now <- liftIO getPOSIXTime
+  now <- liftIO getCurrentTime
   threadID <- liftIO myThreadId
-  logDebugNS (T.pack a) (T.pack $ printf "%s (thread id=%s): %s" (show now) (show threadID) b)
+  logDebugNS (T.pack a) (T.pack $ printf "%s (thread id=%s): %s" (iso8601Show now) (show threadID) b)
 
 logDebugNSS' :: (MonadIO m, MonadLogger m) => String -> String -> m ()
 logDebugNSS' a b = do
-  now <- liftIO getPOSIXTime
+  now <- liftIO getCurrentTime
   threadID <- liftIO myThreadId
-  logDebugNS (T.pack a) (T.pack $ printf "%s (thread id=%s): %s" (show now) (show threadID) b)
+  logDebugNS (T.pack a) (T.pack $ printf "%s (thread id=%s): %s" (iso8601Show now) (show threadID) b)
 
 logErrorNSS :: MonadLoggerIO m => String -> String -> m ()
 logErrorNSS a b = do
-  now <- liftIO getPOSIXTime
+  now <- liftIO getCurrentTime
   threadID <- liftIO myThreadId
-  logErrorNS (T.pack a) (T.pack $ printf "%s (thread id=%s): %s" (show now) (show threadID) b)
+  logErrorNS (T.pack a) (T.pack $ printf "%s (thread id=%s): %s" (iso8601Show now) (show threadID) b)
 
 tryE :: Monad m => ExceptT e m a -> ExceptT e m (Either e a)
 tryE m = catchE (fmap Right m) (return . Left)
@@ -96,9 +100,9 @@ removeIfExists n = removeFile n `catch` handleExists
 removeIfExistsL :: FilePath -> (MonadLoggerIO m) => m ()
 removeIfExistsL n = do
   x :: Either IOError () <- liftIO $ try $ removeFile n
-  case x of
-    Left e -> logErrorNSS "removeIfExistsL" $ printf "%s -> %s" n (show e)
-    Right _ -> logErrorNSS "removeIfExistsL" $ printf "%s -> success" n
+  logErrorNSS "removeIfExistsL" $ case x of
+    Left e -> printf "%s -> %s" n (show e)
+    Right _ -> printf "%s -> success" n
 
 stats :: IO ()
 stats = do
@@ -147,3 +151,23 @@ storeIOExceptionToMonadError a = do
   case x of
     Left e -> throwError $ show e
     Right x -> return x
+
+---
+
+type LogF = Logger.Loc -> Logger.LogSource -> Logger.LogLevel -> Logger.LogStr -> IO ()
+
+combine :: LogF -> LogF -> LogF
+combine l r loc srcT
+  | src == statusS = l loc (T.pack "")
+  | otherwise = r loc srcT
+  where
+    src = unpack srcT
+
+statusS :: String
+statusS = "status.log"
+
+statusL :: FilePath -> LogF
+statusL p a b c d = BS.writeFile p $ BS.drop 3 $ fromLogStr $ defaultLogStr a b c d
+
+updateStatus :: String -> MonadLogger m => m ()
+updateStatus s = logOtherNS (T.pack statusS) (LevelOther $ T.pack "") (T.pack s)

@@ -23,7 +23,7 @@ x - apply cpphs via command
 		| - front-end:
 		|   - if there's no `.cabal` file in the workspace, avoid using the server
 		| - back-end:
-		|   - show parsing status: server/package executable should occasionally print their status to a file in the local/share dir
+x		|   - show parsing status: server/package executable should occasionally print their status to a file in the local/share dir
 8		|   - consider caching last known 'good' version of file local declarations
 9   |   - if there's no resolution cache, try building it dynamically?
     |   - dropcache tests
@@ -41,3 +41,8 @@ x - apply cpphs via command
 
 `concat`?
 `*.hsc` files
+
+```
+import Data.Foldable    ( Foldable(..) )
+import qualified Data.Foldable as Foldable
+```

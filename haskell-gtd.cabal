@@ -32,6 +32,7 @@ common common-deps
         , containers ^>= 0.6.7
         , either ^>= 5.0.2
         , lifted-async ^>= 0.10.2.4
+        , lifted-base ^>= 0.2.3.12
         , monad-control ^>= 1.0.3.1
         , mtl ^>= 2.2.2
         , random ^>= 1.2.1.1
