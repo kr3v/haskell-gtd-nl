@@ -5,7 +5,7 @@
 {-# LANGUAGE TupleSections #-}
 
 import Control.Exception (IOException, try)
-import Control.Monad.Logger (NoLoggingT (..), runStderrLoggingT, runStdoutLoggingT)
+import Control.Monad.Logger (LogLevel (LevelDebug), NoLoggingT (..), runStderrLoggingT, runStdoutLoggingT)
 import Control.Monad.Logger.CallStack (runFileLoggingT)
 import Control.Monad.RWS (MonadIO (liftIO), MonadState (get), forM, forM_, join)
 import Control.Monad.State (StateT (..), evalStateT, execStateT)
@@ -16,15 +16,12 @@ import Data.Aeson (FromJSON, ToJSON, decode, encode)
 import qualified Data.ByteString.Lazy as BS
 import Data.Either (partitionEithers)
 import Data.Either.Combinators (mapLeft, mapRight)
-import Data.Function ((&))
-import Data.Functor ((<&>))
 import Data.List (isPrefixOf, isSuffixOf)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust, fromMaybe)
-import Data.Traversable (for)
 import GHC.Generics (Generic)
 import GTD.Cabal.Cache as Cabal (load, store)
-import GTD.Configuration (GTDConfiguration (..), defaultArgs, prepareConstants)
+import GTD.Configuration (Args (_logLevel), GTDConfiguration (..), defaultArgs, prepareConstants)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (Declarations (..), Exports, Imports, SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine))
 import GTD.Haskell.Lines (Line (..), buildMap, resolve)
@@ -33,11 +30,11 @@ import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import GTD.Resolution.Module (figureOutExports, figureOutExports0)
 import GTD.Resolution.State (emptyContext)
 import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), definition)
-import GTD.Utils (storeIOExceptionToMonadError)
-import System.Directory (getCurrentDirectory, listDirectory)
+import GTD.Utils (removeIfExists, storeIOExceptionToMonadError)
+import System.Directory (getCurrentDirectory, listDirectory, removeDirectoryRecursive, removeFile)
 import System.FilePath ((</>))
 import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
-import Test.Hspec (Expectation, Spec, describe, expectationFailure, it, runIO, shouldBe)
+import Test.Hspec (Spec, describe, expectationFailure, it, runIO, shouldBe)
 import Test.Hspec.Runner (Config (configPrintCpuTime), defaultConfig, hspecWith)
 import Text.Printf (printf)
 
@@ -132,7 +129,7 @@ haskellGetExportsSpec = do
             BS.writeFile dstPath $ encode identifiers
             identifiers `shouldBe` expected
 
-  let ghcP a b = mapRight (runStderrLoggingT . execWriterT . GHC.imports) <$> runNoLoggingT (GHC.parse a b)
+  let ghcP a b = mapRight (runStderrLoggingT . flip execStateT mempty . GHC.exports) <$> runNoLoggingT (GHC.parse a b)
   let parsers = [("ghc-lib-parser", ghcP)]
 
   forM_ parsers $ \(n, p) -> do
@@ -223,17 +220,21 @@ figureOutExportsTest = do
 
 definitionsSpec :: Spec
 definitionsSpec = do
-  consts <- runIO $ prepareConstants =<< defaultArgs
+  da <- runIO defaultArgs
+  consts <- runIO $ prepareConstants da {_logLevel = LevelDebug}
+  pwd <- runIO getCurrentDirectory
 
   let descr = "definitions"
-  pwd <- runIO getCurrentDirectory
-  let workDir = pwd </> "./test/integrationTestRepo/sc-ea-hs"
-  let file = workDir </> "app/game/Main.hs"
-  let req = DefinitionRequest {workDir = workDir, file = file, word = ""}
+      workDir = pwd </> "./test/integrationTestRepo/sc-ea-hs"
+      file = workDir </> "app/game/Main.hs"
+      req = DefinitionRequest {workDir = workDir, file = file, word = ""}
+      logF = workDir </> descr ++ ".txt"
+
+  runIO $ removeIfExists logF
 
   let eval0 w = runExceptT $ definition req {word = w}
       eval w r = eval0 w >>= (\d -> return $ d `shouldBe` r)
-      mstack f a = runFileLoggingT (workDir </> descr ++ ".txt") $ f $ runReaderT a consts
+      mstack f a = runFileLoggingT logF $ f $ runReaderT a consts
 
   let expectedPlayIO =
         let expFile = _repos consts </> "gloss-1.13.2.2/Graphics/Gloss/Interface/IO/Game.hs"
@@ -353,6 +354,10 @@ definitionsSpec = do
     it "cross-package module re-export `runState`" $ do
       join $ mstack (`evalStateT` serverState) $ do
         eval "runState" expectedRunState
+    
+    it "multiple imports of the same module work" $ do
+      join $ mstack (`evalStateT` serverState) $ do
+        eval "GG.Picture" expectedPicture
     it "(re-export)? data name `Picture`" $ do
       join $ mstack (`evalStateT` serverState) $ do
         eval "Picture" expectedPicture
@@ -377,7 +382,7 @@ definitionsSpec = do
         a1 <- eval "(^.)" noDefErr
         a2 <- eval "(%=)" expectedLensOverOperator
         return $ a1 <> a2
-    it "`view`: in-package module re-export + function `view`" $ do
+    it "in-package module re-export + function `view`" $ do
       join $ mstack (`evalStateT` serverState) $ do
         eval "view" expectedLensView
 
@@ -394,6 +399,10 @@ definitionsSpec = do
     it "qualified module import - go to function through qualifier `Map.keys`" $ do
       join $ mstack (`evalStateT` serverState) $ do
         eval "Map.keys" expectedQMapKeys
+
+    it "main-to-library resolution works `generateSurface`" $ do
+      join $ mstack (`evalStateT` serverState) $ do
+        eval "generateSurface" noDefErr
 
     -- often failed ones
     it "printf" $ do
@@ -464,6 +473,9 @@ main :: IO ()
 main = do
   hSetBuffering stdout LineBuffering
   hSetBuffering stderr LineBuffering
+
+  c <- prepareConstants =<< defaultArgs
+  removeDirectoryRecursive $ _cache c
 
   hspecWith defaultConfig {configPrintCpuTime = False} $ do
     haskellApplyCppHsSpec

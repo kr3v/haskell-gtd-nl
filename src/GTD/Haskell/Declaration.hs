@@ -1,20 +1,25 @@
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module GTD.Haskell.Declaration where
 
-import Control.Lens (Each (..), makeLenses, over, (%=))
+import Control.Lens (Each (..), Traversal', makeLenses, use, (%=))
+import Control.Monad.RWS (MonadState, MonadTrans (lift))
+import Control.Monad.State (StateT, execStateT)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Binary (Binary)
 import qualified Data.Map.Strict as Map
 import GHC.Generics (Generic)
 import GTD.Cabal.Package (ModuleNameS)
+import GTD.Utils (modifyEachM, overM)
 import Language.Haskell.Exts (ModuleName (..), Name (..), SrcSpan (..), SrcSpanInfo (srcInfoSpan))
-import Control.Monad.RWS (MonadState)
-import Control.Monad.State (evalStateT, execState)
 
 data SourceSpan = SourceSpan
   { sourceSpanFileName :: FilePath,
@@ -141,8 +146,8 @@ asResolutionMap Declarations {_decls = ds, _dataTypes = dts} =
 asDeclsMap :: [Declaration] -> Map.Map Identifier Declaration
 asDeclsMap ds = Map.fromList $ (\d -> (_declName d, d)) <$> ds
 
-declarationsT :: (Declaration -> Declaration) -> (Declarations -> Declarations)
-declarationsT d = execState (declarationsTS d)
+declarationsT :: Monad m => (Declaration -> Declaration) -> Declarations -> m Declarations
+declarationsT d = execStateT (declarationsTS d)
 
 declarationsTS :: (Declaration -> Declaration) -> (MonadState Declarations m) => m ()
 declarationsTS d = do
@@ -150,7 +155,13 @@ declarationsTS d = do
   (dataTypes . each . cdtFields . each) %= d
   (dataTypes . each . cdtName) %= d
 
----
+declarationsMT :: (Monad m) => (Declaration -> m Declaration) -> Declarations -> m Declarations
+declarationsMT d = execStateT $ do
+  let dS = lift . d
+  modifyEachM decls dS
+  modifyEachM dataTypes $ \(x :: ClassOrData) -> flip execStateT x $ do
+    modifyEachM cdtFields $ lift . lift . d
+    overM cdtName $ lift . lift . d
 
 data ModuleImportType = All | Exactly | EverythingBut deriving (Show, Generic, Eq)
 

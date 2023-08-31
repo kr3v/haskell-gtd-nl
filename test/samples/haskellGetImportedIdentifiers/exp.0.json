@@ -1,5 +1,5 @@
-{
-  "Control.Lens": {
+[
+  {
     "_mAllowNoQualifier": true,
     "_mCDs": [],
     "_mDecls": [
@@ -19,7 +19,7 @@
     "_mQualifier": "Control.Lens",
     "_mType": "Exactly"
   },
-  "Data.Map.Lazy": {
+  {
     "_mAllowNoQualifier": true,
     "_mCDs": [],
     "_mDecls": [],
@@ -27,7 +27,7 @@
     "_mQualifier": "Map",
     "_mType": "All"
   },
-  "Data.Map.Strict": {
+  {
     "_mAllowNoQualifier": false,
     "_mCDs": [],
     "_mDecls": [],
@@ -35,7 +35,7 @@
     "_mQualifier": "Map",
     "_mType": "All"
   },
-  "Graphics.Gloss": {
+  {
     "_mAllowNoQualifier": true,
     "_mCDs": [
       {
@@ -74,15 +74,7 @@
     "_mQualifier": "Graphics.Gloss",
     "_mType": "Exactly"
   },
-  "Prelude": {
-    "_mAllowNoQualifier": true,
-    "_mCDs": [],
-    "_mDecls": [],
-    "_mName": "Prelude",
-    "_mQualifier": "Prelude",
-    "_mType": "All"
-  },
-  "ScEaHs.Game.Renderable": {
+  {
     "_mAllowNoQualifier": true,
     "_mCDs": [],
     "_mDecls": [],
@@ -90,7 +82,31 @@
     "_mQualifier": "ScEaHs.Game.Renderable",
     "_mType": "All"
   },
-  "ScEaHs.Game.Surface.Generator": {
+  {
+    "_mAllowNoQualifier": true,
+    "_mCDs": [
+      {
+        "_cdtFields": {},
+        "_cdtName": {
+          "_declModule": "System.Random.Stateful",
+          "_declName": "StdGen",
+          "_declSrcOrig": {
+            "sourceSpanEndColumn": 0,
+            "sourceSpanEndLine": 0,
+            "sourceSpanFileName": "",
+            "sourceSpanStartColumn": 0,
+            "sourceSpanStartLine": 0
+          }
+        },
+        "_eWildcard": false
+      }
+    ],
+    "_mDecls": [],
+    "_mName": "System.Random.Stateful",
+    "_mQualifier": "System.Random.Stateful",
+    "_mType": "Exactly"
+  },
+  {
     "_mAllowNoQualifier": true,
     "_mCDs": [],
     "_mDecls": [
@@ -132,28 +148,12 @@
     "_mQualifier": "ScEaHs.Game.Surface.Generator",
     "_mType": "EverythingBut"
   },
-  "System.Random.Stateful": {
+  {
     "_mAllowNoQualifier": true,
-    "_mCDs": [
-      {
-        "_cdtFields": {},
-        "_cdtName": {
-          "_declModule": "System.Random.Stateful",
-          "_declName": "StdGen",
-          "_declSrcOrig": {
-            "sourceSpanEndColumn": 0,
-            "sourceSpanEndLine": 0,
-            "sourceSpanFileName": "",
-            "sourceSpanStartColumn": 0,
-            "sourceSpanStartLine": 0
-          }
-        },
-        "_eWildcard": false
-      }
-    ],
+    "_mCDs": [],
     "_mDecls": [],
-    "_mName": "System.Random.Stateful",
-    "_mQualifier": "System.Random.Stateful",
-    "_mType": "Exactly"
+    "_mName": "Prelude",
+    "_mQualifier": "Prelude",
+    "_mType": "All"
   }
-}
+]

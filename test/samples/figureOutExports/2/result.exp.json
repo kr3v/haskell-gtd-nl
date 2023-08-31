@@ -8,7 +8,7 @@
         "_declSrcOrig": {
           "sourceSpanEndColumn": 3,
           "sourceSpanEndLine": 5,
-          "sourceSpanFileName": "./test/samples/figureOutExports/2/main.hs",
+          "sourceSpanFileName": "test/samples/figureOutExports/2/main.hs",
           "sourceSpanStartColumn": 1,
           "sourceSpanStartLine": 5
         }

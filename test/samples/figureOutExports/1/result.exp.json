@@ -8,7 +8,7 @@
         "_declSrcOrig": {
           "sourceSpanEndColumn": 4,
           "sourceSpanEndLine": 8,
-          "sourceSpanFileName": "./test/samples/figureOutExports/1/main.hs",
+          "sourceSpanFileName": "test/samples/figureOutExports/1/main.hs",
           "sourceSpanStartColumn": 1,
           "sourceSpanStartLine": 8
         }
@@ -19,7 +19,7 @@
         "_declSrcOrig": {
           "sourceSpanEndColumn": 4,
           "sourceSpanEndLine": 3,
-          "sourceSpanFileName": "./test/samples/figureOutExports/1/import.1.hs",
+          "sourceSpanFileName": "test/samples/figureOutExports/1/import.1.hs",
           "sourceSpanStartColumn": 1,
           "sourceSpanStartLine": 3
         }
@@ -30,7 +30,7 @@
         "_declSrcOrig": {
           "sourceSpanEndColumn": 4,
           "sourceSpanEndLine": 6,
-          "sourceSpanFileName": "./test/samples/figureOutExports/1/import.1.hs",
+          "sourceSpanFileName": "test/samples/figureOutExports/1/import.1.hs",
           "sourceSpanStartColumn": 1,
           "sourceSpanStartLine": 6
         }
@@ -41,7 +41,7 @@
         "_declSrcOrig": {
           "sourceSpanEndColumn": 4,
           "sourceSpanEndLine": 3,
-          "sourceSpanFileName": "./test/samples/figureOutExports/1/import.2.hs",
+          "sourceSpanFileName": "test/samples/figureOutExports/1/import.2.hs",
           "sourceSpanStartColumn": 1,
           "sourceSpanStartLine": 3
         }
@@ -52,7 +52,7 @@
         "_declSrcOrig": {
           "sourceSpanEndColumn": 4,
           "sourceSpanEndLine": 6,
-          "sourceSpanFileName": "./test/samples/figureOutExports/1/import.2.hs",
+          "sourceSpanFileName": "test/samples/figureOutExports/1/import.2.hs",
           "sourceSpanStartColumn": 1,
           "sourceSpanStartLine": 6
         }
@@ -63,7 +63,7 @@
         "_declSrcOrig": {
           "sourceSpanEndColumn": 4,
           "sourceSpanEndLine": 3,
-          "sourceSpanFileName": "./test/samples/figureOutExports/1/import.3.hs",
+          "sourceSpanFileName": "test/samples/figureOutExports/1/import.3.hs",
           "sourceSpanStartColumn": 1,
           "sourceSpanStartLine": 3
         }
@@ -74,7 +74,7 @@
         "_declSrcOrig": {
           "sourceSpanEndColumn": 4,
           "sourceSpanEndLine": 3,
-          "sourceSpanFileName": "./test/samples/figureOutExports/1/import.4.hs",
+          "sourceSpanFileName": "test/samples/figureOutExports/1/import.4.hs",
           "sourceSpanStartColumn": 1,
           "sourceSpanStartLine": 3
         }

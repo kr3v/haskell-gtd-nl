@@ -37,6 +37,18 @@ ultraZoom l sa = do
   l .= a'
   return b
 
+overM :: (MonadState s m) => Lens' s a -> (a -> m a) -> m ()
+overM l f = do
+  a <- use l
+  a' <- f a
+  l .= a'
+
+modifyEachM :: (MonadState s m, Traversable t) => Lens' s (t a) -> (a -> m a) -> m ()
+modifyEachM l f = do
+  ta <- use l
+  tb <- traverse f ta
+  l .= tb
+
 logDebugNSS :: MonadLoggerIO m => String -> String -> m ()
 logDebugNSS a b = do
   now <- liftIO getCurrentTime

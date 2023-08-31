@@ -23,12 +23,12 @@ import GHC.TypeLits (KnownSymbol)
 import qualified GTD.Cabal.Cache as CabalCache
 import GTD.Configuration (Args (..), GTDConfiguration (..), args, argsP, prepareConstants)
 import GTD.Resolution.State (Context, emptyContext)
-import GTD.Server (CpphsRequest, CpphsResponse (..), DefinitionRequest (..), DefinitionResponse (..), DropCacheRequest, cpphs, definition, resetCache)
+import GTD.Server (CpphsRequest, CpphsResponse (..), DefinitionRequest (..), DefinitionResponse (..), DropPackageCacheRequest, cpphs, definition, dropPackageCache)
 import GTD.Utils (combine, statusL, ultraZoom, updateStatus)
 import Network.Socket (Family (AF_INET), SockAddr (SockAddrInet), SocketType (Stream), bind, defaultProtocol, listen, socket, socketPort, tupleToHostAddress, withSocketsDo)
 import Network.Wai.Handler.Warp (defaultSettings, runSettingsSocket)
 import Options.Applicative (ParserInfo, execParser, fullDesc, helper, info, (<**>))
-import Servant (Header, Headers, JSON, Post, ReqBody, addHeader, (:<|>) (..), (:>))
+import Servant (Header, Headers, JSON, Post, ReqBody, addHeader, (:<|>) (..), (:>), Delete)
 import Servant.Server (Handler, serve)
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.Exit (ExitCode (..))
@@ -57,7 +57,7 @@ type API =
     :<|> "ping"
       :> Post '[JSON] String
     :<|> "dropcache"
-      :> ReqBody '[JSON] DropCacheRequest
+      :> ReqBody '[JSON] DropPackageCacheRequest
       :> Post '[JSON] String
     :<|> "cpphs"
       :> ReqBody '[JSON] CpphsRequest
@@ -118,11 +118,11 @@ pingH m = do
 dropCacheH ::
   GTDConfiguration ->
   MVar ServerState ->
-  DropCacheRequest ->
+  DropPackageCacheRequest ->
   Handler String
 dropCacheH c m req = do
   let defH = either id id
-  h "dropCache" c m resetCache (\_ e -> defH e) req
+  h "dropCache" c m dropPackageCache (\_ e -> defH e) req
 
 runCpphsH ::
   GTDConfiguration ->

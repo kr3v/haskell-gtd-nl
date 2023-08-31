@@ -20,12 +20,13 @@ import qualified Data.Map.Strict as Map
 import GHC.Generics (Generic)
 import qualified GTD.Cabal.Package as Cabal
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
-import GTD.Haskell.Declaration (ClassOrData (_cdtName), Declaration (..), Declarations (..), Exports, Imports, SourceSpan (..), declarationsT)
+import GTD.Haskell.Declaration (ClassOrData (_cdtName), Declaration (..), Declarations (..), Exports, Imports, SourceSpan (..), declarationsT, declarationsMT)
 import qualified GTD.Haskell.Declaration as Declarations
 import qualified GTD.Haskell.Lines as Lines
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import GTD.Utils (logDebugNSS, storeIOExceptionToMonadError)
 import Language.Haskell.Exts (Module (Module), SrcSpan (..), SrcSpanInfo (..))
+import Text.Printf
 
 newtype HsModuleParams = HsModuleParams
   { _isImplicitExportAll :: Bool
@@ -108,10 +109,10 @@ parseModule cm@HsModule {_path = srcP} = do
   (iiea, es) <- runStateT (GHC.exports a) Map.empty
   is <- execWriterT $ GHC.imports a
   localsO <- execWriterT $ GHC.identifiers a
-  let locals = flip declarationsT localsO $ \d -> do
-        case Lines.resolve lines (sourceSpanStartLine . _declSrcOrig $ d) of
-          Just Lines.Line {..} -> d {_declSrcOrig = (_declSrcOrig d) {sourceSpanFileName = path, sourceSpanStartLine = num}}
-          Nothing -> d
+  locals <- flip declarationsT localsO $ \d -> do
+    case Lines.resolve lines (sourceSpanStartLine . _declSrcOrig $ d) of
+      Just Lines.Line {path = p, num = n} -> d {_declSrcOrig = (_declSrcOrig d) {sourceSpanFileName = p, sourceSpanStartLine = n, sourceSpanEndLine = n}}
+      Nothing -> d
   return $
     cm
       { _info = HsModuleData {_exports0 = es, _imports = is, _locals = locals},

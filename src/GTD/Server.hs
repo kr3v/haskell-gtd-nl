@@ -33,7 +33,7 @@ import qualified GTD.Cabal.Full as Cabal (full)
 import qualified GTD.Cabal.Full as CabalCache (full)
 import qualified GTD.Cabal.Get as Cabal (GetCache (_vs))
 import GTD.Cabal.Package (ModuleNameS, PackageWithResolvedDependencies)
-import qualified GTD.Cabal.Package as Cabal (Dependency, Package (_dependencies, _modules, _name, _root, _version), PackageModules (_exports, _reExports, _srcDirs), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, key, pKey)
+import qualified GTD.Cabal.Package as Cabal (Dependency, Package (..), PackageModules (..), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, key, pKey)
 import GTD.Configuration (Args (..), GTDConfiguration (..), args)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Identifier, SourceSpan (..), asDeclsMap, emptySourceSpan)
@@ -331,17 +331,17 @@ definition (DefinitionRequest {workDir = wd, file = rf0, word = w}) = do
 
 ---
 
-newtype DropCacheRequest = DropCacheRequest {dir :: FilePath}
+newtype DropPackageCacheRequest = DropCacheRequest {dir :: FilePath}
   deriving (Show, Generic)
 
-instance FromJSON DropCacheRequest
+instance FromJSON DropPackageCacheRequest
 
-instance ToJSON DropCacheRequest
+instance ToJSON DropPackageCacheRequest
 
-resetCache ::
-  DropCacheRequest ->
+dropPackageCache ::
+  DropPackageCacheRequest ->
   (MS m, MonadError String m) => m String
-resetCache (DropCacheRequest {dir = d}) = do
+dropPackageCache (DropCacheRequest {dir = d}) = do
   updateStatus $ printf "resetting cache on %s..." d
   cPkgs <- CabalCache.findAtF d
   forM_ cPkgs $ \cPkg -> do
