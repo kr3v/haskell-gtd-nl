@@ -5,7 +5,7 @@
 
 
 
-#line 1 "././test/samples/magic/in.0.header.hs"
+#line 1 "././test/samples/lines/in.0.header.hs"
 {-# LANGUAGE TypeApplications #-}
 
 

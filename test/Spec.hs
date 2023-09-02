@@ -364,7 +364,7 @@ definitionsSpec = do
     it "cross-package module re-export `runState`" $ do
       join $ mstack (`evalStateT` serverState) $ do
         eval "runState" expectedRunState
-    
+
     it "multiple imports of the same module work" $ do
       join $ mstack (`evalStateT` serverState) $ do
         eval "GG.Picture" expectedPicture
@@ -422,19 +422,19 @@ definitionsSpec = do
       join $ mstack (`evalStateT` serverState) $ do
         eval "try" expectedTry
 
-data MagicSpecTestCase = MagicSpecTestCase
+data LinesSpecTestCase = LinesSpecTestCase
   { _in :: Line,
     _out :: Line
   }
   deriving (Show, Generic)
 
-instance FromJSON MagicSpecTestCase
+instance FromJSON LinesSpecTestCase
 
-instance ToJSON MagicSpecTestCase
+instance ToJSON LinesSpecTestCase
 
-magicSpec :: Spec
-magicSpec = do
-  let descr = "magic"
+linesSpec :: Spec
+linesSpec = do
+  let descr = "lines"
   let test i = runExceptT $ do
         let iS = show i
             sampleRoot = "./test/samples/" </> descr
@@ -454,7 +454,7 @@ magicSpec = do
         let expected :: Map.Map Int Line = fromMaybe mempty $ decode expectedS
 
         testsS <- storeIOExceptionToMonadError $ BS.readFile testsPath
-        let tests :: [MagicSpecTestCase] = fromMaybe mempty $ decode testsS
+        let tests :: [LinesSpecTestCase] = fromMaybe mempty $ decode testsS
 
         let result = buildMap c1
         liftIO $ BS.writeFile dstPath $ encode result
@@ -492,6 +492,6 @@ main = do
     haskellGetIdentifiersSpec
     haskellGetExportsSpec
     haskellGetImportsSpec
-    magicSpec
+    linesSpec
     figureOutExportsTest
     integrationTestsSpec
