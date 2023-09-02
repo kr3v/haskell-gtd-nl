@@ -17,7 +17,7 @@ import Data.Aeson (FromJSON, ToJSON)
 import Data.Binary (Binary)
 import qualified Data.Map.Strict as Map
 import GHC.Generics (Generic)
-import GTD.Cabal.Package (ModuleNameS)
+import GTD.Cabal.Types (ModuleNameS)
 import GTD.Utils (modifyEachM, overM)
 import Language.Haskell.Exts (ModuleName (..), Name (..), SrcSpan (..), SrcSpanInfo (srcInfoSpan))
 

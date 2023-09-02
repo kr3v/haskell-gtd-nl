@@ -34,12 +34,13 @@ exportsN = "exports.binary"
 modulesN :: String
 modulesN = "modules.binary"
 
-path :: Cabal.Package a -> FilePath -> (MonadReader GTDConfiguration m) => m FilePath
+path :: Cabal.Package a -> FilePath -> (MonadIO m, MonadReader GTDConfiguration m) => m FilePath
 path cPkg f = do
   c <- asks _cache
+  d <- __resolution'dir $ Cabal.key cPkg
   let r = pathAsFile $ Cabal._root cPkg
       p = Cabal.dKey . Cabal._designation $ cPkg
-  return $ c </> (r ++ ":" ++ p ++ ":" ++ f)
+  return $ c </> d </> (r ++ ":" ++ p ++ ":" ++ f)
 
 __pGet :: Cabal.Package b -> FilePath -> (MonadLoggerIO m, MonadReader GTDConfiguration m, Binary a) => m (Maybe a)
 __pGet cPkg f = do

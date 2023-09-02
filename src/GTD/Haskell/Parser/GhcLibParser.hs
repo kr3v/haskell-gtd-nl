@@ -32,7 +32,7 @@ import GHC.Types.SourceError (SourceError)
 import GHC.Types.SrcLoc (GenLocated (..), RealSrcSpan (srcSpanFile), SrcSpan (..), mkRealSrcLoc, srcSpanEndCol, srcSpanEndLine, srcSpanStartCol, srcSpanStartLine, unLoc)
 import qualified GHC.Unit.Types as GenModule
 import GHC.Utils.Outputable (Outputable (..), SDocContext (..), defaultSDocContext, renderWithContext)
-import GTD.Cabal.Package (ModuleNameS)
+import GTD.Cabal.Types (ModuleNameS)
 import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Exports, Imports, Module (..), SourceSpan (..), asDeclsMap, emptySourceSpan)
 import qualified GTD.Haskell.Declaration as Declarations
 import GTD.Utils (logDebugNSS)

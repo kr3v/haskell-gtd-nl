@@ -225,7 +225,7 @@ definitionsSpec = do
   pwd <- runIO getCurrentDirectory
 
   let descr = "definitions"
-      workDir = pwd </> "./test/integrationTestRepo/sc-ea-hs"
+      workDir = pwd </> "test/integrationTestRepo/sc-ea-hs"
       file = workDir </> "app/game/Main.hs"
       req = DefinitionRequest {workDir = workDir, file = file, word = ""}
       logF = workDir </> descr ++ ".txt"
@@ -249,6 +249,11 @@ definitionsSpec = do
   let expectedLensView =
         let expFile = _repos consts </> "lens-5.2.2/src/Control/Lens/Getter.hs"
             expLineNo = 244
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+  let expectedLensViewOperator =
+        let expFile = _repos consts </> "lens-5.2.2/src/Control/Lens/Getter.hs"
+            expLineNo = 316
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
          in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
   let expectedLensOverOperator =
@@ -316,6 +321,11 @@ definitionsSpec = do
             expLineNo = 3347
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
          in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+  let expectedGenerateSurface =
+        let expFile = workDir </> "src/ScEaHs/Game/Surface/Generator.hs"
+            expLineNo = 46
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 16, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
   let noDefErr = Left "No definition found"
 
   let st0 = emptyContext
@@ -374,12 +384,12 @@ definitionsSpec = do
         eval "Proxy" expectedProxy
     it "in-package module re-export + operator form 1 `^., %=`" $ do
       join $ mstack (`evalStateT` serverState) $ do
-        a1 <- eval "^." noDefErr
+        a1 <- eval "^." expectedLensViewOperator
         a2 <- eval "%=" expectedLensOverOperator
         return $ a1 <> a2
     it "in-package module re-export + operator form 2 `(^.), (%=)`" $ do
       join $ mstack (`evalStateT` serverState) $ do
-        a1 <- eval "(^.)" noDefErr
+        a1 <- eval "(^.)" expectedLensViewOperator
         a2 <- eval "(%=)" expectedLensOverOperator
         return $ a1 <> a2
     it "in-package module re-export + function `view`" $ do
@@ -402,7 +412,7 @@ definitionsSpec = do
 
     it "main-to-library resolution works `generateSurface`" $ do
       join $ mstack (`evalStateT` serverState) $ do
-        eval "generateSurface" noDefErr
+        eval "generateSurface" expectedGenerateSurface
 
     -- often failed ones
     it "printf" $ do

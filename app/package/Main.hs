@@ -8,18 +8,17 @@
 module Main where
 
 import Control.Exception.Lifted (bracket)
-import Control.Lens (use, (^.))
+import Control.Lens (use)
 import Control.Monad (forM_)
 import Control.Monad.Except (MonadIO (..), runExceptT, when)
-import Control.Monad.Logger (LogLevel (LevelInfo), LoggingT (..), defaultOutput, filterLogger, runFileLoggingT)
+import Control.Monad.Logger (LogLevel (LevelInfo), LoggingT (..), defaultOutput, filterLogger)
 import Control.Monad.Reader (ReaderT (runReaderT))
 import Control.Monad.State (execStateT)
 import qualified GTD.Cabal.Cache as Cabal (load, store)
-import qualified GTD.Cabal.FindAt as Cabal (findAt)
 import qualified GTD.Cabal.Get as Cabal (changed)
 import qualified GTD.Configuration as Conf (Args (..), GTDConfiguration (..), defaultArgs, prepareConstants)
 import GTD.Resolution.State (ccGet, emptyContext)
-import GTD.Server (package'resolution'withDependencies'concurrently)
+import GTD.Server (package'resolution'withDependencies'concurrently, cabalPackage'unresolved, cabalPackage'contextWithLocals)
 import GTD.Utils (combine, logErrorNSS, stats, statusL, updateStatus)
 import Options.Applicative (Parser, ParserInfo, auto, execParser, fullDesc, help, helper, info, long, option, showDefault, strOption, value, (<**>))
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
@@ -67,8 +66,9 @@ main = do
           liftIO $ hSetBuffering h LineBuffering
           e <- runExceptT $ flip runReaderT constants $ flip execStateT emptyContext $ do
             Cabal.load
-            pkg <- Cabal.findAt d
-            forM_ pkg $ \p -> package'resolution'withDependencies'concurrently p
+            cPkgsU <- cabalPackage'unresolved d
+            cabalPackage'contextWithLocals cPkgsU
+            forM_ cPkgsU $ \p -> package'resolution'withDependencies'concurrently p
             ccGC <- use $ ccGet . Cabal.changed
             when ccGC Cabal.store
           case e of

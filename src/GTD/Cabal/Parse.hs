@@ -23,7 +23,7 @@ import Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import Distribution.PackageDescription.Parsec (parseGenericPackageDescription, runParseResult)
 import Distribution.Pretty (prettyShow)
 import Distribution.Utils.Path (getSymbolicPath)
-import GTD.Cabal.Package (Dependency (..), Designation (Designation, _desName, _desType), DesignationType (Executable, Library), Package (..), PackageModules (..), PackageWithUnresolvedDependencies, emptyPackageModules)
+import GTD.Cabal.Types (Dependency (..), Designation (Designation, _desName, _desType), DesignationType (Executable, Library), Package (..), PackageModules (..), PackageWithUnresolvedDependencies, emptyPackageModules)
 import GTD.Configuration (GTDConfiguration (..))
 import GTD.Resolution.Caching.Utils (binaryGet, pathAsFile)
 import GTD.Utils (logDebugNSS, removeIfExistsL)
@@ -72,7 +72,7 @@ __read'direct p = do
     let p0 =
           Package
             { _name = unPackageName $ packageName pd,
-              _version = prettyShow $ pkgVersion $ Cabal.package pd,
+              _version = pkgVersion $ Cabal.package pd,
               _root = normalise $ takeDirectory p,
               _path = p,
               _designation = Designation {_desType = Library, _desName = Nothing},

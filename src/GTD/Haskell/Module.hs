@@ -18,7 +18,7 @@ import Data.Aeson (FromJSON, ToJSON)
 import Data.Binary (Binary)
 import qualified Data.Map.Strict as Map
 import GHC.Generics (Generic)
-import qualified GTD.Cabal.Package as Cabal
+import qualified GTD.Cabal.Types as Cabal
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (ClassOrData (_cdtName), Declaration (..), Declarations (..), Exports, Imports, SourceSpan (..), declarationsT, declarationsMT)
 import qualified GTD.Haskell.Declaration as Declarations

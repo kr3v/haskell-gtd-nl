@@ -1,13 +1,13 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TupleSections #-}
 
-module GTD.Cabal.Full where
+module GTD.Cabal.Dependencies where
 
 import Control.Applicative (Applicative (..))
 import Control.Concurrent.Async.Lifted (forConcurrently)
@@ -20,32 +20,35 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Data.Foldable (find)
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes, isNothing, mapMaybe)
+import Data.Maybe (catMaybes, isNothing)
 import Distribution.Pretty (prettyShow)
-import Distribution.Types.Version (Version)
 import Distribution.Types.VersionRange (withinRange)
 import GTD.Cabal.Get (get)
-import GTD.Cabal.Package (Dependency (..), Designation (..), DesignationType (..), Package (..), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies)
-import qualified GTD.Cabal.Package as Cabal
 import GTD.Cabal.Parse (parse)
+import GTD.Cabal.Types (Dependency (..), Designation (..), DesignationType (..), Package (..), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies)
+import qualified GTD.Cabal.Types as Cabal
 import GTD.Configuration (GTDConfiguration (..))
 import GTD.Resolution.State (Context (..), cLocalPackages, ccFull, ccGet)
 import GTD.Utils (deduplicate, logDebugNSS, mapFrom)
 import System.FilePath ((</>))
-import Distribution.Client.Compat.Prelude (simpleParsec)
+import Text.Printf (printf)
 
 __full ::
   PackageWithUnresolvedDependencies ->
   (MonadBaseControl IO m, MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m) => m PackageWithResolvedDependencies
 __full pkg = do
-  let deps = deduplicate $ _dependencies pkg
-  logDebugNSS "cabal fetch" $ "dependencies: " ++ show deps
+  let logTag = printf "cabal full %s" $ show $ Cabal.key pkg
 
-  locallyResolvedDeps <- (catMaybes <$>) $ forM deps $ \Dependency {..} -> do
-    z <- use $ cLocalPackages . at _dName
-    let vs = mapMaybe (\(v, p) -> (, p) <$> (simpleParsec v :: Maybe Version)) (maybe [] Map.toList z)
-    let matching = find (\(v, _) -> v `withinRange` _dVersion) vs
-    return $ snd <$> matching
+  let deps = deduplicate $ _dependencies pkg
+  logDebugNSS logTag $ "all dependencies: " ++ show deps
+
+  locallyResolvedDepsM <- forM deps $ \Dependency {..} -> do
+    localsM <- use $ cLocalPackages . at (_dName, _dSubname)
+    let locals = maybe [] (fmap snd . Map.toList) localsM
+    let matching = find ((`withinRange` _dVersion) . _version) locals
+    return matching
+  let locallyResolvedDeps = catMaybes locallyResolvedDepsM
+  logDebugNSS logTag $ printf "locally resolved dependencies: %s" $ show $ Cabal.key <$> locallyResolvedDeps
 
   let unresolvedDeps = Map.elems $ Map.difference (mapFrom _dName deps) (mapFrom _name locallyResolvedDeps)
 
@@ -62,6 +65,8 @@ __full pkg = do
     r <- parse $ reposR </> p </> (_dName ++ ".cabal")
     -- we are only interested in the package main library
     return $ find (liftA2 (&&) (isNothing . _desName) ((== Library) . _desType) . _designation) r
+  logDebugNSS logTag $ printf "resolved dependencies: %s" $ show $ Cabal.key <$> catMaybes depsR
+
   return $ pkg {_dependencies = locallyResolvedDeps ++ catMaybes depsR}
 
 full ::

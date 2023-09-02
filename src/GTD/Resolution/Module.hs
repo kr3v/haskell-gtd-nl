@@ -16,8 +16,8 @@ import Control.Monad.Trans.Writer (execWriterT)
 import Data.Either (partitionEithers)
 import qualified Data.Map.Strict as Map
 import Distribution.ModuleName (fromString, toFilePath)
-import GTD.Cabal.Package (ModuleNameS)
-import qualified GTD.Cabal.Package as Cabal (Package (_modules, _name, _root), PackageModules (_srcDirs), PackageWithResolvedDependencies, key)
+import GTD.Cabal.Types (ModuleNameS)
+import qualified GTD.Cabal.Types as Cabal (Package (_modules, _name, _root), PackageModules (_srcDirs), PackageWithResolvedDependencies, key)
 import GTD.Configuration (GTDConfiguration)
 import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Module (..), ModuleImportType (..), allImportedModules, asDeclsMap)
 import GTD.Haskell.Module (HsModule (..), HsModuleData (..), HsModuleP (..), HsModuleParams (..), emptyHsModule, parseModule)
@@ -87,7 +87,6 @@ resolution sM m = do
     Nothing -> do
       r <- resolution'direct sM m
       PackageCache.resolution'put m r
-      PackageCache.resolution'put'lines m $ _lines m
       return r
 
 resolution'direct ::

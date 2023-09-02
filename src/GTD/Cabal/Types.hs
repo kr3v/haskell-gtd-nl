@@ -12,13 +12,15 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
-module GTD.Cabal.Package where
+module GTD.Cabal.Types where
 
 import Control.Lens (makeLenses)
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Set as Set
 import Distribution.Compat.Prelude (Binary, Generic, fromMaybe)
 import Distribution.Types.VersionRange (VersionRange)
+import Distribution.Pretty (prettyShow)
+import qualified Distribution.Version as Cabal
 
 type PackageNameS = String
 
@@ -79,10 +81,12 @@ type PackageWithResolvedDependencies = Package (Package Dependency)
 
 type PackageWithUnresolvedDependencies = Package Dependency
 
+type Version = Cabal.Version
+
 data Package a = Package
   { _designation :: Designation,
     _name :: PackageNameS,
-    _version :: String,
+    _version :: Version,
     _root :: FilePath,
     _path :: FilePath,
     _modules :: PackageModules,
@@ -111,7 +115,7 @@ emptyPackageKey :: PackageKey
 emptyPackageKey = PackageKey "" "" (Designation Nothing Library)
 
 key :: Package a -> PackageKey
-key p = PackageKey {_pkName = _name p, _pkVersion = _version p, _pkDesignation = _designation p}
+key p = PackageKey {_pkName = _name p, _pkVersion = prettyShow . _version $ p, _pkDesignation = _designation p}
 
 pKey :: PackageKey -> String
 pKey k = _pkName k ++ "-" ++ _pkVersion k ++ "-" ++ dKey (_pkDesignation k)

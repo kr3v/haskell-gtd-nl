@@ -29,11 +29,11 @@ import qualified Data.Set as Set
 import GHC.Generics (Generic)
 import qualified GTD.Cabal.Cache as CabalCache
 import qualified GTD.Cabal.FindAt as CabalCache (findAt)
-import qualified GTD.Cabal.Full as Cabal (full)
-import qualified GTD.Cabal.Full as CabalCache (full)
+import qualified GTD.Cabal.Dependencies as Cabal (full)
+import qualified GTD.Cabal.Dependencies as CabalCache (full)
 import qualified GTD.Cabal.Get as Cabal (GetCache (_vs))
-import GTD.Cabal.Package (ModuleNameS, PackageWithResolvedDependencies)
-import qualified GTD.Cabal.Package as Cabal (Dependency, Package (..), PackageModules (..), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, key, pKey)
+import GTD.Cabal.Types (ModuleNameS, PackageWithResolvedDependencies)
+import qualified GTD.Cabal.Types as Cabal (Dependency, Package (..), PackageModules (..), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, key, pKey, Designation (..))
 import GTD.Configuration (Args (..), GTDConfiguration (..), args)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Identifier, SourceSpan (..), asDeclsMap, emptySourceSpan)
@@ -199,7 +199,7 @@ package'resolution'withDependencies'forked p = do
   rts <- if dm then pArgs else return []
   let a = ["--dir", d, "--log-level", show ll] ++ if null rts then [] else ["+RTS"] ++ rts ++ ["-RTS"]
 
-  updateStatus $ printf "executing `package` on %s..." (Cabal.pKey . Cabal.key $ p)
+  updateStatus $ printf "executing `package`"
   l <- liftIO $ withFile (r </> "package.stdout.log") AppendMode $ \hout -> withFile (r </> "package.stderr.log") AppendMode $ \herr -> do
     e <- liftIO $ tryAny $ createProcess (proc pe a) {std_out = UseHandle hout, std_err = UseHandle herr}
     x <- case e of
@@ -259,31 +259,29 @@ noDefinitionFoundError = throwError "No definition found"
 cabalPackage'unresolved :: FilePath -> (MS m, MonadError String m) => m [Cabal.PackageWithUnresolvedDependencies]
 cabalPackage'unresolved = CabalCache.findAt
 
-cabalPackage'resolved :: (MS m) => [Cabal.Package Cabal.Dependency] -> m [PackageWithResolvedDependencies]
-cabalPackage'resolved cPkgsU = do
+cabalPackage'contextWithLocals :: (MS m) => [Cabal.PackageWithUnresolvedDependencies] -> m ()
+cabalPackage'contextWithLocals cPkgsU = do
   cLocalPackages .= mempty
-  forM cPkgsU $ \cPkg -> do
-    cLocalPackages %= Map.unionWith (<>) (Map.singleton (Cabal._name cPkg) (Map.singleton (Cabal._version cPkg) cPkg))
-    Cabal.full cPkg
+  forM_ cPkgsU $ \cPkg -> do
+    cLocalPackages %= Map.insertWith (<>) (Cabal._name cPkg, Cabal._desName . Cabal._designation $ cPkg) (Map.singleton (Cabal._version cPkg) cPkg)
+  l <- use cLocalPackages
+  logDebugNSS "cabalPackage'contextWithLocals" $ printf "cLocalPackages = %s" (show ((\(k, vs) -> (\(v, p) -> (k, v, Cabal._designation p)) <$> Map.toList vs) <$> Map.toList l))
+
+cabalPackage'resolve :: (MS m) => [Cabal.Package Cabal.Dependency] -> m [PackageWithResolvedDependencies]
+cabalPackage'resolve = mapM Cabal.full
 
 cabalPackage :: FilePath -> FilePath -> (MS m, MonadError String m) => m PackageWithResolvedDependencies
 cabalPackage wd rf = do
   cPkgsU <- cabalPackage'unresolved wd
-  -- TODO: figure out processing order here
-  cPkgs <- cabalPackage'resolved cPkgsU
-  forM_ cPkgs $ \cPkg -> do
-    e <- PackageCache.pExists cPkg
-    unless e $ void $ package cPkg
+  cabalPackage'contextWithLocals cPkgsU
+  cPkgs <- cabalPackage'resolve cPkgsU
+
   let srcDirs p = (\d -> normalise $ Cabal._root p </> d) <$> (Cabal._srcDirs . Cabal._modules $ p)
-  _locs <- use cLocalPackages
-  logDebugNSS "prepare cPkg" $
-    printf
-      "wd=%s\nsource dirs=%s\nlocalPackages=%s\n"
-      wd
-      (intercalate "\n" $ intercalate "," . srcDirs <$> cPkgs)
-      (show $ (\(n, vs) -> (\v -> (n, v)) <$> Map.keys vs) <$> Map.assocs _locs)
-  let cPkgM = find (any (`isPrefixOf` rf) . srcDirs) cPkgs
-  maybe (throwError "cannot find a cabal 'item' with source directory that owns given file") return cPkgM
+      cPkgM = find (any (`isPrefixOf` rf) . srcDirs) cPkgs
+  cPkg <- maybe (throwError "cannot find a cabal 'item' with source directory that owns given file") return cPkgM
+  e <- PackageCache.pExists cPkg
+  unless e $ void $ package cPkg
+  return cPkg
 
 definition ::
   DefinitionRequest ->

@@ -15,9 +15,9 @@ import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Aeson (decode, encode)
 import qualified Data.ByteString.Lazy as BS
 import GTD.Cabal.FindAt (findAt)
-import GTD.Cabal.Full (full)
-import GTD.Cabal.Package (Package (..), PackageWithResolvedDependencies)
-import qualified GTD.Cabal.Package as Cabal
+import GTD.Cabal.Dependencies (full)
+import GTD.Cabal.Types (Package (..), PackageWithResolvedDependencies)
+import qualified GTD.Cabal.Types as Cabal
 import GTD.Cabal.Parse (remove)
 import GTD.Configuration (GTDConfiguration (..))
 import GTD.Resolution.State (Context, ccGet)

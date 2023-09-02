@@ -94,11 +94,11 @@ library
     exposed-modules:
         GTD.Cabal
         GTD.Cabal.Cache
+        GTD.Cabal.Dependencies
         GTD.Cabal.FindAt
-        GTD.Cabal.Full
         GTD.Cabal.Get
-        GTD.Cabal.Package
         GTD.Cabal.Parse
+        GTD.Cabal.Types
         GTD.Configuration
         GTD.Haskell.Cpphs
         GTD.Haskell.Declaration

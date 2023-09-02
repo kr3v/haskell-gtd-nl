@@ -23,13 +23,11 @@ x - apply cpphs via command
 		| - front-end:
 		|   - if there's no `.cabal` file in the workspace, avoid using the server
 		| - back-end:
-x		|   - show parsing status: server/package executable should occasionally print their status to a file in the local/share dir
-8		|   - consider caching last known 'good' version of file local declarations
+8		|   - consider caching last known 'good' version of file local declarations - probably a bad idea in case lines changed; however, it can be verified in runtime
 9   |   - if there's no resolution cache, try building it dynamically?
     |   - dropcache tests
     |   - drop `Context` usage in `GTD.Cabal` package by replacing it with direct access
     |   - Cabal support:
-    |     - locally resolved libraries should override `cabal get`
     |     - 'global' Cabal language directives
 		| - undecided:
 		|   - consider supporting projects where:
@@ -39,10 +37,4 @@ x		|   - show parsing status: server/package executable should occasionally prin
   	| - both:
   	|   - follow lsp instead of custom protocol
 
-`concat`?
 `*.hsc` files
-
-```
-import Data.Foldable    ( Foldable(..) )
-import qualified Data.Foldable as Foldable
-``` <- partially done, need tests
