@@ -18,8 +18,8 @@ import Control.Lens (makeLenses)
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Set as Set
 import Distribution.Compat.Prelude (Binary, Generic, fromMaybe)
-import Distribution.Types.VersionRange (VersionRange)
 import Distribution.Pretty (prettyShow)
+import Distribution.Types.VersionRange (VersionRange)
 import qualified Distribution.Version as Cabal
 
 type PackageNameS = String
@@ -92,7 +92,7 @@ data Package a = Package
     _modules :: PackageModules,
     _dependencies :: [a]
   }
-  deriving (Show, Generic)
+  deriving (Eq, Show, Generic)
 
 instance Binary (Package (Package Dependency))
 

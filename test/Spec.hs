@@ -1,10 +1,17 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# HLINT ignore "Use tuple-section" #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 import Control.Exception (IOException, try)
+import Control.Lens (use)
 import Control.Monad.Logger (LogLevel (LevelDebug), NoLoggingT (..), runStderrLoggingT, runStdoutLoggingT)
 import Control.Monad.Logger.CallStack (runFileLoggingT)
 import Control.Monad.RWS (MonadIO (liftIO), MonadState (get), forM, forM_, join)
@@ -13,14 +20,17 @@ import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (ReaderT (..))
 import Control.Monad.Writer (execWriterT)
 import Data.Aeson (FromJSON, ToJSON, decode, encode)
+import Data.Aeson.Types (FromJSON (..), Parser, Value (..), ToJSON (..))
 import qualified Data.ByteString.Lazy as BS
 import Data.Either (partitionEithers)
 import Data.Either.Combinators (mapLeft, mapRight)
 import Data.List (isPrefixOf, isSuffixOf)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust, fromMaybe)
+import Distribution.Version (VersionRange)
 import GHC.Generics (Generic)
 import GTD.Cabal.Cache as Cabal (load, store)
+import GTD.Cabal.Types (Dependency, PackageModules, PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, Version)
 import GTD.Configuration (Args (_logLevel), GTDConfiguration (..), defaultArgs, prepareConstants)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (Declarations (..), Exports, Imports, SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine))
@@ -28,8 +38,8 @@ import GTD.Haskell.Lines (Line (..), buildMap, resolve)
 import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule, parseModule)
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import GTD.Resolution.Module (figureOutExports, figureOutExports0)
-import GTD.Resolution.State (emptyContext)
-import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), definition)
+import GTD.Resolution.State (LocalPackagesKey, LocalPackagesMap, cLocalPackages, emptyContext)
+import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), cabalPackage'contextWithLocals, cabalPackage'resolve, cabalPackage'unresolved, definition)
 import GTD.Utils (removeIfExists, storeIOExceptionToMonadError)
 import System.Directory (getCurrentDirectory, listDirectory, removeDirectoryRecursive, removeFile)
 import System.FilePath ((</>))
@@ -37,6 +47,7 @@ import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
 import Test.Hspec (Spec, describe, expectationFailure, it, runIO, shouldBe)
 import Test.Hspec.Runner (Config (configPrintCpuTime), defaultConfig, hspecWith)
 import Text.Printf (printf)
+import Data.Text (unpack, pack)
 
 haskellApplyCppHsSpec :: Spec
 haskellApplyCppHsSpec = do
@@ -236,6 +247,13 @@ definitionsSpec = do
       eval w r = eval0 w >>= (\d -> return $ d `shouldBe` r)
       mstack f a = runFileLoggingT logF $ f $ runReaderT a consts
 
+  let st0 = emptyContext
+  st1 <- runIO $ mstack (`execStateT` st0) Cabal.load
+  (a, serverState) <- runIO $ mstack (`runStateT` st1) $ eval0 "playIO"
+  runIO $ print a
+  -- TODO: check the warning
+  _ <- runIO $ mstack (`execStateT` serverState) Cabal.store
+
   let expectedPlayIO =
         let expFile = _repos consts </> "gloss-1.13.2.2/Graphics/Gloss/Interface/IO/Game.hs"
             expLineNo = 20
@@ -328,99 +346,35 @@ definitionsSpec = do
          in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
   let noDefErr = Left "No definition found"
 
-  let st0 = emptyContext
-  st1 <- runIO $ mstack (`execStateT` st0) Cabal.load
-  (a, serverState) <- runIO $ mstack (`runStateT` st1) $ eval0 "playIO"
-  runIO $ print a
-  -- TODO: check the warning
-  _ <- runIO $ mstack (`execStateT` serverState) Cabal.store
+  let tests =
+        [ ("directly exported regular function", "playIO", expectedPlayIO),
+          ("re-exported regular function", "mkStdGen", expectedMkStdGen),
+          ("from prelude - function", "return", expectedPreludeReturn),
+          ("from prelude - data ctor", "Nothing", expectedPreludeNothing),
+          ("re-exported throughout packages (?) class name", "State", noDefErr),
+          ("cross-package module re-export", "runState", expectedRunState),
+          ("multiple imports of the same module", "GG.Picture", expectedPicture),
+          ("(re-export)? data name", "Picture", expectedPicture),
+          ("data type name", "Display", expectedDisplay),
+          ("data constructor", "InWindow", expectedInWindow),
+          ("data type with type variable", "Proxy", expectedProxy),
+          ("in-package module re-export + operator form", "^.", expectedLensViewOperator),
+          ("in-package module re-export + operator form", "%=", expectedLensOverOperator),
+          ("in-package module re-export + function", "view", expectedLensView),
+          ("qualified module import - go to module via qualifier", "Map", expectedQMap),
+          ("qualified module import - go to module via 'original' name", "Data.Map.Strict", noDefErr),
+          ("regular module import - go to module via 'original' name", "Data.Time.Clock.POSIX", expectedDTClockPosix),
+          ("qualified module import - go to function through qualifier", "Map.keys", expectedQMapKeys),
+          ("main-to-library resolution works", "generateSurface", expectedGenerateSurface),
+          ("", "printf", expectedPrintf),
+          ("", "try", expectedTry)
+        ]
 
   describe descr $ do
-    it "directly exported regular function `playIO`" $ do
-      join $ mstack (`evalStateT` serverState) $ do
-        eval "playIO" expectedPlayIO
-
-    it "sequential execution does not fail `playIO`" $ do
-      join $ mstack (`evalStateT` serverState) $ do
-        a1 <- eval "playIO" expectedPlayIO
-        a2 <- eval "playIO" expectedPlayIO
-        a3 <- eval "playIO" expectedPlayIO
-        return $ a1 <> a2 <> a3
-    it "re-exported regular function `mkStdGen`" $ do
-      join $ mstack (`evalStateT` serverState) $ do
-        eval "mkStdGen" expectedMkStdGen
-
-    -- if `return` is broken, then it is possible that `module X (module X) where ...` case is broken
-    it "from prelude - function `return`" $ do
-      join $ mstack (`evalStateT` serverState) $ do
-        eval "return" expectedPreludeReturn
-    it "from prelude - data ctor `Nothing`" $ do
-      join $ mstack (`evalStateT` serverState) $ do
-        eval "Nothing" expectedPreludeNothing
-
-    it "re-exported throughout packages (?) class name `State`" $ do
-      join $ mstack (`evalStateT` serverState) $ do
-        eval "State" noDefErr
-    it "cross-package module re-export `runState`" $ do
-      join $ mstack (`evalStateT` serverState) $ do
-        eval "runState" expectedRunState
-
-    it "multiple imports of the same module work" $ do
-      join $ mstack (`evalStateT` serverState) $ do
-        eval "GG.Picture" expectedPicture
-    it "(re-export)? data name `Picture`" $ do
-      join $ mstack (`evalStateT` serverState) $ do
-        eval "Picture" expectedPicture
-
-    it "data type name `Display`" $ do
-      join $ mstack (`evalStateT` serverState) $ do
-        eval "Display" expectedDisplay
-    it "data constructor `InWindow`" $ do
-      join $ mstack (`evalStateT` serverState) $ do
-        eval "InWindow" expectedInWindow
-
-    it "data type with type variable `Proxy`" $ do
-      join $ mstack (`evalStateT` serverState) $ do
-        eval "Proxy" expectedProxy
-    it "in-package module re-export + operator form 1 `^., %=`" $ do
-      join $ mstack (`evalStateT` serverState) $ do
-        a1 <- eval "^." expectedLensViewOperator
-        a2 <- eval "%=" expectedLensOverOperator
-        return $ a1 <> a2
-    it "in-package module re-export + operator form 2 `(^.), (%=)`" $ do
-      join $ mstack (`evalStateT` serverState) $ do
-        a1 <- eval "(^.)" expectedLensViewOperator
-        a2 <- eval "(%=)" expectedLensOverOperator
-        return $ a1 <> a2
-    it "in-package module re-export + function `view`" $ do
-      join $ mstack (`evalStateT` serverState) $ do
-        eval "view" expectedLensView
-
-    -- qualified's
-    it "qualified module import - go to module via qualifier `Map`" $ do
-      join $ mstack (`evalStateT` serverState) $ do
-        eval "Map" expectedQMap
-    it "qualified module import - go to module via 'original' name `Data.Map.Strict`" $ do
-      join $ mstack (`evalStateT` serverState) $ do
-        eval "Data.Map.Strict" noDefErr
-    it "regular module import - go to module via 'original' name `Data.Time.Clock.POSIX`" $ do
-      join $ mstack (`evalStateT` serverState) $ do
-        eval "Data.Time.Clock.POSIX" expectedDTClockPosix
-    it "qualified module import - go to function through qualifier `Map.keys`" $ do
-      join $ mstack (`evalStateT` serverState) $ do
-        eval "Map.keys" expectedQMapKeys
-
-    it "main-to-library resolution works `generateSurface`" $ do
-      join $ mstack (`evalStateT` serverState) $ do
-        eval "generateSurface" expectedGenerateSurface
-
-    -- often failed ones
-    it "printf" $ do
-      join $ mstack (`evalStateT` serverState) $ do
-        eval "printf" expectedPrintf
-    it "try" $ do
-      join $ mstack (`evalStateT` serverState) $ do
-        eval "try" expectedTry
+    forM_ tests $ \(n, q, r) -> do
+      it (n ++ " `" ++ q ++ "`") $ do
+        join $ mstack (`evalStateT` serverState) $ do
+          eval q r
 
 data LinesSpecTestCase = LinesSpecTestCase
   { _in :: Line,
@@ -471,9 +425,101 @@ linesSpec = do
   describe descr $ do
     it "???" $ do
       x <- test 0
-      case x of
-        Right x -> x
-        Left e -> expectationFailure $ show e
+      either (expectationFailure . show) id x
+
+instance FromJSON Version where
+  parseJSON :: Value -> Parser Version
+  parseJSON (String t) = pure $ read $ unpack t
+
+instance ToJSON Version where
+  toJSON :: Version -> Value
+  toJSON = String . pack . show
+
+instance FromJSON VersionRange where
+  parseJSON :: Value -> Parser VersionRange
+  parseJSON (String t) = pure $ read $ unpack t
+
+instance ToJSON VersionRange where
+  toJSON :: VersionRange -> Value
+  toJSON = String . pack . show
+
+instance FromJSON Dependency
+
+instance ToJSON Dependency
+
+instance FromJSON PackageModules
+
+instance ToJSON PackageModules
+
+instance FromJSON PackageWithUnresolvedDependencies
+
+instance ToJSON PackageWithUnresolvedDependencies
+
+instance FromJSON PackageWithResolvedDependencies
+
+instance ToJSON PackageWithResolvedDependencies
+
+cabalFullTest :: Spec
+cabalFullTest = do
+  da <- runIO defaultArgs
+  consts <- runIO $ prepareConstants da {_logLevel = LevelDebug}
+  pwd <- runIO getCurrentDirectory
+
+  let descr = "cabalFull"
+      workDir = pwd </> "test/integrationTestRepo/sc-ea-hs"
+      file = workDir </> "app/game/Main.hs"
+      req = DefinitionRequest {workDir = workDir, file = file, word = ""}
+      logF = workDir </> descr ++ ".txt"
+  runIO $ removeIfExists logF
+
+  let eval0 w = runExceptT $ definition req {word = w}
+      eval w r = eval0 w >>= (\d -> return $ d `shouldBe` r)
+      mstack f a = runFileLoggingT logF $ f $ runReaderT a consts
+
+  let st0 = emptyContext
+  st1 <- runIO $ mstack (`execStateT` st0) Cabal.load
+
+  let test i = do
+        let iS = show i
+            dstUPath = "test/samples" </> descr </> ("out.unresolved." ++ iS ++ ".json")
+            dstLPath = "test/samples" </> descr </> ("out.locals." ++ iS ++ ".json")
+            dstRPath = "test/samples" </> descr </> ("out.resolved." ++ iS ++ ".json")
+            expUPath = "test/samples" </> descr </> ("exp.unresolved." ++ iS ++ ".json")
+            expLPath = "test/samples" </> descr </> ("exp.locals." ++ iS ++ ".json")
+            expRPath = "test/samples" </> descr </> ("exp.resolved." ++ iS ++ ".json")
+
+        expectedUS <- liftIO $ BS.readFile expUPath
+        expectedLS <- liftIO $ BS.readFile expLPath
+        expectedRS <- liftIO $ BS.readFile expRPath
+        let expectedR :: [PackageWithResolvedDependencies] = fromJust $ decode expectedRS
+            expectedU :: [PackageWithUnresolvedDependencies] = fromJust $ decode expectedUS
+            expectedL :: [LocalPackagesKey] = fromJust $ decode expectedLS
+
+        join $ mstack (`evalStateT` st1) $ do
+          result <- runExceptT $ cabalPackage'unresolved workDir
+          case result of
+            Left e -> return $ expectationFailure $ printf "failed to parse %s: %s" workDir e
+            Right (u :: [PackageWithUnresolvedDependencies]) -> do
+              liftIO $ BS.writeFile dstUPath $ encode u
+              let d1 = u `shouldBe` expectedU
+
+              cabalPackage'contextWithLocals u
+              l0 <- use cLocalPackages
+              let l1 = concatMap (\((k1, k2), vs) -> (\k3 -> (k1, k2, k3)) <$> Map.keys vs) (Map.assocs l0)
+              liftIO $ BS.writeFile dstLPath $ encode l1
+              let d2 = l1 `shouldBe` expectedL
+
+              r <- cabalPackage'resolve u
+              liftIO $ BS.writeFile dstRPath $ encode r
+              let d3 = r `shouldBe` expectedR
+
+              return $ d1 <> d2 <> d3
+
+  describe descr $ do
+    it "test repo" $ do
+      test 0
+
+-- True `shouldBe` True
 
 integrationTestsSpec :: Spec
 integrationTestsSpec = do
@@ -494,4 +540,5 @@ main = do
     haskellGetImportsSpec
     linesSpec
     figureOutExportsTest
+    cabalFullTest
     integrationTestsSpec

@@ -270,12 +270,17 @@ cabalPackage'contextWithLocals cPkgsU = do
 cabalPackage'resolve :: (MS m) => [Cabal.Package Cabal.Dependency] -> m [PackageWithResolvedDependencies]
 cabalPackage'resolve = mapM Cabal.full
 
-cabalPackage :: FilePath -> FilePath -> (MS m, MonadError String m) => m PackageWithResolvedDependencies
-cabalPackage wd rf = do
+findAtF ::
+  FilePath ->
+  (MS m, MonadError String m) => m [PackageWithResolvedDependencies]
+findAtF wd = do
   cPkgsU <- cabalPackage'unresolved wd
   cabalPackage'contextWithLocals cPkgsU
-  cPkgs <- cabalPackage'resolve cPkgsU
+  cabalPackage'resolve cPkgsU
 
+cabalPackage :: FilePath -> FilePath -> (MS m, MonadError String m) => m PackageWithResolvedDependencies
+cabalPackage wd rf = do
+  cPkgs <- findAtF wd
   let srcDirs p = (\d -> normalise $ Cabal._root p </> d) <$> (Cabal._srcDirs . Cabal._modules $ p)
       cPkgM = find (any (`isPrefixOf` rf) . srcDirs) cPkgs
   cPkg <- maybe (throwError "cannot find a cabal 'item' with source directory that owns given file") return cPkgM
@@ -341,7 +346,7 @@ dropPackageCache ::
   (MS m, MonadError String m) => m String
 dropPackageCache (DropCacheRequest {dir = d}) = do
   updateStatus $ printf "resetting cache on %s..." d
-  cPkgs <- CabalCache.findAtF d
+  cPkgs <- findAtF d
   forM_ cPkgs $ \cPkg -> do
     PackageCache.pRemove cPkg
     PackageCache.resolution'remove cPkg

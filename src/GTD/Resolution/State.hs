@@ -24,13 +24,17 @@ $(makeLenses ''Package)
 
 ---
 
+type LocalPackagesKey = (PackageNameS, Maybe String, Cabal.Version)
+
+type LocalPackagesMap = Map.Map (PackageNameS, Maybe String) (Map.Map Cabal.Version Cabal.PackageWithUnresolvedDependencies)
+
 data Context = Context
   { _ccFindAt :: Map.Map FilePath [Cabal.PackageWithUnresolvedDependencies],
     _ccFull :: Map.Map Cabal.PackageKey Cabal.PackageWithResolvedDependencies,
     _ccGet :: Cabal.GetCache,
     _cExports :: LRU.LRU Cabal.PackageKey (Map.Map ModuleNameS HsModuleP),
     _cResolution :: LRU.LRU FilePath (Maybe (Map.Map ModuleNameS Declarations)),
-    _cLocalPackages :: Map.Map (PackageNameS, Maybe String) (Map.Map Cabal.Version Cabal.PackageWithUnresolvedDependencies)
+    _cLocalPackages :: LocalPackagesMap
   }
   deriving (Show, Generic)
 
