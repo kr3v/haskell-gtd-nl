@@ -53,7 +53,7 @@ import GHC.Types.SrcLoc (GenLocated (..))
 import qualified GHC.Types.SrcLoc as GHC
 import qualified GTD.Cabal.Cache as Cabal (load)
 import qualified GTD.Cabal.FindAt as Cabal (findAt)
-import qualified GTD.Cabal.Get as Cabal (get)
+import qualified GTD.Cabal.Get as Cabal (getS)
 import qualified GTD.Cabal.Types as Cabal (Package (_dependencies), key)
 import qualified GTD.Cabal.Parse as Cabal (__read'packageDescription)
 import GTD.Configuration (defaultArgs, prepareConstants, repos)
@@ -130,7 +130,7 @@ resolutionOrder pkgN pkgV t = do
 
   x <- runStderrLoggingT $ runExceptT $ flip runReaderT constants $ flip evalStateT emptyContext $ do
     Cabal.load
-    cPkgM <- ultraZoom ccGet $ runMaybeT $ Cabal.get pkgN pkgV
+    cPkgM <- ultraZoom ccGet $ Cabal.getS pkgN pkgV
     cPkgP <- case cPkgM of
       Nothing -> throwError "Cabal.get: no package found"
       Just cPkgP -> return cPkgP

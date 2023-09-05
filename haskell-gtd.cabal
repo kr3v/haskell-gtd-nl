@@ -57,7 +57,7 @@ common common-deps
 
         , graphviz ^>= 2999.20.1.0
 
-executable haskell-gtd-debug
+executable haskell-gtd-nl-debug
     import:           common-deps
     main-is:          Main.hs
     build-depends:
@@ -67,7 +67,7 @@ executable haskell-gtd-debug
 
     ghc-options: -O2 -g1 -threaded -Wall -rtsopts "-with-rtsopts=-N -A128M -T"
 
-executable haskell-gtd-server
+executable haskell-gtd-nl-server
     import:           common-deps
     main-is:          Main.hs
     build-depends:
@@ -77,7 +77,7 @@ executable haskell-gtd-server
 
     ghc-options: -O2 -g1 -threaded -Wall -rtsopts "-with-rtsopts=-N -A1M -T"
 
-executable haskell-gtd-parser
+executable haskell-gtd-nl-parser
     import:           common-deps
     main-is:          Main.hs
     build-depends:
@@ -115,7 +115,7 @@ library
 
     ghc-options: -O2 -g1 -Wall
 
-test-suite haskell-gtd-lib-test
+test-suite haskell-gtd-nl-tests
     import: common-deps
 
     type: exitcode-stdio-1.0

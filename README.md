@@ -4,7 +4,7 @@ Both 'server' and 'front-end' (VS Code extension for now).
 It relies on `cpphs` and `ghc-lib-parser` to parse Haskell code.
 Supports only `*.cabal`-based projects.
 
-The extension server stores its info at `~/.local/share/haskell-gtd-extension-server-root` directory. Logs are not rotated (yet?). Cabal packages are cloned into `repos` directory at the extension root via `cabal get`.
+The extension server stores its info at `~/.local/share/haskell-gtd-nl/` directory. Logs are not rotated (yet?). Cabal packages are cloned into `repos` directory at the extension root via `cabal get`.
 `repos` directory is added to a working directory root as a `.repos` symlink (to prevent https://github.com/haskell/vscode-haskell/issues/480).
 
 [!(example)](https://github.com/kr3v/gtd-nl-hs/assets/14293293/a5dc1f20-d343-4761-ad65-5af7d6cefe91)
@@ -29,5 +29,5 @@ General notes:
 
 ### "Release"
 1. Install the extension as `.vsix`.
-2. Create a `~/.local/share/haskell-gtd-extension-server-root/` directory and put `haskell-gtd-server` and `haskell-gtd-package` binaries in it.
+2. Create a `~/.local/share/haskell-gtd-nl/` directory and put `haskell-gtd-server` and `haskell-gtd-parser` binaries in it.
 3. The extension should activate when a Haskell file gets opened.

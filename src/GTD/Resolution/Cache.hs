@@ -14,7 +14,7 @@ import Data.Binary (Binary, encodeFile)
 import qualified Data.Cache.LRU as LRU
 import qualified Data.Map as Map
 import Data.Maybe (isJust)
-import qualified GTD.Cabal as Cabal
+import qualified GTD.Cabal.Types as Cabal (ModuleNameS, Package (_designation, _root), PackageKey, PackageWithResolvedDependencies, dKey, key, pKey)
 import GTD.Configuration (GTDConfiguration (..))
 import GTD.Haskell.Declaration (Declarations)
 import GTD.Haskell.Lines (Lines)

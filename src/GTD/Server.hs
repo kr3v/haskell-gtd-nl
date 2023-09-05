@@ -28,12 +28,12 @@ import Data.Maybe (catMaybes, fromMaybe)
 import qualified Data.Set as Set
 import GHC.Generics (Generic)
 import qualified GTD.Cabal.Cache as CabalCache
+import qualified GTD.Cabal.Dependencies as Cabal (full, fullS)
+import qualified GTD.Cabal.Dependencies as CabalCache (full, fullS)
 import qualified GTD.Cabal.FindAt as CabalCache (findAt)
-import qualified GTD.Cabal.Dependencies as Cabal (full)
-import qualified GTD.Cabal.Dependencies as CabalCache (full)
 import qualified GTD.Cabal.Get as Cabal (GetCache (_vs))
 import GTD.Cabal.Types (ModuleNameS, PackageWithResolvedDependencies)
-import qualified GTD.Cabal.Types as Cabal (Dependency, Package (..), PackageModules (..), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, key, pKey, Designation (..))
+import qualified GTD.Cabal.Types as Cabal (Dependency, Designation (..), Package (..), PackageModules (..), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, key, pKey)
 import GTD.Configuration (Args (..), GTDConfiguration (..), args)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Identifier, SourceSpan (..), asDeclsMap, emptySourceSpan)
@@ -84,6 +84,15 @@ modules1 pkg c = do
 
 ---
 
+(>==>) :: Monad m => (a -> m (b, s -> s)) -> (b -> m (c, s -> s)) -> (a -> m (c, s -> s))
+f >==> g = \x -> do
+  (y, m1) <- f x
+  (z, m2) <- g y
+  return (z, m2 . m1)
+
+(<==<) :: Monad m => (b -> m (c, s -> s)) -> (a -> m (b, s -> s)) -> (a -> m (c, s -> s))
+(<==<) = flip (>==>)
+
 package'resolution'withMutator'direct ::
   Context ->
   Cabal.PackageWithResolvedDependencies ->
@@ -91,7 +100,7 @@ package'resolution'withMutator'direct ::
 package'resolution'withMutator'direct c cPkg = do
   let logTag = "package'resolution'withMutator'direct " ++ show (Cabal.key cPkg)
 
-  (depsC, m) <- bimap catMaybes (foldr (.) id) <$> mapAndUnzipM (PackageCache.get c <=< flip evalStateT c . CabalCache.full) (Cabal._dependencies cPkg)
+  (depsC, m) <- bimap catMaybes (foldr (.) id) <$> mapAndUnzipM (PackageCache.get c <==< CabalCache.full c) (Cabal._dependencies cPkg)
   let deps = foldr (<>) Map.empty $ Package._exports <$> depsC
 
   pkgE <- modules $ Package {_cabalPackage = cPkg, Package._modules = deps, Package._exports = Map.empty}
@@ -137,7 +146,7 @@ package'order'ignoringAlreadyCached :: Cabal.PackageWithUnresolvedDependencies -
 package'order'ignoringAlreadyCached cPkg = do b <- PackageCache.pExists cPkg; if b then return Nothing else package'order'default cPkg
 
 package'order'default :: Cabal.PackageWithUnresolvedDependencies -> (MS m) => m (Maybe Cabal.PackageWithResolvedDependencies)
-package'order'default = (Just <$>) . CabalCache.full
+package'order'default = (Just <$>) . CabalCache.fullS
 
 package'dependencies'ordered ::
   Cabal.PackageWithUnresolvedDependencies ->
@@ -166,8 +175,8 @@ package'resolution'withDependencies'concurrently ::
   (MS m) => m (Maybe Package)
 package'resolution'withDependencies'concurrently cPkg0 = do
   let k = Cabal.pKey . Cabal.key $ cPkg0
-  let logTag :: String = printf "Cabal dependencies for %s" k
-  updateStatus $ printf "resolving %s" logTag
+  let logTag :: String = printf "%s deps" k
+  updateStatus $ printf "fetching %s" logTag
   pkgsO <- package'dependencies'ordered cPkg0 package'order'ignoringAlreadyCached
   updateStatus $ printf "parsing %s..." logTag
   modifyMS $ \st ->
@@ -179,7 +188,7 @@ package'resolution'withDependencies'concurrently cPkg0 = do
       Cabal.key
       (return . fmap Cabal.key . Cabal._dependencies)
   updateStatus $ printf "parsing %s..." k
-  CabalCache.full cPkg0 >>= package'resolution
+  CabalCache.fullS cPkg0 >>= package'resolution
 
 package'resolution'withDependencies'forked :: Cabal.PackageWithResolvedDependencies -> (MS m) => m ()
 package'resolution'withDependencies'forked p = do
@@ -268,7 +277,7 @@ cabalPackage'contextWithLocals cPkgsU = do
   logDebugNSS "cabalPackage'contextWithLocals" $ printf "cLocalPackages = %s" (show ((\(k, vs) -> (\(v, p) -> (k, v, Cabal._designation p)) <$> Map.toList vs) <$> Map.toList l))
 
 cabalPackage'resolve :: (MS m) => [Cabal.Package Cabal.Dependency] -> m [PackageWithResolvedDependencies]
-cabalPackage'resolve = mapM Cabal.full
+cabalPackage'resolve = mapM Cabal.fullS
 
 findAtF ::
   FilePath ->

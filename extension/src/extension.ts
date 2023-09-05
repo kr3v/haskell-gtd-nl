@@ -452,7 +452,7 @@ async function cpphs() {
 
 async function initConfig() {
 	let conf = vscode.workspace.getConfiguration('haskell-gtd-nl', vscode.window.activeTextEditor?.document?.uri);
-	serverRoot = await supernormalize(conf.get<string>('server.root') ?? path.join(userHomeDir, "/.local/share/haskell-gtd-extension-server-root"), false);
+	serverRoot = await supernormalize(conf.get<string>('server.root') ?? path.join(userHomeDir, "/.local/share/haskell-gtd-nl"), false);
 	serverExe = await supernormalize(conf.get<string>('server.path') ?? "haskell-gtd-server", true);
 	packageExe = await supernormalize(conf.get<string>('parser.path') ?? "haskell-gtd-parser", true);
 	serverRepos = path.join(serverRoot, "repos");
@@ -472,8 +472,7 @@ async function initConfig() {
 				default:
 					outputChannel.appendLine(util.format("unknown status file: %s", filename));
 			}
-			statusBar.text = `${statusServerS}`;
-			if (statusPackageS != "") statusBar.text += ` (${statusPackageS})`
+			statusBar.text = statusPackageS == "" ? statusServerS : statusPackageS;
 			outputChannel.appendLine(util.format("status: %s (pkg=`%s`, srv=`%s`)", statusBar.text, statusPackageS, statusServerS));
 			statusBar.show();
 		});
