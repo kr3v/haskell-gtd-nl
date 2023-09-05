@@ -71,6 +71,8 @@ async function supernormalize(p: string, executable: boolean): Promise<string> {
 	return path.normalize(path.join(serverRoot, p));
 }
 
+///
+
 const haskellExtensionID = "haskell.haskell";
 
 function isMainHaskellExtensionActive(): boolean {
@@ -109,11 +111,11 @@ async function startServerIfRequired() {
 	if (stderr != null) { await stderr.close(); stderr = null; }
 	if (server != null) { server.kill(); server = null; stopServer(); }
 
-	let conf = vscode.workspace.getConfiguration('hs-gtd');
+	let conf = vscode.workspace.getConfiguration('haskell-gtd-nl');
 	let serverArgs = conf.get<string[]>("server.args") ?? [];
-	let packageArgs = conf.get<string[]>("package.args") ?? [];
-	let args = serverArgs.concat(packageArgs.length > 0 ? ["--package", ...packageArgs] : []);
-	args = args.concat(["--package-exe", packageExe]);
+	let packageArgs = conf.get<string[]>("parser.args") ?? [];
+	let args = serverArgs.concat(packageArgs.length > 0 ? ["--parser", ...packageArgs] : []);
+	args = args.concat(["--parser-exe", packageExe]);
 	args = args.concat(["--root", serverRoot]);
 
 	const ac = new AbortController();
@@ -378,7 +380,7 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 		if (isParentOf(wd, wordSourcePathO) && !isParentOf(repos, wd)) {
 			wordSourcePath = wordSourcePathO;
 			if (isMainHaskellExtensionActive()) {
-				let conf = vscode.workspace.getConfiguration('hs-gtd');
+				let conf = vscode.workspace.getConfiguration('haskell-gtd-nl');
 				let disableLocDefs = conf.get<boolean>("extension.disable-local-definitions-when-hls-is-active") ?? true;
 				if (disableLocDefs) {
 					outputChannel.appendLine(util.format("HLS is active, disabling local definitions; got %s", wordSourcePathO));
@@ -449,10 +451,10 @@ async function cpphs() {
 }
 
 async function initConfig() {
-	let conf = vscode.workspace.getConfiguration('hs-gtd', vscode.window.activeTextEditor?.document?.uri);
+	let conf = vscode.workspace.getConfiguration('haskell-gtd-nl', vscode.window.activeTextEditor?.document?.uri);
 	serverRoot = await supernormalize(conf.get<string>('server.root') ?? path.join(userHomeDir, "/.local/share/haskell-gtd-extension-server-root"), false);
 	serverExe = await supernormalize(conf.get<string>('server.path') ?? "haskell-gtd-server", true);
-	packageExe = await supernormalize(conf.get<string>('package.path') ?? "haskell-gtd-package", true);
+	packageExe = await supernormalize(conf.get<string>('parser.path') ?? "haskell-gtd-parser", true);
 	serverRepos = path.join(serverRoot, "repos");
 	serverPidF = path.join(serverRoot, 'pid');
 	serverPortF = path.join(serverRoot, 'port');
@@ -464,7 +466,7 @@ async function initConfig() {
 				case "server":
 					statusServerS = (await fs.promises.readFile(path.join(serverRoot, "status", filename), "utf8")).trim();
 					break;
-				case "package":
+				case "parser":
 					statusPackageS = (await fs.promises.readFile(path.join(serverRoot, "status", filename), "utf8")).trim();
 					break;
 				default:
@@ -547,16 +549,16 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	}
 
-	context.subscriptions.push(vscode.commands.registerCommand('hs-gtd.server.restart', stopServer));
+	context.subscriptions.push(vscode.commands.registerCommand('haskell-gtd-nl.server.restart', stopServer));
 
-	context.subscriptions.push(vscode.commands.registerCommand('hs-gtd.cpphs', cpphs));
+	context.subscriptions.push(vscode.commands.registerCommand('haskell-gtd-nl.cpphs', cpphs));
 
 	vscode.workspace.onDidChangeConfiguration(async (e) => {
-		if (!e.affectsConfiguration('hs-gtd')) {
+		if (!e.affectsConfiguration('haskell-gtd-nl')) {
 			return;
 		}
 		initConfig();
-		if (e.affectsConfiguration("hs-gtd.package.args") || e.affectsConfiguration("hs-gtd.server.args")) {
+		if (e.affectsConfiguration("haskell-gtd-nl.parser.args") || e.affectsConfiguration("haskell-gtd-nl.server.args")) {
 			stopServer();
 		}
 	});

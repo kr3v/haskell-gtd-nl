@@ -109,8 +109,8 @@
       "_srcDirs": ["src"]
     },
     "_name": "sc-ea-hs",
-    "_path": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs/sc-ea-hs.cabal",
-    "_root": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+    "_path": "test/integrationTestRepo/sc-ea-hs/sc-ea-hs.cabal",
+    "_root": "test/integrationTestRepo/sc-ea-hs",
     "_version": "mkVersion [0,0,0,1]"
   },
   {
@@ -182,8 +182,8 @@
       "_srcDirs": ["app/map-generator"]
     },
     "_name": "sc-ea-hs",
-    "_path": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs/sc-ea-hs.cabal",
-    "_root": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+    "_path": "test/integrationTestRepo/sc-ea-hs/sc-ea-hs.cabal",
+    "_root": "test/integrationTestRepo/sc-ea-hs",
     "_version": "mkVersion [0,0,0,1]"
   },
   {
@@ -252,8 +252,8 @@
       "_srcDirs": ["app/game"]
     },
     "_name": "sc-ea-hs",
-    "_path": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs/sc-ea-hs.cabal",
-    "_root": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+    "_path": "test/integrationTestRepo/sc-ea-hs/sc-ea-hs.cabal",
+    "_root": "test/integrationTestRepo/sc-ea-hs",
     "_version": "mkVersion [0,0,0,1]"
   }
 ]

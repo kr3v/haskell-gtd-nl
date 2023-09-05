@@ -25,13 +25,13 @@ x - apply cpphs via command
 		| - back-end:
 8		|   - consider caching last known 'good' version of file local declarations - probably a bad idea in case lines changed; however, it can be verified in runtime
 9   |   - if there's no resolution cache, try building it dynamically?
-    |   - dropcache tests
-    |   - drop `Context` usage in `GTD.Cabal` package by replacing it with direct access
     |   - Cabal support:
     |     - 'global' Cabal language directives
+    |   - drop cache on file save should drop only dependencies and itself (i.e. saving a file from executable/tests should not drop the cache for the library)
+    |   - support for tests/benchmarks
 		| - undecided:
 		|   - consider supporting projects where:
-		|     - there's no `.cabal` file (base only?)
+		|     - there's no `.cabal` file => base only? 
 		|     - there's a `.cabal` file, but it's not in the root directcory
 		|       `./src/A/B/C/D.hs` -> check for `.cabal` in `.`, `.src`, ...; use the first that has `A.B.C.D` resolvable through `src-dirs`
   	| - both:

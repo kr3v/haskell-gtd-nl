@@ -57,8 +57,8 @@ main = do
   getCurrentDirectory >>= print
   print constants
 
-  let logP = r </> "package.log"
-      logS = r </> "status" </> "package"
+  let logP = r </> "parser.log"
+      logS = r </> "status" </> "parser"
   withFile logP AppendMode $ \h ->
     (`runLoggingT` combine (statusL logS) (defaultOutput h)) $
       filterLogger (\_ l -> l >= ll) $ do

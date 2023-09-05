@@ -94,6 +94,14 @@ data Package a = Package
   }
   deriving (Eq, Show, Generic)
 
+$(makeLenses ''Package)
+
+transformPathsR :: (FilePath -> FilePath) -> PackageWithResolvedDependencies -> PackageWithResolvedDependencies
+transformPathsR f p = transformPaths f p {_dependencies = transformPaths f <$> _dependencies p}
+
+transformPaths :: (FilePath -> FilePath) -> Package a -> Package a
+transformPaths f p = p {_root = f (_root p), _path = f (_path p)}
+
 instance Binary (Package (Package Dependency))
 
 instance Binary (Package Dependency)

@@ -24,14 +24,14 @@ argsP =
     <$> option auto (long "ttl" <> help "how long to wait before dying when idle (in seconds)" <> showDefault <> value 60)
     <*> switch (long "dynamic-memory-usage" <> help "whether to use dynamic memory usage" <> showDefault)
     <*> option auto (long "log-level" <> help "" <> showDefault <> value LevelInfo)
-    <*> strOption (long "package-exe" <> help "" <> showDefault <> value "./haskell-gtd-package")
+    <*> strOption (long "parser-exe" <> help "" <> showDefault <> value "./haskell-gtd-parser")
     <*> strOption (long "root" <> help "" <> showDefault)
 
 defaultArgs :: IO Args
 defaultArgs = do
   home <- getHomeDirectory
-  let root = home </> ".local" </> "share" </> "haskell-gtd-extension-server-root"
-  return $ Args {_ttl = 60, _dynamicMemoryUsage = True, _logLevel = LevelInfo, _packageExe = root </> "haskell-gtd-package", _root = root}
+  let root = home </> ".local" </> "share" </> "haskell-gtd-nl"
+  return $ Args {_ttl = 60, _dynamicMemoryUsage = True, _logLevel = LevelInfo, _packageExe = root </> "haskell-gtd-parser", _root = root}
 
 data GTDConfiguration = GTDConfiguration
   { _logs :: FilePath,

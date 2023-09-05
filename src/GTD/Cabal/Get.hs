@@ -51,9 +51,9 @@ instance Monoid GetCache where
   mempty :: GetCache
   mempty = GetCache mempty False
 
-get'direct :: String -> String -> (MonadIO m, MonadFail m) => m (ExitCode, Maybe String)
-get'direct pkg reposR = do
-  (_, Just hout, Just herr, h) <- liftIO $ createProcess (proc "cabal" ["get", pkg, "--destdir", reposR]) {std_out = CreatePipe, std_err = CreatePipe}
+get'direct :: String -> String -> String -> (MonadIO m, MonadFail m) => m (ExitCode, Maybe String)
+get'direct pkg pkgVerPredicate reposR = do
+  (_, Just hout, Just herr, h) <- liftIO $ createProcess (proc "cabal" ["get", pkg ++ pkgVerPredicate, "--destdir", reposR]) {std_out = CreatePipe, std_err = CreatePipe}
   stdout <- liftIO $ hGetContents hout
   stderr <- liftIO $ hGetContents herr
   let content = stdout ++ stderr
@@ -73,7 +73,7 @@ get pkg pkgVerPredicate = do
     Just p -> MaybeT $ return p
     Nothing -> do
       reposR <- view repos
-      (ec, r) <- get'direct pkg reposR
+      (ec, r) <- get'direct pkg pkgVerPredicate reposR
       logDebugNSS' "cabal get" $ printf "cabal get %s %s: exit code %s" pkg pkgVerPredicate (show ec)
       vs %= Map.insert k r
       changed .= True

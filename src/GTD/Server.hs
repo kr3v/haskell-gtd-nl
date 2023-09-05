@@ -194,13 +194,13 @@ package'resolution'withDependencies'forked p = do
       pArgs = do
         memFree <- liftIO getUsableFreeMemory
         let a = pArgs' memFree
-        logDebugNSS "haskell-gtd-package" $ printf "given getUsableFreeMemory=%s and memFree=%s, rts = %s" (show dm) (show memFree) (show a)
+        logDebugNSS "haskell-gtd-parser" $ printf "given getUsableFreeMemory=%s and memFree=%s, rts = %s" (show dm) (show memFree) (show a)
         return a
   rts <- if dm then pArgs else return []
   let a = ["--dir", d, "--log-level", show ll] ++ if null rts then [] else ["+RTS"] ++ rts ++ ["-RTS"]
 
-  updateStatus $ printf "executing `package`"
-  l <- liftIO $ withFile (r </> "package.stdout.log") AppendMode $ \hout -> withFile (r </> "package.stderr.log") AppendMode $ \herr -> do
+  updateStatus $ printf "executing `parser`"
+  l <- liftIO $ withFile (r </> "parser.stdout.log") AppendMode $ \hout -> withFile (r </> "parser.stderr.log") AppendMode $ \herr -> do
     e <- liftIO $ tryAny $ createProcess (proc pe a) {std_out = UseHandle hout, std_err = UseHandle herr}
     x <- case e of
       Left e -> return $ show e
@@ -208,8 +208,8 @@ package'resolution'withDependencies'forked p = do
         x <- liftIO $ waitForProcess h
         return $ show x
     return $ printf "exe=%s args=%s -> %s" (show a) d x
-  updateStatus $ printf "executing `package` on %s... done" (Cabal.pKey . Cabal.key $ p)
-  logDebugNSS "haskell-gtd-package" l
+  updateStatus $ printf "executing `parser` on %s... done" (Cabal.pKey . Cabal.key $ p)
+  logDebugNSS "haskell-gtd-parser" l
 
 package ::
   Cabal.PackageWithResolvedDependencies ->

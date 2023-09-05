@@ -1,6 +1,6 @@
 {
-  "name": "hs-gtd",
-  "displayName": "hs-gtd",
+  "name": "haskell-gtd-nl",
+  "displayName": "Haskell 'go to non-local definitions' extension",
   "publisher": "kr3v",
   "description": "",
   "version": "0.2.5",
@@ -17,26 +17,26 @@
   "contributes": {
     "configuration": [
       {
-        "title": "hs-gtd configuration",
+        "title": "haskell-gtd-nl configuration",
         "properties": {
-          "hs-gtd.extension.disable-local-definitions-when-hls-is-active": {
+          "haskell-gtd-nl.extension.disable-local-definitions-when-hls-is-active": {
             "type": "boolean",
             "default": true,
             "description": "If HLS is active, this extension's local definitions will be disabled, as they are often out of sync with HLS (meaning you would see two definitions for local symbols). Does not affect behaviour for symbols resolved outside of current working directory."
           },
-          "hs-gtd.server.root": {
+          "haskell-gtd-nl.server.root": {
             "type": "string",
-            "default": "~/.local/share/haskell-gtd-extension-server-root"
+            "default": "~/.local/share/haskell-gtd-nl"
           },
-          "hs-gtd.server.path": {
+          "haskell-gtd-nl.server.path": {
             "type": "string",
-            "default": "./haskell-gtd-server"
+            "default": "./haskell-gtd-nl-server"
           },
-          "hs-gtd.package.path": {
+          "haskell-gtd-nl.parser.path": {
             "type": "string",
-            "default": "./haskell-gtd-package"
+            "default": "./haskell-gtd-nl-parser"
           },
-          "hs-gtd.server.args": {
+          "haskell-gtd-nl.server.args": {
             "type": "array",
             "default": [
               "--ttl",
@@ -44,7 +44,7 @@
               "--dynamic-memory-usage"
             ]
           },
-          "hs-gtd.package.args": {
+          "haskell-gtd-nl.parser.args": {
             "type": "array",
             "default": []
           }
@@ -53,12 +53,12 @@
     ],
     "commands": [
       {
-        "command": "hs-gtd.server.restart",
-        "title": "hs-gtd: kill/stop backend server (it will be restarted automatically when a Haskell file is opened)"
+        "command": "haskell-gtd-nl.server.restart",
+        "title": "haskell-gtd-nl: kill/stop backend server (it will be restarted automatically when a Haskell file is opened)"
       },
       {
-        "command": "hs-gtd.cpphs",
-        "title": "hs-gtd: applies `cpphs` to the current file"
+        "command": "haskell-gtd-nl.cpphs",
+        "title": "haskell-gtd-nl: applies `cpphs` to the current file"
       }
     ]
   },

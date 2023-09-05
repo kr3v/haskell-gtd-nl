@@ -10,7 +10,7 @@ module GTD.Resolution.Utils where
 import Control.Concurrent.Async.Lifted (Async, async, wait)
 import Control.Lens (makeLenses, use, (%=), (.=))
 import Control.Monad.Logger (MonadLoggerIO)
-import Control.Monad.RWS (mapAndUnzipM, MonadState (get))
+import Control.Monad.RWS (MonadState (get), mapAndUnzipM)
 import Control.Monad.State (MonadIO (..), MonadTrans (..), StateT, execStateT, gets, when)
 import Control.Monad.Trans.Control (MonadBaseControl (..))
 import qualified Data.Graph as Graph
@@ -27,15 +27,6 @@ data SchemeState k a b = SchemeState
 
 $(makeLenses ''SchemeState)
 
--- | types: `a` is a value; `b` is a key for a value, yet it cannot be used for deduplication; `k` is a key for a value, that can be used for deduplication; `k` \in `b`, `b` \in `a`
--- | arguments:
--- | `a` is a builder argument, that is called at most once to build a value for a key
--- | `k` is a key produced for a value
--- | `p` is a function that produces dependencies for a value
--- | `ks` is a set of keys to start with (root set)
--- |
--- | `scheme` recursively figures out dependencies for a given root set;
--- |          it is safe in terms of cyclic dependencies - `a` is called at most once for a given key
 _scheme ::
   (Ord k, MonadLoggerIO m) =>
   (b -> m (Maybe a)) ->
@@ -43,20 +34,33 @@ _scheme ::
   (a -> m [b]) ->
   [b] ->
   StateT (SchemeState k a b) m ()
-_scheme a k p ks = do
-  z <- lift $ catMaybes <$> mapM (\x -> fmap (x,) <$> a x) ks
+_scheme f kb p ks = do
+  z <- lift $ catMaybes <$> mapM (\x -> fmap (x,) <$> f x) ks
   let (bs1, as1) = unzip z
-  let ks1 = k <$> bs1
+  let ks1 = kb <$> bs1
   schemeStateA %= Map.union (Map.fromList $ zip ks1 as1)
   schemeStateB %= Map.union (Map.fromList $ zip ks1 bs1)
   deps <- lift $ concat <$> mapM p as1
-  let ds = mapFrom k deps
+  let ds = mapFrom kb deps
   _ks <- use schemeStateB
   let ds' = ds `Map.difference` _ks
   if Map.null ds'
     then return ()
-    else _scheme a k p (Map.elems ds')
+    else _scheme f kb p (Map.elems ds')
 
+-- | `scheme` recursively figures out dependencies for a given root set
+--          it is safe in terms of cyclic dependencies - `a` is called at most once for a given key
+-- returns list of values ordered by dependencies (topological sort; if item A depends on item B, then B comes before A)
+-- types:
+-- `a` is a value
+-- `b` is a value that is used to produce `a`; `b` is not used for deduplication
+-- `k` is a key for both `a` and `b` to be used for `deduplication`
+-- `b` and `k` can be the same type, in case `k` is enough to generate `a`
+-- arguments:
+-- `f` is a builder argument, that is called at most once to build a value for a key
+-- `ka`, `kb` - key producers for `a` or `b` respectively
+-- `p` is a function that produces dependencies for a value
+-- `ks` is a set of keys to start with (root set)
 scheme ::
   (Ord k, MonadLoggerIO m) =>
   (b -> m (Maybe a)) ->
@@ -65,8 +69,8 @@ scheme ::
   (a -> m [b]) ->
   [b] ->
   StateT (SchemeState k a b) m [a]
-scheme a ka kb p ks = do
-  _scheme a kb p ks
+scheme f ka kb p ks = do
+  _scheme f kb p ks
   as <- gets _schemeStateA
 
   let iModules = Map.fromList $ zip [1 ..] (Map.elems as)
@@ -82,38 +86,56 @@ scheme a ka kb p ks = do
 
 ---
 
+---
+
+-- `_queue` is a queue of tasks to be executed
+-- `_processed` is a map of tasks that have been executed
+-- `_asyncs` is a map of tasks that are currently executing
+-- `_state` is a state that is passed to `f` and `ps`
+-- `_shouldUpdateStatus` is a flag that indicates whether status file should be updated
 data ParallelizedState s k a b m = ParallelizedState
-  { _queue :: [a],
-    _processed :: Map.Map k b,
-    _asyncs :: Map.Map k (Async (StM m (b, s -> s))),
+  { _queue :: [b],
+    _processed :: Map.Map k a,
+    _asyncs :: Map.Map k (Async (StM m (a, s -> s))),
     _state :: s,
     _shouldUpdateStatus :: Bool
   }
 
 $(makeLenses ''ParallelizedState)
 
+-- | `parallelized` executes a given function in parallel, while respecting dependencies
+-- types and arguments format is the same as for `scheme`, plus:
+-- type `n` is used as an additional debug logging context
+-- `f` is a function that produces a value; it accepts current state as an argument and generates a state update function
+--     as `f` is executed concurrently, the state update function is only applied in the 'main' thread
+--     the idea was to avoid having MVar's, but it's not clear whether this was a good idea
+-- `ps` is a function that produces a string representation of the state for debug logging
+-- `ds` is a function that produces dependencies for a value; given that we don't need to figure out the execution order,
+--      this function is used to figure out whether a given task (`b`) depends on a task that is currently executing;
+--      in such a case, we have to await on the required tasks
 parallelized ::
-  (Show a, Show b, Show n, Show k, MonadIO m, MonadLoggerIO m, MonadBaseControl IO m, Ord k) =>
+  (Show a, Show b, Show n, Show k, Ord k) =>
+  (MonadIO m, MonadLoggerIO m, MonadBaseControl IO m) =>
   ParallelizedState s k a b m ->
   n ->
-  (s -> a -> m (b, s -> s)) ->
+  (s -> b -> m (a, s -> s)) ->
   (s -> String) ->
-  (a -> k) ->
-  (a -> m [k]) ->
+  (b -> k) ->
+  (b -> m [k]) ->
   m s
-parallelized s n f ps ka ds = _state <$> execStateT (parallelized0 n f ps ka ds) s
+parallelized s n f ps kb ds = _state <$> execStateT (parallelized0 n f ps kb ds) s
 
 parallelized0 ::
   (Show a, Show b, Show n, Show k, Ord k) =>
   (MonadIO m, MonadLoggerIO m, MonadBaseControl IO m) =>
   n ->
-  (s -> a -> m (b, s -> s)) ->
+  (s -> b -> m (a, s -> s)) ->
   (s -> String) ->
-  (a -> k) ->
-  (a -> m [k]) ->
+  (b -> k) ->
+  (b -> m [k]) ->
   StateT (ParallelizedState s k a b m) m ()
-parallelized0 n f ps ka ds = do
-  ParallelizedState{_queue=q, _asyncs=a, _shouldUpdateStatus=us} <- get
+parallelized0 n f ps kb ds = do
+  ParallelizedState {_queue = q, _asyncs = a, _shouldUpdateStatus = us} <- get
   let logTag = printf "parallelized %s" (show n)
 
   case q of
@@ -124,18 +146,17 @@ parallelized0 n f ps ka ds = do
       processed %= Map.union (Map.fromList $ zip aK rs)
     (x : xs) -> do
       xD <- lift $ ds x
-
       let is = Set.intersection (Set.fromList xD) (Map.keysSet a)
       if Set.null is
         then do
           logDebugNSS logTag (printf "asyncs=%s, queue=%s" (show $ length a) (show $ length xs))
           s <- use state
           a <- lift $ async $ do
-            logDebugNSS logTag $ printf "%s starting;\ndeps = %s\nstate = %s" (show $ ka x) (show xD) (ps s)
+            logDebugNSS logTag $ printf "%s starting;\ndeps = %s\nstate = %s" (show $ kb x) (show xD) (ps s)
             z <- f s x
-            logDebugNSS logTag $ printf "%s finished" (show $ ka x)
+            logDebugNSS logTag $ printf "%s finished" (show $ kb x)
             return z
-          asyncs %= Map.insert (ka x) a
+          asyncs %= Map.insert (kb x) a
           queue .= xs
         else do
           let (aK, xDA) = unzip $ mapMaybe (\y -> (y,) <$> (y `Map.lookup` a)) (Set.toList is)
@@ -149,7 +170,8 @@ parallelized0 n f ps ka ds = do
           s1 <- use state
 
           when us $
-            updateStatus $ printf "%s: %s tasks executing, %s in queue" logTag (show $ length a) (show $ length xs)
+            updateStatus $
+              printf "%s: %s tasks executing, %s in queue" logTag (show $ length a) (show $ length xs)
           logDebugNSS logTag $
             printf
               "asyncs=%s, queue=%s\nwaited for=%s\nss=%s\ns0=%s\ns1=%s\nus=%s"
@@ -161,6 +183,6 @@ parallelized0 n f ps ka ds = do
               (ps s1)
               (show us)
 
-      parallelized0 n f ps ka ds
+      parallelized0 n f ps kb ds
 
   return ()

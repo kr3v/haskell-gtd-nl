@@ -77,7 +77,7 @@ executable haskell-gtd-server
 
     ghc-options: -O2 -g1 -threaded -Wall -rtsopts "-with-rtsopts=-N -A1M -T"
 
-executable haskell-gtd-package
+executable haskell-gtd-parser
     import:           common-deps
     main-is:          Main.hs
     build-depends:

@@ -51,7 +51,7 @@ import qualified GHC.Parser.Lexer as GHC
 import GHC.Types.SourceError (SourceError)
 import GHC.Types.SrcLoc (GenLocated (..))
 import qualified GHC.Types.SrcLoc as GHC
-import qualified GTD.Cabal.Cache as Cabal (findAtF, load)
+import qualified GTD.Cabal.Cache as Cabal (load)
 import qualified GTD.Cabal.FindAt as Cabal (findAt)
 import qualified GTD.Cabal.Get as Cabal (get)
 import qualified GTD.Cabal.Types as Cabal (Package (_dependencies), key)
@@ -61,7 +61,7 @@ import qualified GTD.Haskell.Module as HsModule
 import GTD.Haskell.Parser.GhcLibParser (fakeSettings, parsePragmasIntoDynFlags, showO)
 import GTD.Resolution.Module (module'Dependencies)
 import GTD.Resolution.State (ccGet, emptyContext)
-import GTD.Server (modulesOrdered, package'dependencies'ordered, package'order'default)
+import GTD.Server (modulesOrdered, package'dependencies'ordered, package'order'default, findAtF)
 import GTD.Utils (ultraZoom)
 import Options.Applicative (Parser, ParserInfo, auto, command, execParser, fullDesc, help, helper, info, long, metavar, option, progDesc, strOption, subparser, (<**>))
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
@@ -165,7 +165,7 @@ resolutionOrder pkgN pkgV t = do
           return ()
 
     case t of
-      Module -> h HsModule._name module'Dependencies modulesOrdered Cabal.findAtF
+      Module -> h HsModule._name module'Dependencies modulesOrdered findAtF
       Package -> h (show . Cabal.key) (fmap show . Cabal._dependencies) (flip package'dependencies'ordered package'order'default) Cabal.findAt
 
   case x of

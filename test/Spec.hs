@@ -20,17 +20,18 @@ import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (ReaderT (..))
 import Control.Monad.Writer (execWriterT)
 import Data.Aeson (FromJSON, ToJSON, decode, encode)
-import Data.Aeson.Types (FromJSON (..), Parser, Value (..), ToJSON (..))
+import Data.Aeson.Types (FromJSON (..), Parser, ToJSON (..), Value (..))
 import qualified Data.ByteString.Lazy as BS
 import Data.Either (partitionEithers)
 import Data.Either.Combinators (mapLeft, mapRight)
 import Data.List (isPrefixOf, isSuffixOf)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust, fromMaybe)
+import Data.Text (pack, unpack)
 import Distribution.Version (VersionRange)
 import GHC.Generics (Generic)
 import GTD.Cabal.Cache as Cabal (load, store)
-import GTD.Cabal.Types (Dependency, PackageModules, PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, Version)
+import GTD.Cabal.Types (Dependency, PackageModules, PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, Version, transformPaths, transformPathsR)
 import GTD.Configuration (Args (_logLevel), GTDConfiguration (..), defaultArgs, prepareConstants)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (Declarations (..), Exports, Imports, SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine))
@@ -42,12 +43,11 @@ import GTD.Resolution.State (LocalPackagesKey, LocalPackagesMap, cLocalPackages,
 import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), cabalPackage'contextWithLocals, cabalPackage'resolve, cabalPackage'unresolved, definition)
 import GTD.Utils (removeIfExists, storeIOExceptionToMonadError)
 import System.Directory (getCurrentDirectory, listDirectory, removeDirectoryRecursive, removeFile)
-import System.FilePath ((</>))
+import System.FilePath (makeRelative, (</>))
 import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
 import Test.Hspec (Spec, describe, expectationFailure, it, runIO, shouldBe)
 import Test.Hspec.Runner (Config (configPrintCpuTime), defaultConfig, hspecWith)
 import Text.Printf (printf)
-import Data.Text (unpack, pack)
 
 haskellApplyCppHsSpec :: Spec
 haskellApplyCppHsSpec = do
@@ -265,17 +265,17 @@ definitionsSpec = do
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 9, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
          in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
   let expectedLensView =
-        let expFile = _repos consts </> "lens-5.2.2/src/Control/Lens/Getter.hs"
+        let expFile = _repos consts </> "lens-5.2.3/src/Control/Lens/Getter.hs"
             expLineNo = 244
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
          in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
   let expectedLensViewOperator =
-        let expFile = _repos consts </> "lens-5.2.2/src/Control/Lens/Getter.hs"
+        let expFile = _repos consts </> "lens-5.2.3/src/Control/Lens/Getter.hs"
             expLineNo = 316
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
          in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
   let expectedLensOverOperator =
-        let expFile = _repos consts </> "lens-5.2.2/src/Control/Lens/Setter.hs"
+        let expFile = _repos consts </> "lens-5.2.3/src/Control/Lens/Setter.hs"
             expLineNo = 792
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
          in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
@@ -463,18 +463,14 @@ cabalFullTest :: Spec
 cabalFullTest = do
   da <- runIO defaultArgs
   consts <- runIO $ prepareConstants da {_logLevel = LevelDebug}
-  pwd <- runIO getCurrentDirectory
+  wd <- runIO getCurrentDirectory
 
   let descr = "cabalFull"
-      workDir = pwd </> "test/integrationTestRepo/sc-ea-hs"
-      file = workDir </> "app/game/Main.hs"
-      req = DefinitionRequest {workDir = workDir, file = file, word = ""}
-      logF = workDir </> descr ++ ".txt"
+      wdT = wd </> "test/integrationTestRepo/sc-ea-hs"
+      logF = wdT </> descr ++ ".txt"
   runIO $ removeIfExists logF
 
-  let eval0 w = runExceptT $ definition req {word = w}
-      eval w r = eval0 w >>= (\d -> return $ d `shouldBe` r)
-      mstack f a = runFileLoggingT logF $ f $ runReaderT a consts
+  let mstack f a = runFileLoggingT logF $ f $ runReaderT a consts
 
   let st0 = emptyContext
   st1 <- runIO $ mstack (`execStateT` st0) Cabal.load
@@ -496,12 +492,18 @@ cabalFullTest = do
             expectedL :: [LocalPackagesKey] = fromJust $ decode expectedLS
 
         join $ mstack (`evalStateT` st1) $ do
-          result <- runExceptT $ cabalPackage'unresolved workDir
+          result <- runExceptT $ cabalPackage'unresolved wdT
           case result of
-            Left e -> return $ expectationFailure $ printf "failed to parse %s: %s" workDir e
-            Right (u :: [PackageWithUnresolvedDependencies]) -> do
-              liftIO $ BS.writeFile dstUPath $ encode u
-              let d1 = u `shouldBe` expectedU
+            Left e -> return $ expectationFailure $ printf "failed to parse %s: %s" wdT e
+            Right u -> do
+              let t p
+                    | wd `isPrefixOf` p = makeRelative wd p
+                    | _repos consts `isPrefixOf` p = ".repos" </> makeRelative (_repos consts) p
+                    | otherwise = p
+                  uT = transformPaths t <$> u
+
+              liftIO $ BS.writeFile dstUPath $ encode uT
+              let d1 = uT `shouldBe` expectedU
 
               cabalPackage'contextWithLocals u
               l0 <- use cLocalPackages
@@ -510,8 +512,9 @@ cabalFullTest = do
               let d2 = l1 `shouldBe` expectedL
 
               r <- cabalPackage'resolve u
-              liftIO $ BS.writeFile dstRPath $ encode r
-              let d3 = r `shouldBe` expectedR
+              let rT = transformPathsR t <$> r
+              liftIO $ BS.writeFile dstRPath $ encode rT
+              let d3 = rT `shouldBe` expectedR
 
               return $ d1 <> d2 <> d3
 
