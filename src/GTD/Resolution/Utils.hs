@@ -5,13 +5,13 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 
-module GTD.Resolution.Utils where
+module GTD.Resolution.Utils (scheme, parallelized, reverseDependencies, ParallelizedState (..)) where
 
 import Control.Concurrent.Async.Lifted (Async, async, wait)
 import Control.Lens (makeLenses, use, (%=), (.=))
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (MonadState (get), mapAndUnzipM)
-import Control.Monad.State (MonadIO (..), MonadTrans (..), StateT, execStateT, gets, when)
+import Control.Monad.State (MonadIO (..), MonadTrans (..), StateT, evalStateT, execStateT, gets, when)
 import Control.Monad.Trans.Control (MonadBaseControl (..))
 import qualified Data.Graph as Graph
 import qualified Data.Map.Strict as Map
@@ -48,8 +48,28 @@ _scheme f kb p ks = do
     then return ()
     else _scheme f kb p (Map.elems ds')
 
+graph ::
+  (Ord k, MonadLoggerIO m) =>
+  (b -> m (Maybe a)) ->
+  (a -> k) ->
+  (b -> k) ->
+  (a -> m [b]) ->
+  [b] ->
+  StateT (SchemeState k a b) m (Graph.Graph, Map.Map k Graph.Vertex, Map.Map Graph.Vertex a)
+graph f ka kb p ks = do
+  _scheme f kb p ks
+  as <- gets _schemeStateA
+
+  let iModules = Map.fromList $ zip [1 ..] (Map.elems as)
+  let iNModules = Map.fromList $ flipTuple <$> Map.assocs (ka <$> iModules)
+
+  let jF i dep = (i, fromJust $ Map.lookup dep iNModules)
+      iF i ds = jF i <$> filter (`Map.member` iNModules) ds
+  edges <- lift $ concat <$> mapM (\(i, m) -> iF i <$> ((kb <$>) <$> p m)) (Map.assocs iModules)
+  return $ (,,) (Graph.buildG (1, Map.size as) edges) iNModules iModules
+
 -- | `scheme` recursively figures out dependencies for a given root set
---          it is safe in terms of cyclic dependencies - `a` is called at most once for a given key
+-- it is safe in terms of cyclic dependencies - `a` is called at most once for a given key
 -- returns list of values ordered by dependencies (topological sort; if item A depends on item B, then B comes before A)
 -- types:
 -- `a` is a value
@@ -61,7 +81,7 @@ _scheme f kb p ks = do
 -- `ka`, `kb` - key producers for `a` or `b` respectively
 -- `p` is a function that produces dependencies for a value
 -- `ks` is a set of keys to start with (root set)
-scheme ::
+schemeS ::
   (Ord k, MonadLoggerIO m) =>
   (b -> m (Maybe a)) ->
   (a -> k) ->
@@ -69,22 +89,29 @@ scheme ::
   (a -> m [b]) ->
   [b] ->
   StateT (SchemeState k a b) m [a]
-scheme f ka kb p ks = do
-  _scheme f kb p ks
-  as <- gets _schemeStateA
+schemeS f ka kb p ks = do
+  (g, _, vToA) <- graph f ka kb p ks
+  let cs = concatMap (foldr (:) []) $ Graph.scc g
+  return $ fromJust . (`Map.lookup` vToA) <$> cs
 
-  let iModules = Map.fromList $ zip [1 ..] (Map.elems as)
-  let iNModules = Map.fromList $ flipTuple <$> Map.assocs (ka <$> iModules)
+reverseDependenciesS ::
+  (Ord k, MonadLoggerIO m) =>
+  (b -> m (Maybe a)) ->
+  (a -> k) ->
+  (b -> k) ->
+  (a -> m [b]) ->
+  [b] ->
+  k ->
+  StateT (SchemeState k a b) m (Maybe [a])
+reverseDependenciesS f ka kb p ks k = do
+  (g, kToV, vToA) <- graph f ka kb p ks
+  let gT = Graph.transposeG g
+  let ds = mapMaybe (`Map.lookup` vToA) <$> (Graph.reachable gT <$> Map.lookup k kToV)
+  return ds
 
-  let jF i dep = (i, fromJust $ Map.lookup dep iNModules)
-      iF i ds = jF i <$> filter (`Map.member` iNModules) ds
-  edges <- lift $ concat <$> mapM (\(i, m) -> iF i <$> ((kb <$>) <$> p m)) (Map.assocs iModules)
-  let graph = Graph.buildG (1, Map.size as) edges
+reverseDependencies f ka kb p ks k = evalStateT (reverseDependenciesS f ka kb p ks k) (SchemeState Map.empty Map.empty)
 
-  let graphS = concatMap (foldr (:) []) $ Graph.scc graph
-  return $ fromJust . (`Map.lookup` iModules) <$> graphS
-
----
+scheme f ka kb p ks = evalStateT (schemeS f ka kb p ks) (SchemeState Map.empty Map.empty)
 
 ---
 

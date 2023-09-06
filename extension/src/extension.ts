@@ -506,7 +506,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			outputChannel.appendLine(util.format("resetting workspace cache..."));
 
 			await startServerIfRequired();
-			let body = { dir: wd };
+			let body = { dcDir: wd, dcFile : document.uri.fsPath };
 			let res = await axios
 				.post(`http://localhost:${port}/dropcache`, body)
 				.catch(function (error) { return { "data": error }; });

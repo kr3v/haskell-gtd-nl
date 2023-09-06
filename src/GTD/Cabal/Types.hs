@@ -27,7 +27,7 @@ type PackageNameS = String
 type ModuleNameS = String
 
 data DesignationType = Library | Executable | TestSuite | Benchmark
-  deriving (Eq, Ord, Show, Generic)
+  deriving (Eq, Ord, Read, Show, Generic)
 
 data Designation = Designation {_desName :: Maybe String, _desType :: DesignationType}
   deriving (Eq, Ord, Show, Generic)

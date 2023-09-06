@@ -27,7 +27,7 @@ import GTD.Cabal.Types (Dependency (..), Designation (Designation, _desName, _de
 import GTD.Configuration (GTDConfiguration (..))
 import GTD.Resolution.Caching.Utils (binaryGet, pathAsFile)
 import GTD.Utils (logDebugNSS, removeIfExistsL)
-import System.FilePath (takeDirectory, (</>), normalise)
+import System.FilePath (normalise, takeDirectory, (</>))
 import System.IO (IOMode (ReadMode), hGetContents, openFile)
 
 ---

@@ -14,7 +14,7 @@ import Control.Exception (IOException, try)
 import Control.Lens (use)
 import Control.Monad.Logger (LogLevel (LevelDebug), NoLoggingT (..), runStderrLoggingT, runStdoutLoggingT)
 import Control.Monad.Logger.CallStack (runFileLoggingT)
-import Control.Monad.RWS (MonadIO (liftIO), MonadState (get), forM, forM_, join)
+import Control.Monad.RWS (MonadIO (liftIO), MonadState (get), MonadTrans (..), MonadWriter (..), forM, forM_, join)
 import Control.Monad.State (StateT (..), evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (ReaderT (..))
@@ -38,19 +38,20 @@ import GTD.Haskell.Declaration (Declarations (..), Exports, Imports, SourceSpan 
 import GTD.Haskell.Lines (Line (..), buildMap, resolve)
 import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule, parseModule)
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
+import qualified GTD.Resolution.Cache as PackageCache
 import GTD.Resolution.Module (figureOutExports, figureOutExports0)
-import GTD.Resolution.State (LocalPackagesKey, LocalPackagesMap, cLocalPackages, emptyContext)
-import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), cabalPackage'contextWithLocals, cabalPackage'resolve, cabalPackage'unresolved, definition)
+import GTD.Resolution.State (LocalPackagesKey, cLocalPackages, emptyContext)
+import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), DropPackageCacheRequest (..), cabalPackage, cabalPackage'contextWithLocals, cabalPackage'resolve, cabalPackage'unresolved, definition, dropPackageCache)
 import GTD.Utils (removeIfExists, storeIOExceptionToMonadError)
-import System.Directory (getCurrentDirectory, listDirectory, removeDirectoryRecursive, removeFile)
+import System.Directory (getCurrentDirectory, listDirectory, removeDirectoryRecursive)
 import System.FilePath (makeRelative, (</>))
 import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
-import Test.Hspec (Spec, describe, expectationFailure, it, runIO, shouldBe)
+import Test.Hspec (Expectation, Spec, describe, expectationFailure, it, runIO, shouldBe)
 import Test.Hspec.Runner (Config (configPrintCpuTime), defaultConfig, hspecWith)
 import Text.Printf (printf)
 
-haskellApplyCppHsSpec :: Spec
-haskellApplyCppHsSpec = do
+haskellApplyCppHsTest :: Spec
+haskellApplyCppHsTest = do
   describe "haskellApplyCppHs" $ do
     it "applies #if-related C preprocessor directives" $ do
       let srcPath = "./test/samples/haskellApplyCppHs/in.0.hs"
@@ -81,8 +82,8 @@ haskellApplyCppHsSpec = do
           writeFile dstPath r
           r `shouldBe` expected
 
-haskellGetIdentifiersSpec :: Spec
-haskellGetIdentifiersSpec = do
+haskellGetIdentifiersTest :: Spec
+haskellGetIdentifiersTest = do
   let descr = "haskellGetIdentifiers"
   let test n p i = do
         let iS = show i
@@ -119,8 +120,8 @@ haskellGetIdentifiersSpec = do
         it "parses classes declarations" $
           test n p 2
 
-haskellGetExportsSpec :: Spec
-haskellGetExportsSpec = do
+haskellGetExportsTest :: Spec
+haskellGetExportsTest = do
   let descr = "haskellGetExportedIdentifiers"
   let test n p i = do
         let iS = show i
@@ -149,8 +150,8 @@ haskellGetExportsSpec = do
         it "parses a file with an explicit list of exported functions" $
           test n p 0
 
-haskellGetImportsSpec :: Spec
-haskellGetImportsSpec = do
+haskellGetImportsTest :: Spec
+haskellGetImportsTest = do
   let descr = "haskellGetImportedIdentifiers"
   let test n p i = do
         let iS = show i
@@ -179,8 +180,6 @@ haskellGetImportsSpec = do
       describe n $ do
         it "extracts only function imports" $
           test n p 0
-
----
 
 figureOutExportsTest :: Spec
 figureOutExportsTest = do
@@ -227,10 +226,8 @@ figureOutExportsTest = do
               liftIO $ BS.writeFile outRP $ encode result
               return $ result `shouldBe` expectedR
 
----
-
-definitionsSpec :: Spec
-definitionsSpec = do
+definitionsTest :: Spec
+definitionsTest = do
   da <- runIO defaultArgs
   consts <- runIO $ prepareConstants da {_logLevel = LevelDebug}
   pwd <- runIO getCurrentDirectory
@@ -386,8 +383,8 @@ instance FromJSON LinesSpecTestCase
 
 instance ToJSON LinesSpecTestCase
 
-linesSpec :: Spec
-linesSpec = do
+linesTest :: Spec
+linesTest = do
   let descr = "lines"
   let test i = runExceptT $ do
         let iS = show i
@@ -522,11 +519,61 @@ cabalFullTest = do
     it "test repo" $ do
       test 0
 
--- True `shouldBe` True
+dropCacheTest :: Spec
+dropCacheTest = do
+  da <- runIO defaultArgs
+  consts <- runIO $ prepareConstants da {_logLevel = LevelDebug}
+  wd <- runIO getCurrentDirectory
 
-integrationTestsSpec :: Spec
-integrationTestsSpec = do
-  definitionsSpec
+  let descr = "dropCache"
+      wdT = wd </> "test/integrationTestRepo/sc-ea-hs"
+      mainF = wdT </> "app/game/Main.hs"
+      libF = wdT </> "src/ScEaHs/Game/Surface/Generator.hs"
+      logF = wdT </> descr ++ ".txt"
+      reqM = DefinitionRequest {workDir = wdT, file = mainF, word = "playIO"}
+      reqL = DefinitionRequest {workDir = wdT, file = libF, word = "randomR"}
+  runIO $ removeIfExists logF
+
+  let mstack f a = runFileLoggingT logF $ f $ runReaderT a consts
+
+  let st0 = emptyContext
+  st1 <- runIO $ mstack (`execStateT` st0) Cabal.load
+  (_, st2) <- runIO $ mstack (`runStateT` st1) $ runExceptT $ definition reqM
+
+  describe descr $ do
+    it "test repo" $ do
+      x :: Either String Expectation <- mstack (`evalStateT` st2) $ runExceptT $ execWriterT $ do
+        cpkgM <- cabalPackage wdT mainF
+        cpkgL <- cabalPackage wdT libF
+
+        PackageCache.pExists cpkgM >>= tell . (`shouldBe` True)
+        PackageCache.pExists cpkgL >>= tell . (`shouldBe` True)
+
+        _ <- dropPackageCache DropCacheRequest {dcDir = wdT, dcFile = mainF}
+        PackageCache.pExists cpkgM >>= tell . (`shouldBe` False)
+        PackageCache.pExists cpkgL >>= tell . (`shouldBe` True)
+
+        _ <- dropPackageCache DropCacheRequest {dcDir = wdT, dcFile = libF}
+        PackageCache.pExists cpkgM >>= tell . (`shouldBe` False)
+        PackageCache.pExists cpkgL >>= tell . (`shouldBe` False)
+
+        _ <- definition reqL
+        PackageCache.pExists cpkgM >>= tell . (`shouldBe` False)
+        PackageCache.pExists cpkgL >>= tell . (`shouldBe` True)
+
+        _ <- dropPackageCache DropCacheRequest {dcDir = wdT, dcFile = libF}
+        PackageCache.pExists cpkgM >>= tell . (`shouldBe` False)
+        PackageCache.pExists cpkgL >>= tell . (`shouldBe` False)
+
+        _ <- definition reqM
+        PackageCache.pExists cpkgM >>= tell . (`shouldBe` True)
+        PackageCache.pExists cpkgL >>= tell . (`shouldBe` True)
+
+        _ <- dropPackageCache DropCacheRequest {dcDir = wdT, dcFile = libF}
+        PackageCache.pExists cpkgM >>= tell . (`shouldBe` False)
+        PackageCache.pExists cpkgL >>= tell . (`shouldBe` False)
+
+      either (expectationFailure . show) id x
 
 main :: IO ()
 main = do
@@ -537,11 +584,12 @@ main = do
   removeDirectoryRecursive $ _cache c
 
   hspecWith defaultConfig {configPrintCpuTime = False} $ do
-    haskellApplyCppHsSpec
-    haskellGetIdentifiersSpec
-    haskellGetExportsSpec
-    haskellGetImportsSpec
-    linesSpec
+    haskellApplyCppHsTest
+    haskellGetIdentifiersTest
+    haskellGetExportsTest
+    haskellGetImportsTest
+    linesTest
     figureOutExportsTest
     cabalFullTest
-    integrationTestsSpec
+    definitionsTest
+    dropCacheTest

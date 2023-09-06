@@ -45,5 +45,5 @@ store = do
 
 ---
 
-dropCache :: Cabal.PackageWithResolvedDependencies -> (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m) => m ()
+dropCache :: Cabal.Package a -> (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m) => m ()
 dropCache p = remove $ _path p

@@ -74,7 +74,7 @@ pStore cPkg pkg = do
   logDebugNSS "package cached put" $ printf "%s -> (%d, %d)" (show $ Cabal.key cPkg) (length $ Package._modules pkg) (length $ Package._exports pkg)
 
 pRemove ::
-  Cabal.PackageWithResolvedDependencies ->
+  Cabal.Package a ->
   (MonadLoggerIO m, MonadReader GTDConfiguration m) => m ()
 pRemove cPkg = do
   path cPkg modulesN >>= removeIfExistsL

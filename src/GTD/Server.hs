@@ -2,17 +2,17 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# HLINT ignore "Use tuple-section" #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
-{-# HLINT ignore "Use tuple-section" #-}
 
 module GTD.Server where
 
 import Control.Exception.Safe (tryAny)
 import Control.Lens (over, use, view, (%=), (.=))
-import Control.Monad (forM, forM_, join, mapAndUnzipM, unless, void, (<=<))
+import Control.Monad (forM, forM_, join, mapAndUnzipM, unless, void)
 import Control.Monad.Except (MonadError (..), MonadIO (..))
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (MonadReader (..), MonadState (..), gets)
@@ -22,17 +22,17 @@ import Control.Monad.Trans.Reader (ReaderT (..))
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Bifunctor (Bifunctor (..))
 import qualified Data.Cache.LRU as LRU
-import Data.List (find, intercalate, isPrefixOf)
+import Data.List (find, isPrefixOf, singleton)
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes, fromMaybe)
+import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
 import qualified Data.Set as Set
 import GHC.Generics (Generic)
 import qualified GTD.Cabal.Cache as CabalCache
-import qualified GTD.Cabal.Dependencies as Cabal (full, fullS)
+import qualified GTD.Cabal.Dependencies as Cabal (fullS)
 import qualified GTD.Cabal.Dependencies as CabalCache (full, fullS)
 import qualified GTD.Cabal.FindAt as CabalCache (findAt)
 import qualified GTD.Cabal.Get as Cabal (GetCache (_vs))
-import GTD.Cabal.Types (ModuleNameS, PackageWithResolvedDependencies)
+import GTD.Cabal.Types (ModuleNameS, PackageWithResolvedDependencies, PackageWithUnresolvedDependencies)
 import qualified GTD.Cabal.Types as Cabal (Dependency, Designation (..), Package (..), PackageModules (..), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, key, pKey)
 import GTD.Configuration (Args (..), GTDConfiguration (..), args)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
@@ -44,8 +44,8 @@ import qualified GTD.Resolution.Cache as PackageCache
 import GTD.Resolution.Module (figureOutExports1, module'Dependencies, moduleR)
 import GTD.Resolution.State (Context (..), Package (Package, _cabalPackage, _modules), cExports, cLocalPackages, cResolution)
 import qualified GTD.Resolution.State as Package
-import GTD.Resolution.Utils (ParallelizedState (..), SchemeState (..), parallelized, scheme)
-import GTD.Utils (getUsableFreeMemory, logDebugNSS, modifyMS, stats, storeIOExceptionToMonadError, updateStatus)
+import GTD.Resolution.Utils (ParallelizedState (..), parallelized, reverseDependencies, scheme)
+import GTD.Utils (getUsableFreeMemory, logDebugNSS, mapFrom, modifyMS, stats, storeIOExceptionToMonadError, updateStatus)
 import System.FilePath (normalise, (</>))
 import System.IO (IOMode (AppendMode), withFile)
 import System.Process (CreateProcess (..), StdStream (..), createProcess, proc, waitForProcess)
@@ -64,8 +64,9 @@ modules pkg@Package {_cabalPackage = c} = do
 
 -- for a given Cabal package, it returns a list of modules in the order they should be processed
 modulesOrdered :: Cabal.PackageWithResolvedDependencies -> (MS m) => m [HsModule]
-modulesOrdered c = flip runReaderT c $ flip evalStateT (SchemeState Map.empty Map.empty) $ do
-  scheme moduleR HsModule._name id (return . module'Dependencies) (Set.toList . Cabal._exports . Cabal._modules $ c)
+modulesOrdered c =
+  flip runReaderT c $
+    scheme moduleR HsModule._name id (return . module'Dependencies) (Set.toList . Cabal._exports . Cabal._modules $ c)
 
 -- for a given Cabal package and list of its modules in the 'right' order, concurrently parses all the modules
 modules1 ::
@@ -153,9 +154,7 @@ package'dependencies'ordered ::
   (MS m) =>
   (Cabal.PackageWithUnresolvedDependencies -> m (Maybe Cabal.PackageWithResolvedDependencies)) ->
   m [Cabal.PackageWithResolvedDependencies]
-package'dependencies'ordered cPkg0 f =
-  flip evalStateT (SchemeState Map.empty Map.empty) $ do
-    scheme f Cabal.key Cabal.key (return . Cabal._dependencies) [cPkg0]
+package'dependencies'ordered cPkg0 f = scheme f Cabal.key Cabal.key (return . Cabal._dependencies) [cPkg0]
 
 package'concurrent'contextDebugInfo :: Context -> String
 package'concurrent'contextDebugInfo c =
@@ -190,7 +189,7 @@ package'resolution'withDependencies'concurrently cPkg0 = do
   updateStatus $ printf "parsing %s..." k
   CabalCache.fullS cPkg0 >>= package'resolution
 
-package'resolution'withDependencies'forked :: Cabal.PackageWithResolvedDependencies -> (MS m) => m ()
+package'resolution'withDependencies'forked :: Cabal.Package a -> (MS m) => m ()
 package'resolution'withDependencies'forked p = do
   let d = Cabal._root p
   Args {_dynamicMemoryUsage = dm, _logLevel = ll, _packageExe = pe, _root = r} <- view args
@@ -203,10 +202,13 @@ package'resolution'withDependencies'forked p = do
       pArgs = do
         memFree <- liftIO getUsableFreeMemory
         let a = pArgs' memFree
-        logDebugNSS "haskell-gtd-parser" $ printf "given getUsableFreeMemory=%s and memFree=%s, rts = %s" (show dm) (show memFree) (show a)
+        logDebugNSS "haskell-gtd-nl-parser" $ printf "given getUsableFreeMemory=%s and memFree=%s, rts = %s" (show dm) (show memFree) (show a)
         return a
   rts <- if dm then pArgs else return []
-  let a = ["--dir", d, "--log-level", show ll] ++ if null rts then [] else ["+RTS"] ++ rts ++ ["-RTS"]
+  let a1 = ["--dir", d, "--log-level", show ll, "--designation-type", (show . Cabal._desType . Cabal._designation) p]
+      a2 = maybe a1 ((a1 <>) . (["--designation-name"] ++) . singleton) (Cabal._desName . Cabal._designation $ p)
+      a3 = a2 ++ if null rts then [] else ["+RTS"] ++ rts ++ ["-RTS"]
+      a = a3
 
   updateStatus $ printf "executing `parser`"
   l <- liftIO $ withFile (r </> "parser.stdout.log") AppendMode $ \hout -> withFile (r </> "parser.stderr.log") AppendMode $ \herr -> do
@@ -218,7 +220,7 @@ package'resolution'withDependencies'forked p = do
         return $ show x
     return $ printf "exe=%s args=%s -> %s" (show a) d x
   updateStatus $ printf "executing `parser` on %s... done" (Cabal.pKey . Cabal.key $ p)
-  logDebugNSS "haskell-gtd-parser" l
+  logDebugNSS "haskell-gtd-nl-parser" l
 
 package ::
   Cabal.PackageWithResolvedDependencies ->
@@ -230,6 +232,12 @@ package cPkg0 = do
     Nothing -> do
       package'resolution'withDependencies'forked cPkg0
       PackageCache.pGet cPkg0
+
+package_ :: Cabal.Package a -> (MS m) => m ()
+package_ cPkg0 =
+  PackageCache.pExists cPkg0 >>= \case
+    True -> return ()
+    False -> package'resolution'withDependencies'forked cPkg0
 
 ---
 
@@ -287,14 +295,14 @@ findAtF wd = do
   cabalPackage'contextWithLocals cPkgsU
   cabalPackage'resolve cPkgsU
 
-cabalPackage :: FilePath -> FilePath -> (MS m, MonadError String m) => m PackageWithResolvedDependencies
+cabalPackage :: FilePath -> FilePath -> (MS m, MonadError String m) => m PackageWithUnresolvedDependencies
 cabalPackage wd rf = do
-  cPkgs <- findAtF wd
+  cPkgs <- cabalPackage'unresolved wd
   let srcDirs p = (\d -> normalise $ Cabal._root p </> d) <$> (Cabal._srcDirs . Cabal._modules $ p)
       cPkgM = find (any (`isPrefixOf` rf) . srcDirs) cPkgs
   cPkg <- maybe (throwError "cannot find a cabal 'item' with source directory that owns given file") return cPkgM
   e <- PackageCache.pExists cPkg
-  unless e $ void $ package cPkg
+  unless e $ void $ package_ cPkg
   return cPkg
 
 definition ::
@@ -343,7 +351,10 @@ definition (DefinitionRequest {workDir = wd, file = rf0, word = w}) = do
 
 ---
 
-newtype DropPackageCacheRequest = DropCacheRequest {dir :: FilePath}
+data DropPackageCacheRequest = DropCacheRequest
+  { dcDir :: FilePath,
+    dcFile :: FilePath
+  }
   deriving (Show, Generic)
 
 instance FromJSON DropPackageCacheRequest
@@ -353,15 +364,28 @@ instance ToJSON DropPackageCacheRequest
 dropPackageCache ::
   DropPackageCacheRequest ->
   (MS m, MonadError String m) => m String
-dropPackageCache (DropCacheRequest {dir = d}) = do
+dropPackageCache (DropCacheRequest {dcDir = d, dcFile = f}) = do
   updateStatus $ printf "resetting cache on %s..." d
+
   cPkgs <- findAtF d
-  forM_ cPkgs $ \cPkg -> do
+  let cPkgsM = mapFrom Cabal.key cPkgs
+  cPkgU <- cabalPackage d f
+  cPkg0 <- maybe (throwError "???") return $ Cabal.key cPkgU `Map.lookup` cPkgsM
+  cPkgsD <-
+    reverseDependencies
+      (return . Just)
+      Cabal.key
+      Cabal.key
+      (return . mapMaybe ((`Map.lookup` cPkgsM) . Cabal.key) . Cabal._dependencies)
+      cPkgs
+      (Cabal.key cPkg0)
+
+  forM_ (concat cPkgsD) $ \cPkg -> do
     PackageCache.pRemove cPkg
     PackageCache.resolution'remove cPkg
     CabalCache.dropCache cPkg
     cExports %= fst . LRU.delete (Cabal.key cPkg)
-    cResolution %= LRU.newLRU . LRU.maxSize
+  cResolution %= LRU.newLRU . LRU.maxSize
   updateStatus ""
   return "OK"
 
