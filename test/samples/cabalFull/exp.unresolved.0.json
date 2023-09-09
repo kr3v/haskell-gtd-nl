@@ -255,5 +255,88 @@
     "_path": "test/integrationTestRepo/sc-ea-hs/sc-ea-hs.cabal",
     "_root": "test/integrationTestRepo/sc-ea-hs",
     "_version": "mkVersion [0,0,0,1]"
+  },
+  {
+    "_dependencies": [
+      {
+        "_dName": "base",
+        "_dSubname": null,
+        "_dVersion": "MajorBoundVersion (mkVersion [4,16,4,0])"
+      },
+      {
+        "_dName": "sc-ea-hs",
+        "_dSubname": "sc-ea-hs-lib",
+        "_dVersion": "OrLaterVersion (mkVersion [0])"
+      },
+      {
+        "_dName": "hspec",
+        "_dSubname": null,
+        "_dVersion": "OrLaterVersion (mkVersion [0])"
+      },
+      {
+        "_dName": "QuickCheck",
+        "_dSubname": null,
+        "_dVersion": "OrLaterVersion (mkVersion [0])"
+      },
+      {
+        "_dName": "gloss",
+        "_dSubname": null,
+        "_dVersion": "MajorBoundVersion (mkVersion [1,13,2,2])"
+      },
+      {
+        "_dName": "aeson",
+        "_dSubname": null,
+        "_dVersion": "MajorBoundVersion (mkVersion [2,1,2,1])"
+      },
+      {
+        "_dName": "bytestring",
+        "_dSubname": null,
+        "_dVersion": "MajorBoundVersion (mkVersion [0,11,4,0])"
+      },
+      {
+        "_dName": "ilist",
+        "_dSubname": null,
+        "_dVersion": "MajorBoundVersion (mkVersion [0,4,0,1])"
+      },
+      {
+        "_dName": "lens",
+        "_dSubname": null,
+        "_dVersion": "MajorBoundVersion (mkVersion [5,2,2])"
+      },
+      {
+        "_dName": "containers",
+        "_dSubname": null,
+        "_dVersion": "MajorBoundVersion (mkVersion [0,6,7])"
+      },
+      {
+        "_dName": "mtl",
+        "_dSubname": null,
+        "_dVersion": "MajorBoundVersion (mkVersion [2,2,2])"
+      },
+      {
+        "_dName": "random",
+        "_dSubname": null,
+        "_dVersion": "MajorBoundVersion (mkVersion [1,2,1,1])"
+      },
+      {
+        "_dName": "time",
+        "_dSubname": null,
+        "_dVersion": "MajorBoundVersion (mkVersion [1,12,2])"
+      }
+    ],
+    "_designation": {
+      "_desName": "sc-ea-hs-lib-test",
+      "_desType": "TestSuite"
+    },
+    "_modules": {
+      "_allKnownModules": ["Main"],
+      "_exports": ["Spec"],
+      "_reExports": [],
+      "_srcDirs": ["test", "src"]
+    },
+    "_name": "sc-ea-hs",
+    "_path": "test/integrationTestRepo/sc-ea-hs/sc-ea-hs.cabal",
+    "_root": "test/integrationTestRepo/sc-ea-hs",
+    "_version": "mkVersion [0,0,0,1]"
   }
 ]

@@ -17,17 +17,17 @@ import Data.Binary (encodeFile)
 import qualified Data.ByteString.UTF8 as BS
 import qualified Data.Set as Set
 import Distribution.Package (PackageIdentifier (..), packageName, unPackageName)
-import Distribution.PackageDescription (BuildInfo (..), LibraryName (..), unUnqualComponentName)
-import qualified Distribution.PackageDescription as Cabal (BuildInfo (..), Dependency (..), Executable (..), Library (..), PackageDescription (..), explicitLibModules, unPackageName)
+import Distribution.PackageDescription (BuildInfo (..), LibraryName (..), PackageDescription, unUnqualComponentName)
+import qualified Distribution.PackageDescription as Cabal (Benchmark (..), BenchmarkInterface (..), BuildInfo (..), Dependency (..), Executable (..), Library (..), PackageDescription (..), TestSuite (..), explicitLibModules, unPackageName, TestSuiteInterface (..))
 import Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import Distribution.PackageDescription.Parsec (parseGenericPackageDescription, runParseResult)
 import Distribution.Pretty (prettyShow)
 import Distribution.Utils.Path (getSymbolicPath)
-import GTD.Cabal.Types (Dependency (..), Designation (Designation, _desName, _desType), DesignationType (Executable, Library), Package (..), PackageModules (..), PackageWithUnresolvedDependencies, emptyPackageModules)
+import GTD.Cabal.Types (Dependency (..), Designation (Designation, _desName, _desType), DesignationType (..), Package (..), PackageModules (..), PackageWithUnresolvedDependencies, emptyPackageModules)
 import GTD.Configuration (GTDConfiguration (..))
 import GTD.Resolution.Caching.Utils (binaryGet, pathAsFile)
 import GTD.Utils (logDebugNSS, removeIfExistsL)
-import System.FilePath (normalise, takeDirectory, (</>))
+import System.FilePath (dropExtension, normalise, takeDirectory, (</>))
 import System.IO (IOMode (ReadMode), hGetContents, openFile)
 
 ---
@@ -87,15 +87,32 @@ __read'direct p = do
             }
     forM_ (Cabal.library pd) lh
     forM_ (Cabal.subLibraries pd) lh
-    forM_ (Cabal.executables pd) $ \exe -> tell . pure $ do
-      p0
-        { _designation = Designation {_desType = Executable, _desName = Just $ unUnqualComponentName $ Cabal.exeName exe},
-          _modules = __exportsE exe,
-          _dependencies = __depsU $ Cabal.buildInfo exe
-        }
+    forM_ (Cabal.executables pd) $ \exe ->
+      tell . pure $ do
+        p0
+          { _designation = Designation {_desType = Executable, _desName = Just $ unUnqualComponentName $ Cabal.exeName exe},
+            _modules = __exportsE exe,
+            _dependencies = __depsU $ Cabal.buildInfo exe
+          }
+    forM_ (Cabal.testSuites pd) $
+      tell . pure . \ts ->
+        p0
+          { _designation = Designation {_desType = TestSuite, _desName = Just $ unUnqualComponentName $ Cabal.testName ts},
+            _modules = __exportsT ts,
+            _dependencies = __depsU $ Cabal.testBuildInfo ts
+          }
+
+    forM_ (Cabal.benchmarks pd) $
+      tell . pure . \bm ->
+        p0
+          { _designation = Designation {_desType = Benchmark, _desName = Just $ unUnqualComponentName $ Cabal.benchmarkName bm},
+            _modules = __exportsB bm,
+            _dependencies = __depsU $ Cabal.benchmarkBuildInfo bm
+          }
 
 ---
 
+-- TODO: `reexportedModules` actually
 __exportsL :: Cabal.Library -> PackageModules
 __exportsL lib =
   PackageModules
@@ -105,13 +122,40 @@ __exportsL lib =
       _allKnownModules = Set.fromList $ prettyShow <$> Cabal.explicitLibModules lib
     }
 
+__pathAsModule :: FilePath -> String
+__pathAsModule = fmap (\x -> if x == '/' then '.' else x) . dropExtension
+
 __exportsE :: Cabal.Executable -> PackageModules
-__exportsE exe =
+__exportsE exe = do
+  let mainIs = __pathAsModule . Cabal.modulePath $ exe
   PackageModules
     { _srcDirs = getSymbolicPath <$> (hsSourceDirs . Cabal.buildInfo) exe,
-      _exports = Set.singleton "Main",
+      _exports = Set.singleton mainIs,
       _reExports = Set.empty,
-      _allKnownModules = Set.fromList $ "Main" : (prettyShow <$> Cabal.otherModules (Cabal.buildInfo exe))
+      _allKnownModules = Set.fromList $ mainIs : (prettyShow <$> Cabal.otherModules (Cabal.buildInfo exe))
+    }
+
+__exportsT :: Cabal.TestSuite -> PackageModules
+__exportsT ts = do
+  PackageModules
+    { _srcDirs = getSymbolicPath <$> (hsSourceDirs . Cabal.testBuildInfo) ts,
+      _exports = case Cabal.testInterface ts of
+        Cabal.TestSuiteExeV10 _ p -> Set.singleton $ __pathAsModule p
+        Cabal.TestSuiteLibV09 _ p -> Set.singleton $ prettyShow p
+        _ -> Set.empty,
+      _reExports = Set.empty,
+      _allKnownModules = Set.fromList $ "Main" : (prettyShow <$> Cabal.otherModules (Cabal.testBuildInfo ts))
+    }
+
+__exportsB :: Cabal.Benchmark -> PackageModules
+__exportsB ts = do
+  PackageModules
+    { _srcDirs = getSymbolicPath <$> (hsSourceDirs . Cabal.benchmarkBuildInfo) ts,
+      _exports = case Cabal.benchmarkInterface ts of
+        Cabal.BenchmarkExeV10 _ p -> Set.singleton $ __pathAsModule p
+        _ -> Set.empty,
+      _reExports = Set.empty,
+      _allKnownModules = Set.fromList $ "Main" : (prettyShow <$> Cabal.otherModules (Cabal.benchmarkBuildInfo ts))
     }
 
 libraryNameToDesignationName :: LibraryName -> Maybe String

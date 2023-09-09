@@ -387,7 +387,7 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 					return Promise.resolve([]);
 				}
 			}
-		} else if (wordSourcePathO == file) {
+		} else if (wordSourcePathO == file || isParentOf(repos, wordSourcePathO)) {
 			wordSourcePath = wordSourcePathO;
 		} else if (isParentOf(serverRepos, wordSourcePathO)) {
 			wordSourcePath = path.resolve(repos, path.relative(serverRepos, wordSourcePathO))

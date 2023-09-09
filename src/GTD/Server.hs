@@ -33,7 +33,7 @@ import qualified GTD.Cabal.Dependencies as CabalCache (full, fullS)
 import qualified GTD.Cabal.FindAt as CabalCache (findAt)
 import qualified GTD.Cabal.Get as Cabal (GetCache (_vs))
 import GTD.Cabal.Types (ModuleNameS, PackageWithResolvedDependencies, PackageWithUnresolvedDependencies)
-import qualified GTD.Cabal.Types as Cabal (Dependency, Designation (..), Package (..), PackageModules (..), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, key, pKey)
+import qualified GTD.Cabal.Types as Cabal (Dependency, Designation (..), DesignationType (..), Package (..), PackageModules (..), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, key, pKey)
 import GTD.Configuration (Args (..), GTDConfiguration (..), args)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Identifier, SourceSpan (..), asDeclsMap, emptySourceSpan)
@@ -278,8 +278,9 @@ cabalPackage'unresolved = CabalCache.findAt
 
 cabalPackage'contextWithLocals :: (MS m) => [Cabal.PackageWithUnresolvedDependencies] -> m ()
 cabalPackage'contextWithLocals cPkgsU = do
+  let libs = filter (\p -> (Cabal._desType . Cabal._designation $ p) == Cabal.Library) cPkgsU
   cLocalPackages .= mempty
-  forM_ cPkgsU $ \cPkg -> do
+  forM_ libs $ \cPkg -> do
     cLocalPackages %= Map.insertWith (<>) (Cabal._name cPkg, Cabal._desName . Cabal._designation $ cPkg) (Map.singleton (Cabal._version cPkg) cPkg)
   l <- use cLocalPackages
   logDebugNSS "cabalPackage'contextWithLocals" $ printf "cLocalPackages = %s" (show ((\(k, vs) -> (\(v, p) -> (k, v, Cabal._designation p)) <$> Map.toList vs) <$> Map.toList l))
