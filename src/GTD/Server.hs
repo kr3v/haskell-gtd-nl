@@ -306,6 +306,27 @@ cabalPackage wd rf = do
   unless e $ void $ package_ cPkg
   return cPkg
 
+resolutionImpl :: (MonadLoggerIO m, MonadError String m) => Map.Map String Declarations -> String -> m DefinitionResponse
+resolutionImpl resolutionMap w =
+  case w `Map.lookup` resolutionMap of
+    Just d -> do
+      let d0 = head $ Map.elems $ resolution d
+      return $ DefinitionResponse {srcSpan = Just $ emptySourceSpan {sourceSpanFileName = sourceSpanFileName . _declSrcOrig $ d0, sourceSpanStartColumn = 1, sourceSpanStartLine = 1}, err = Nothing}
+    Nothing -> do
+      let (q, w') = fromMaybe ("", w) $ GHC.identifier w
+      let look q1 w1 = join $ do
+            mQ <- Map.lookup q1 resolutionMap
+            d <- Map.lookup w1 $ resolution mQ
+            return $ Just DefinitionResponse {srcSpan = Just $ _declSrcOrig d, err = Nothing}
+      let cases = if w == w' then [("", w)] else [(q, w'), ("", w)]
+      casesM <- forM cases $ \(q1, w1) -> do
+        let r = look q1 w1
+        logDebugNSS "definition" $ printf "%s -> `%s`.`%s` -> %s" w q1 w1 (show r)
+        return r
+      case catMaybes casesM of
+        (x : _) -> return x
+        _ -> noDefinitionFoundError
+
 definition ::
   DefinitionRequest ->
   (MS m, MonadError String m) => m DefinitionResponse
@@ -328,24 +349,7 @@ definition (DefinitionRequest {workDir = wd, file = rf0, word = w}) = do
 
   -- TODO: check both? prioritize the latter?
   updateStatus $ printf "figuring out what `%s` is" w
-  r <- case w `Map.lookup` resolutionMap of
-    Just d -> do
-      let d0 = head $ Map.elems $ resolution d
-      return $ DefinitionResponse {srcSpan = Just $ emptySourceSpan {sourceSpanFileName = sourceSpanFileName . _declSrcOrig $ d0, sourceSpanStartColumn = 1, sourceSpanStartLine = 1}, err = Nothing}
-    Nothing -> do
-      let (q, w') = fromMaybe ("", w) $ GHC.identifier w
-      let look q1 w1 = join $ do
-            mQ <- Map.lookup q1 resolutionMap
-            d <- Map.lookup w1 $ resolution mQ
-            return $ Just DefinitionResponse {srcSpan = Just $ _declSrcOrig d, err = Nothing}
-      let cases = if w == w' then [("", w)] else [(q, w'), ("", w)]
-      casesM <- forM cases $ \(q1, w1) -> do
-        let r = look q1 w1
-        logDebugNSS "definition" $ printf "%s -> `%s`.`%s` -> %s" w q1 w1 (show r)
-        return r
-      case catMaybes casesM of
-        (x : _) -> return x
-        _ -> noDefinitionFoundError
+  r <- resolutionImpl resolutionMap w
 
   liftIO stats
   return r

@@ -27,8 +27,6 @@ x - apply cpphs via command
 9   |   - if there's no resolution cache, try building it dynamically?
     |   - Cabal support:
     |     - 'global' Cabal language directives
-    |   - drop cache on file save should drop only dependencies and itself (i.e. saving a file from executable/tests should not drop the cache for the library)
-    |   - support for tests/benchmarks
 		| - undecided:
 		|   - consider supporting projects where:
 		|     - there's no `.cabal` file => base only? 
@@ -38,3 +36,16 @@ x - apply cpphs via command
   	|   - follow lsp instead of custom protocol
 
 `*.hsc` files
+cpu/memory profiling + benchmark
+resolution debugging:
+   1. check if a word is present in the resolution cache for a file (file + (optional: work directory) + word -> declaration)
+   2. check if a word is exported by its module (library + module + word -> declaration)
+   both of the above can be combined into a single command; the command should work for intermediate resolutions as well (for example, for Prelude re-exports)
+
+
+---
+
+### HLS
+Two concerns:
+1. HLS does not support `base` package, so I wasn't sure that navigation in it would work.
+2. I was not sure if whatever in-HLS implementation I would come up with would be accepted by the HLS team, so I decided to go with my own extension just to be sure that I would be able using it in the future.

@@ -34,7 +34,10 @@ data Args = Args
   deriving (Show)
 
 desP :: Parser Designation
-desP = Designation <$> optional (strOption (long "designation-name" <> help "")) <*> option auto (long "designation-type" <> help "")
+desP =
+  Designation
+    <$> optional (strOption (long "designation-name" <> help ""))
+    <*> option auto (long "designation-type" <> help "")
 
 args :: Parser Args
 args =
@@ -44,10 +47,7 @@ args =
     <*> optional desP
 
 opts :: ParserInfo Args
-opts =
-  info
-    (args <**> helper)
-    fullDesc
+opts = info (args <**> helper) fullDesc
 
 main :: IO ()
 main = do

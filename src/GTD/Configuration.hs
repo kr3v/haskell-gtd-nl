@@ -6,7 +6,7 @@ import Control.Lens (makeLenses, (^.))
 import Control.Monad.Logger (LogLevel (..))
 import Data.Time.Clock.POSIX (getPOSIXTime)
 import Options.Applicative (Parser, auto, help, long, option, showDefault, switch, value, strOption)
-import System.Directory (createDirectoryIfMissing, getHomeDirectory, removeDirectoryRecursive)
+import System.Directory (createDirectoryIfMissing, getHomeDirectory)
 import System.FilePath ((</>))
 
 data Args = Args

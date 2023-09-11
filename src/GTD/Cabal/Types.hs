@@ -11,16 +11,24 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module GTD.Cabal.Types where
 
+import Control.Applicative (Applicative (..))
 import Control.Lens (makeLenses)
 import Data.Aeson (FromJSON, ToJSON)
+import Data.Maybe (isNothing)
 import qualified Data.Set as Set
 import Distribution.Compat.Prelude (Binary, Generic, fromMaybe)
 import Distribution.Pretty (prettyShow)
 import Distribution.Types.VersionRange (VersionRange)
 import qualified Distribution.Version as Cabal
+import System.Directory (doesFileExist)
+import Control.Monad (forM)
+import System.FilePath ((</>))
+import Data.List (find)
+import Distribution.ModuleName (toFilePath, fromString)
 
 type PackageNameS = String
 
@@ -44,12 +52,14 @@ instance Binary DesignationType
 
 instance Binary Designation
 
+dKeyType :: DesignationType -> String
+dKeyType Library = "lib"
+dKeyType Executable = "exe"
+dKeyType TestSuite = "test"
+dKeyType Benchmark = "bench"
+
 dKey :: Designation -> String
-dKey d = case _desType d of
-  Library -> "lib:" ++ fromMaybe "" (_desName d)
-  Executable -> "exe:" ++ fromMaybe "" (_desName d)
-  TestSuite -> "test:" ++ fromMaybe "" (_desName d)
-  Benchmark -> "bench:" ++ fromMaybe "" (_desName d)
+dKey Designation{..} = dKeyType _desType ++ ":" ++ fromMaybe "" _desName
 
 data Dependency = Dependency
   { _dName :: PackageNameS,
@@ -127,3 +137,13 @@ key p = PackageKey {_pkName = _name p, _pkVersion = prettyShow . _version $ p, _
 
 pKey :: PackageKey -> String
 pKey k = _pkName k ++ "-" ++ _pkVersion k ++ "-" ++ dKey (_pkDesignation k)
+
+isMainLib :: Package a -> Bool
+isMainLib = liftA2 (&&) (isNothing . _desName) ((== Library) . _desType) . _designation
+
+resolve :: Package a -> ModuleNameS -> IO (Maybe FilePath)
+resolve p m = do
+  let mp = toFilePath . fromString $ m
+  let ds = fmap (\d -> _root p </> d </> (mp ++ ".hs")) $ _srcDirs . _modules $ p
+  xs <- forM ds $ \d -> (d,) <$> doesFileExist d
+  return $ fst <$> find snd xs

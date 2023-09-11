@@ -1,6 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# HLINT ignore "Use section" #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
@@ -21,6 +23,7 @@ import Data.GraphViz (GraphID (Str), GraphvizOutput (..), X11Color (..), runGrap
 import qualified Data.GraphViz.Attributes.Colors as Color
 import Data.GraphViz.Attributes.Complete (Attribute (..), RankDir (FromLeft), toColorList)
 import Data.GraphViz.Types.Monadic (digraph, edge, graphAttrs)
+import Data.List (find)
 import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 import Data.Text.Lazy as L (pack)
@@ -51,62 +54,95 @@ import GHC.Types.SourceError (SourceError)
 import GHC.Types.SrcLoc (GenLocated (..))
 import qualified GHC.Types.SrcLoc as GHC
 import qualified GTD.Cabal.Cache as Cabal (load)
+import GTD.Cabal.FindAt (findAt)
 import qualified GTD.Cabal.FindAt as Cabal (findAt)
+import GTD.Cabal.Get (getS)
 import qualified GTD.Cabal.Get as Cabal (getS)
-import qualified GTD.Cabal.Types as Cabal (Package (_dependencies), key)
 import qualified GTD.Cabal.Parse as Cabal (__read'packageDescription)
+import GTD.Cabal.Types (PackageWithUnresolvedDependencies, isMainLib)
+import qualified GTD.Cabal.Types as Cabal (Package (..), key, resolve)
 import GTD.Configuration (defaultArgs, prepareConstants, repos)
+import GTD.Haskell.Module (emptyHsModule)
 import qualified GTD.Haskell.Module as HsModule
 import GTD.Haskell.Parser.GhcLibParser (fakeSettings, parsePragmasIntoDynFlags, showO)
+import qualified GTD.Resolution.Cache as PackageCache
 import GTD.Resolution.Module (module'Dependencies)
 import GTD.Resolution.State (ccGet, emptyContext)
-import GTD.Server (modulesOrdered, package'dependencies'ordered, package'order'default, findAtF)
-import GTD.Utils (ultraZoom)
+import GTD.Server (cabalPackage, findAtF, modulesOrdered, package'dependencies'ordered, package'order'default, resolutionImpl)
+import GTD.Utils (fromMaybeM, maybeM, ultraZoom)
 import Options.Applicative (Parser, ParserInfo, auto, command, execParser, fullDesc, help, helper, info, long, metavar, option, progDesc, strOption, subparser, (<**>))
-import System.Directory (getCurrentDirectory, setCurrentDirectory)
-import System.FilePath ((</>))
-import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
+import System.Directory (getCurrentDirectory, makeAbsolute, setCurrentDirectory)
+import System.FilePath ((</>), isRelative)
+import System.IO (BufferMode (LineBuffering), hPrint, hSetBuffering, stderr, stdout)
 import Text.Printf (printf)
 
 showT2 :: (String, String) -> String
 showT2 (a, b) = "(" ++ a ++ "," ++ b ++ ")"
 
-data Type = Package | Module deriving (Show, Read, Enum, Bounded)
+data CabalPackage = CabalPackage
+  { _name :: String,
+    _version :: String
+  }
+  deriving (Show)
+
+cp :: Parser CabalPackage
+cp =
+  CabalPackage
+    <$> strOption (long "packageName" <> help "package name; Cabal's main library will be used")
+    <*> strOption (long "packageVersion" <> help "package version in Cabal predicate form (e.g. `^>= 0.1`)")
+
+data OrderType = Package | Module deriving (Show, Read, Enum, Bounded)
 
 data Args
-  = ResolutionOrder {_pkgN :: String, _pkgV :: String, _type :: Type}
+  = Order {_pkg :: CabalPackage, _type :: OrderType}
   | Identifier {_text :: String}
   | ParseHeader {_file :: String}
   | Cabal {_fileC :: String, _fileP :: String, _root :: String}
+  | Resolution {_rpkg :: ResolutionPackage, _identifier :: String}
+  deriving (Show)
+
+data ResolutionPackage
+  = PCabal {_cpkg :: CabalPackage, _module :: String}
+  | PDir {_dir :: FilePath, _dfile :: FilePath}
   deriving (Show)
 
 ro :: Parser Args
-ro =
-  ResolutionOrder
-    <$> strOption (long "packageName" <> help "kekw")
-    <*> strOption (long "packageVersion" <> help "kekw")
-    <*> option auto (long "type" <> metavar "ENUM" <> help "kekw")
+ro = Order <$> cp <*> option auto (long "type" <> metavar "ENUM" <> help "either Package (for Cabal dependencies resolution order) or Module (for Haskell modules resolution order)")
 
 idP :: Parser Args
-idP = Identifier <$> strOption (long "text" <> help "kekw")
+idP = Identifier <$> strOption (long "text" <> help "identifier to be parsed")
 
 ph :: Parser Args
-ph = ParseHeader <$> strOption (long "file" <> help "kekw")
+ph = ParseHeader <$> strOption (long "file" <> help "path to a file to be parsed")
 
-cp :: Parser Args
-cp =
+ca :: Parser Args
+ca =
   Cabal
-    <$> strOption (long "fileC" <> help "kekw")
-    <*> strOption (long "fileP" <> help "kekw")
-    <*> strOption (long "root" <> help "kekw")
+    <$> strOption (long "fileC" <> help "path to `*.cabal` file")
+    <*> strOption (long "fileP" <> help "path to `cabal.project` file")
+    <*> strOption (long "root" <> help "path to project root")
+
+resP :: Parser ResolutionPackage
+resP = do
+  let c = PCabal <$> cp <*> strOption (long "module" <> help "kekw")
+      d = PDir <$> strOption (long "dir" <> help "kekw") <*> strOption (long "file" <> help "kekw")
+      commands =
+        [ command "cabal" (info c (fullDesc <> progDesc "kekw")),
+          command "dir" (info d (fullDesc <> progDesc "kekw"))
+        ]
+  subparser (mconcat commands)
+
+res :: Parser Args
+res = Resolution <$> resP <*> strOption (long "identifier" <> help "kekw")
 
 args :: Parser Args
 args = do
   let commands =
-        [ command "order" (info ro (fullDesc <> progDesc "kekw")),
-          command "identifier" (info idP (fullDesc <> progDesc "kekw")),
-          command "header" (info ph (fullDesc <> progDesc "kekw")),
-          command "cabal" (info cp (fullDesc <> progDesc "kekw"))
+        [ command "order" (info ro (fullDesc <> progDesc "gtd-nl-hs: print processing order for either Cabal dependencies or Haskell modules of a given package")),
+          command "identifier" (info idP (fullDesc <> progDesc "ghc-lib-parser: try parsing given identifier")),
+          command "header" (info ph (fullDesc <> progDesc "ghc-lib-parser: try parsing a file's header")),
+          command "cabal" (info ca (fullDesc <> progDesc "cabal: just testing API, nothing useful")),
+          command "resolution" (info res (fullDesc <> progDesc "gtd-nl-hs: check if a given identifier is resolvable in a given package and module"))
         ]
   subparser (mconcat commands)
 
@@ -119,15 +155,15 @@ opts =
 flip3 :: (a -> b -> c -> d) -> (c -> b -> a -> d)
 flip3 f x y z = f z y x
 
-resolutionOrder :: String -> String -> Type -> IO ()
-resolutionOrder pkgN pkgV t = do
+order :: String -> String -> OrderType -> IO ()
+order pkgN pkgV t = do
   wd <- getCurrentDirectory
   constants <- prepareConstants =<< defaultArgs
   setCurrentDirectory (constants ^. repos)
   getCurrentDirectory >>= print
   print constants
 
-  x <- runStderrLoggingT $ runExceptT $ flip runReaderT constants $ flip evalStateT emptyContext $ do
+  x <- runStderrLoggingT $ flip runReaderT constants $ flip evalStateT emptyContext $ runExceptT $ do
     Cabal.load
     cPkgM <- ultraZoom ccGet $ Cabal.getS pkgN pkgV
     cPkgP <- case cPkgM of
@@ -233,16 +269,51 @@ cabal fileP fileC root = do
   idx <- getInstalledPackages v c [GlobalPackageDB, UserPackageDB] d
   forM_ (allPackages idx) print
 
+-- cabal v2-run haskell-gtd-nl-debug -- resolution dir --dir "$(pwd)" --file "./app/server/Main.hs" --identifier "return"
+-- cabal v2-run haskell-gtd-nl-debug -- resolution cabal --packageName base --packageVersion "^>=4.16" --module "Prelude" --identifier "return" 2>/dev/null
+resolution :: ResolutionPackage -> String -> IO ()
+resolution pkg ident = do
+  constants <- prepareConstants =<< defaultArgs
+  setCurrentDirectory (constants ^. repos)
+
+  r <- runStderrLoggingT $ flip runReaderT constants $ flip evalStateT emptyContext $ runExceptT $ do
+    Cabal.load
+
+    (cPkg, f) <- case pkg of
+      PCabal {_cpkg = CabalPackage {..}, _module = m} -> do
+        pkgP <- ultraZoom ccGet $ getS _name _version
+        cPkgs <- maybeM (throwError "`cabal get` could not find a package by given name and version") findAt (return pkgP)
+        cPkg <- fromMaybeM (throwError "the package was found, but there's no 'main library' in it") $ return $ find isMainLib cPkgs
+        f <- fromMaybeM (throwError "the package was found, but the utility cannot find an appropriate `*.hs` file for given module name in any source directory") $ liftIO $ Cabal.resolve cPkg m
+        fA <- liftIO $ makeAbsolute f
+        return (cPkg, fA)
+      PDir {_dir = dir, _dfile = f} -> do
+        fA <- liftIO $ makeAbsolute $ if isRelative f then dir </> f else f
+        liftIO $ hPrint stderr fA
+        (,fA) <$> cabalPackage dir fA
+
+    liftIO $ hPrint stderr $ Cabal.key cPkg
+    liftIO $ hPrint stderr f
+    let m = emptyHsModule {HsModule._path = f, HsModule._pkgK = Cabal.key cPkg}
+    r <- fromMaybeM (throwError "for a given module in a given package, there's no 'resolution' cache") $ PackageCache.resolution'get m
+    w <- resolutionImpl r ident
+    liftIO $ print w
+
+  case r of
+    Left e -> print e
+    Right _ -> return ()
+
 main :: IO ()
 main = do
   hSetBuffering stdout LineBuffering
   hSetBuffering stderr LineBuffering
 
   a <- execParser opts
-  print a
+  hPrint stderr a
 
   case a of
-    ResolutionOrder {_pkgN = pkgN, _pkgV = pkgV, _type = t} -> resolutionOrder pkgN pkgV t
+    Order {_pkg = CabalPackage {..}, _type = t} -> order _name _version t
     Identifier {_text = text} -> identifier text
     ParseHeader {_file = file} -> parseHeader file
     Cabal {_fileP = fileP, _fileC = fileC, _root = root} -> cabal fileP fileC root
+    Resolution {_rpkg = pkg, _identifier = ident} -> resolution pkg ident

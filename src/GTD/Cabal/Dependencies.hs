@@ -24,7 +24,7 @@ import Distribution.Pretty (prettyShow)
 import Distribution.Types.VersionRange (withinRange)
 import GTD.Cabal.Get (get)
 import GTD.Cabal.Parse (parse)
-import GTD.Cabal.Types (Dependency (..), Designation (..), DesignationType (..), Package (..), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies)
+import GTD.Cabal.Types (Dependency (..), Designation (..), DesignationType (..), Package (..), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, isMainLib)
 import qualified GTD.Cabal.Types as Cabal
 import GTD.Configuration (GTDConfiguration (..))
 import GTD.Resolution.State (Context (..), ccFull, ccGet)
@@ -67,7 +67,7 @@ __full ctx pkg = do
   depsR <- forM pkgs $ \(Dependency {..}, p) -> do
     r <- parse $ reposR </> p </> (_dName ++ ".cabal")
     -- we are only interested in the package main library
-    return $ find (liftA2 (&&) (isNothing . _desName) ((== Library) . _desType) . _designation) r
+    return $ find isMainLib r
   logDebugNSS logTag $ printf "resolved dependencies: %s" $ show $ Cabal.key <$> catMaybes depsR
 
   return (pkg {_dependencies = locallyResolvedDeps ++ catMaybes depsR}, ccGet %~ flip (foldr ($)) cacheM)
