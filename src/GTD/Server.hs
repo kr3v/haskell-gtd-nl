@@ -183,7 +183,7 @@ package'resolution'withDependencies'concurrently cPkg0 = do
 package'resolution'withDependencies'forked :: Cabal.Package a -> (MS m) => m ()
 package'resolution'withDependencies'forked p = do
   let d = Cabal._root p
-  Args {_dynamicMemoryUsage = dm, _logLevel = ll, _parserExe = pe, _root = r} <- view args
+  Args {_dynamicMemoryUsage = dm, _logLevel = ll, _parserExe = pe, _parserArgs = pa, _root = r} <- view args
 
   let pArgs' memFree
         | memFree > 8 * 1024 = ["-N", "-A128M"]
@@ -196,10 +196,13 @@ package'resolution'withDependencies'forked p = do
         logDebugNSS "haskell-gtd-nl-parser" $ printf "given getUsableFreeMemory=%s and memFree=%s, rts = %s" (show dm) (show memFree) (show a)
         return a
   rts <- if dm then pArgs else return []
-  let a1 = ["--dir", d, "--log-level", show ll, "--designation-type", (show . Cabal._desType . Cabal._designation) p]
-      a2 = maybe a1 ((a1 <>) . (["--designation-name"] ++) . singleton) (Cabal._desName . Cabal._designation $ p)
-      a3 = a2 ++ if null rts then [] else ["+RTS"] ++ rts ++ ["-RTS"]
-      a = a3
+  let a =
+        concat
+          [ pa,
+            if null rts then [] else ["+RTS"] ++ rts ++ ["-RTS"],
+            ["--dir", d, "--log-level", show ll, "--designation-type", (show . Cabal._desType . Cabal._designation) p],
+            maybe [] ((["--designation-name"] ++) . singleton) (Cabal._desName . Cabal._designation $ p)
+          ]
 
   updateStatus $ printf "executing `parser`"
   l <- liftIO $ withFile (r </> "parser.stdout.log") AppendMode $ \hout -> withFile (r </> "parser.stderr.log") AppendMode $ \herr -> do
@@ -231,7 +234,6 @@ package_ cPkg0 =
     False -> package'resolution'withDependencies'forked cPkg0
 
 ---
-
 
 ---
 

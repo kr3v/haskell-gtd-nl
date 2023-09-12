@@ -7,9 +7,11 @@ import Control.Exception (IOException, catch)
 import Control.Lens (makeLenses, (^.))
 import Control.Monad (when)
 import Control.Monad.Logger (LogLevel (..))
+import Data.Aeson (decode)
+import qualified Data.ByteString.Lazy.Char8 as BS
 import Data.Time.Clock.POSIX (getPOSIXTime)
 import Data.Version (showVersion)
-import Options.Applicative (Parser, auto, help, long, option, showDefault, strOption, switch, value)
+import Options.Applicative (Parser, auto, eitherReader, help, long, option, showDefault, strOption, switch, value)
 import qualified Paths_haskell_gtd
 import System.Directory (createDirectoryIfMissing, getHomeDirectory, removeDirectoryRecursive)
 import System.FilePath ((</>))
@@ -19,10 +21,15 @@ data Args = Args
     _dynamicMemoryUsage :: Bool,
     _logLevel :: LogLevel,
     _parserExe :: String,
-    _parserArgs :: String,
+    _parserArgs :: [String],
     _root :: String
   }
   deriving (Show)
+
+parseJson :: String -> Either String [String]
+parseJson str = case decode (BS.pack str) of
+  Just v -> Right v
+  Nothing -> Left "invalid value"
 
 argsP :: Parser Args
 argsP =
@@ -31,14 +38,14 @@ argsP =
     <*> switch (long "dynamic-memory-usage" <> help "whether to use dynamic memory usage" <> showDefault)
     <*> option auto (long "log-level" <> help "" <> showDefault <> value LevelInfo)
     <*> strOption (long "parser-exe" <> help "" <> showDefault <> value "./haskell-gtd-nl-parser")
-    <*> strOption (long "parser-args" <> help "" <> showDefault <> value "[]")
+    <*> option (eitherReader parseJson) (long "parser-args" <> help "" <> showDefault <> value [])
     <*> strOption (long "root" <> help "" <> showDefault)
 
 defaultArgs :: IO Args
 defaultArgs = do
   home <- getHomeDirectory
   let root = home </> ".local" </> "share" </> "haskell-gtd-nl"
-  return $ Args {_ttl = 60, _dynamicMemoryUsage = True, _logLevel = LevelInfo, _parserExe = root </> "haskell-gtd-nl-parser", _parserArgs = "[]", _root = root}
+  return $ Args {_ttl = 60, _dynamicMemoryUsage = True, _logLevel = LevelInfo, _parserExe = root </> "haskell-gtd-nl-parser", _parserArgs = [], _root = root}
 
 data GTDConfiguration = GTDConfiguration
   { _logs :: FilePath,
