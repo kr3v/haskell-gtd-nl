@@ -37,11 +37,6 @@ x - apply cpphs via command
 
 `*.hsc` files
 cpu/memory profiling + benchmark
-resolution debugging:
-   1. check if a word is present in the resolution cache for a file (file + (optional: work directory) + word -> declaration)
-   2. check if a word is exported by its module (library + module + word -> declaration)
-   both of the above can be combined into a single command; the command should work for intermediate resolutions as well (for example, for Prelude re-exports)
-
 
 ---
 

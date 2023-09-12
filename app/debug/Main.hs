@@ -72,7 +72,7 @@ import GTD.Server (cabalPackage, findAtF, modulesOrdered, package'dependencies'o
 import GTD.Utils (fromMaybeM, maybeM, ultraZoom)
 import Options.Applicative (Parser, ParserInfo, auto, command, execParser, fullDesc, help, helper, info, long, metavar, option, progDesc, strOption, subparser, (<**>))
 import System.Directory (getCurrentDirectory, makeAbsolute, setCurrentDirectory)
-import System.FilePath ((</>), isRelative)
+import System.FilePath (isRelative, (</>))
 import System.IO (BufferMode (LineBuffering), hPrint, hSetBuffering, stderr, stdout)
 import Text.Printf (printf)
 
