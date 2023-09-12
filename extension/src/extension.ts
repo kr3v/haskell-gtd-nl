@@ -114,7 +114,7 @@ async function startServerIfRequired() {
 	let conf = vscode.workspace.getConfiguration('haskell-gtd-nl');
 	let serverArgs = conf.get<string[]>("server.args") ?? [];
 	let packageArgs = conf.get<string[]>("parser.args") ?? [];
-	let args = serverArgs.concat(packageArgs.length > 0 ? ["--parser", ...packageArgs] : []);
+	let args = serverArgs.concat(packageArgs.length > 0 ? ["--parser-args", JSON.stringify(packageArgs)] : []);
 	args = args.concat(["--parser-exe", packageExe]);
 	args = args.concat(["--root", serverRoot]);
 
@@ -517,6 +517,12 @@ export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.languages.registerDefinitionProvider(
 			{ scheme: 'file', language: 'haskell' },
+			new XDefinitionProvider()
+		)
+	);
+	context.subscriptions.push(
+		vscode.languages.registerDefinitionProvider(
+			{ scheme: 'file', language: 'Hsc2Hs' },
 			new XDefinitionProvider()
 		)
 	);

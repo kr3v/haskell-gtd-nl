@@ -164,15 +164,22 @@ storeIOExceptionToMonadError a = do
     Left e -> throwError $ show e
     Right x -> return x
 
-
 -- | Monadic generalisation of 'maybe'.
 maybeM :: Monad m => m b -> (a -> m b) -> m (Maybe a) -> m b
 maybeM n j x = maybe n j =<< x
 
-
 -- | Monadic generalisation of 'fromMaybe'.
 fromMaybeM :: Monad m => m a -> m (Maybe a) -> m a
 fromMaybeM n = maybeM n pure
+
+(>==>) :: Monad m => (a -> m (b, s -> s)) -> (b -> m (c, s -> s)) -> (a -> m (c, s -> s))
+f >==> g = \x -> do
+  (y, m1) <- f x
+  (z, m2) <- g y
+  return (z, m2 . m1)
+
+(<==<) :: Monad m => (b -> m (c, s -> s)) -> (a -> m (b, s -> s)) -> (a -> m (c, s -> s))
+(<==<) = flip (>==>)
 
 ---
 

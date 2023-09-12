@@ -26,7 +26,6 @@ import qualified GTD.Haskell.Lines as Lines
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import GTD.Utils (logDebugNSS, storeIOExceptionToMonadError)
 import Language.Haskell.Exts (Module (Module), SrcSpan (..), SrcSpanInfo (..))
-import Text.Printf
 
 newtype HsModuleParams = HsModuleParams
   { _isImplicitExportAll :: Bool

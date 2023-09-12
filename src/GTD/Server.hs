@@ -45,7 +45,7 @@ import GTD.Resolution.Module (figureOutExports1, module'Dependencies, moduleR)
 import GTD.Resolution.State (Context (..), Package (Package, _cabalPackage, _modules), cExports, cLocalPackages, cResolution)
 import qualified GTD.Resolution.State as Package
 import GTD.Resolution.Utils (ParallelizedState (..), parallelized, reverseDependencies, scheme)
-import GTD.Utils (getUsableFreeMemory, logDebugNSS, mapFrom, modifyMS, stats, storeIOExceptionToMonadError, updateStatus)
+import GTD.Utils (getUsableFreeMemory, logDebugNSS, mapFrom, modifyMS, stats, storeIOExceptionToMonadError, updateStatus, (<==<))
 import System.FilePath (normalise, (</>))
 import System.IO (IOMode (AppendMode), withFile)
 import System.Process (CreateProcess (..), StdStream (..), createProcess, proc, waitForProcess)
@@ -84,15 +84,6 @@ modules1 pkg c = do
     (return . module'Dependencies)
 
 ---
-
-(>==>) :: Monad m => (a -> m (b, s -> s)) -> (b -> m (c, s -> s)) -> (a -> m (c, s -> s))
-f >==> g = \x -> do
-  (y, m1) <- f x
-  (z, m2) <- g y
-  return (z, m2 . m1)
-
-(<==<) :: Monad m => (b -> m (c, s -> s)) -> (a -> m (b, s -> s)) -> (a -> m (c, s -> s))
-(<==<) = flip (>==>)
 
 package'resolution'withMutator'direct ::
   Context ->
@@ -192,7 +183,7 @@ package'resolution'withDependencies'concurrently cPkg0 = do
 package'resolution'withDependencies'forked :: Cabal.Package a -> (MS m) => m ()
 package'resolution'withDependencies'forked p = do
   let d = Cabal._root p
-  Args {_dynamicMemoryUsage = dm, _logLevel = ll, _packageExe = pe, _root = r} <- view args
+  Args {_dynamicMemoryUsage = dm, _logLevel = ll, _parserExe = pe, _root = r} <- view args
 
   let pArgs' memFree
         | memFree > 8 * 1024 = ["-N", "-A128M"]
@@ -241,11 +232,6 @@ package_ cPkg0 =
 
 ---
 
-resolution :: Declarations -> Map.Map Identifier Declaration
-resolution Declarations {_decls = ds, _dataTypes = dts} =
-  let ds' = Map.elems ds
-      dts' = concatMap (\cd -> [_cdtName cd] <> Map.elems (_cdtFields cd)) (Map.elems dts)
-   in asDeclsMap $ ds' <> dts'
 
 ---
 
@@ -306,17 +292,23 @@ cabalPackage wd rf = do
   unless e $ void $ package_ cPkg
   return cPkg
 
-resolutionImpl :: (MonadLoggerIO m, MonadError String m) => Map.Map String Declarations -> String -> m DefinitionResponse
-resolutionImpl resolutionMap w =
+resolution'simplify :: Declarations -> Map.Map Identifier Declaration
+resolution'simplify Declarations {_decls = ds, _dataTypes = dts} =
+  let ds' = Map.elems ds
+      dts' = concatMap (\cd -> [_cdtName cd] <> Map.elems (_cdtFields cd)) (Map.elems dts)
+   in asDeclsMap $ ds' <> dts'
+
+resolution :: (MonadLoggerIO m, MonadError String m) => Map.Map String Declarations -> String -> m DefinitionResponse
+resolution resolutionMap w =
   case w `Map.lookup` resolutionMap of
-    Just d -> do
-      let d0 = head $ Map.elems $ resolution d
-      return $ DefinitionResponse {srcSpan = Just $ emptySourceSpan {sourceSpanFileName = sourceSpanFileName . _declSrcOrig $ d0, sourceSpanStartColumn = 1, sourceSpanStartLine = 1}, err = Nothing}
+    Just d -> case Map.elems $ resolution'simplify d of
+      (d : _) -> return $ DefinitionResponse {srcSpan = Just $ emptySourceSpan {sourceSpanFileName = sourceSpanFileName . _declSrcOrig $ d, sourceSpanStartColumn = 1, sourceSpanStartLine = 1}, err = Nothing}
+      _ -> throwError "given word is a known module, but it has no declarations"
     Nothing -> do
       let (q, w') = fromMaybe ("", w) $ GHC.identifier w
       let look q1 w1 = join $ do
             mQ <- Map.lookup q1 resolutionMap
-            d <- Map.lookup w1 $ resolution mQ
+            d <- Map.lookup w1 $ resolution'simplify mQ
             return $ Just DefinitionResponse {srcSpan = Just $ _declSrcOrig d, err = Nothing}
       let cases = if w == w' then [("", w)] else [(q, w'), ("", w)]
       casesM <- forM cases $ \(q1, w1) -> do
@@ -349,7 +341,7 @@ definition (DefinitionRequest {workDir = wd, file = rf0, word = w}) = do
 
   -- TODO: check both? prioritize the latter?
   updateStatus $ printf "figuring out what `%s` is" w
-  r <- resolutionImpl resolutionMap w
+  r <- resolution resolutionMap w
 
   liftIO stats
   return r

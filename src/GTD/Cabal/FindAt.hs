@@ -21,8 +21,8 @@ import Distribution.Client.RebuildMonad (runRebuild)
 import Distribution.Parsec (eitherParsec)
 import Distribution.Simple.Flag (Flag (..))
 import Distribution.Types.CondTree (CondTree (CondNode, condTreeData))
-import GTD.Cabal.Types (PackageWithUnresolvedDependencies)
 import GTD.Cabal.Parse (parse)
+import GTD.Cabal.Types (PackageWithUnresolvedDependencies)
 import GTD.Configuration (GTDConfiguration (..))
 import GTD.Resolution.State (Context, ccFindAt)
 import GTD.Utils (concatMapM, logDebugNSS)
@@ -53,9 +53,9 @@ findAt'regular ::
   (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadError String m) => m [PackageWithUnresolvedDependencies]
 findAt'regular wd = do
   cabalFiles <- liftIO $ filter (\x -> takeExtension x == ".cabal") <$> listDirectory wd
-  cabalFile <- case length cabalFiles of
-    0 -> throwError "No cabal file found"
-    1 -> return $ wd </> head cabalFiles
+  cabalFile <- case cabalFiles of
+    [] -> throwError "No cabal file found"
+    [f] -> return $ wd </> f
     _ -> throwError "Multiple cabal files found"
   logDebugNSS "definition" $ "Found cabal file: " ++ cabalFile
   parse cabalFile

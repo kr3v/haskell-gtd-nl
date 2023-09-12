@@ -11,7 +11,8 @@
     "Other"
   ],
   "activationEvents": [
-    "onLanguage:haskell"
+    "onLanguage:haskell",
+    "onLanguage:Hsc2Hs"
   ],
   "main": "./out/extension.js",
   "contributes": {

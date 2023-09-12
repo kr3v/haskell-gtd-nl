@@ -8,16 +8,17 @@
 module GTD.Resolution.Module where
 
 import Control.Monad.Cont (forM, forM_, when)
+import Control.Monad.Except (MonadError (..))
 import Control.Monad.Logger (MonadLoggerIO, NoLoggingT (runNoLoggingT))
 import Control.Monad.RWS (MonadReader (ask), MonadWriter (..))
 import Control.Monad.State.Lazy (MonadState (..), execStateT, modify)
-import Control.Monad.Trans.Except (runExceptT, withExceptT)
+import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Writer (execWriterT)
 import Data.Either (partitionEithers)
 import qualified Data.Map.Strict as Map
 import Distribution.ModuleName (fromString, toFilePath)
 import GTD.Cabal.Types (ModuleNameS)
-import qualified GTD.Cabal.Types as Cabal (Package (_modules, _name, _root), PackageModules (_srcDirs), PackageWithResolvedDependencies, key)
+import qualified GTD.Cabal.Types as Cabal (Package (_modules, _name, _root), PackageModules (_srcDirs, _allKnownModules), PackageWithResolvedDependencies, key)
 import GTD.Configuration (GTDConfiguration)
 import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Module (..), ModuleImportType (..), allImportedModules, asDeclsMap)
 import GTD.Haskell.Module (HsModule (..), HsModuleData (..), HsModuleP (..), HsModuleParams (..), emptyHsModule, parseModule)
@@ -26,6 +27,8 @@ import qualified GTD.Resolution.Cache as PackageCache
 import GTD.Utils (logDebugNSS, logErrorNSS, mapFrom)
 import System.FilePath (normalise, (</>))
 import Text.Printf (printf)
+import Control.Applicative (Applicative(liftA2))
+import qualified Data.Set as Set
 
 ---
 
@@ -40,7 +43,7 @@ resolve repoRoot srcDir moduleName = normalise $ repoRoot </> srcDir </> ((toFil
 module'Dependencies :: HsModule -> [ModuleNameS]
 module'Dependencies m = filter (_name m /=) (allImportedModules . _imports . _info $ m)
 
-module'2 :: Cabal.PackageWithResolvedDependencies -> ModuleNameS -> (MonadLoggerIO m) => m [Either (FilePath, ModuleNameS, String) HsModule]
+module'2 :: Cabal.PackageWithResolvedDependencies -> ModuleNameS -> (MonadLoggerIO m) => m [Either String HsModule]
 module'2 p m = do
   let root = Cabal._root p
   let srcDirs = Cabal._srcDirs . Cabal._modules $ p
@@ -48,25 +51,24 @@ module'2 p m = do
     let path = resolve root srcDir m
     logDebugNSS "module'2" $ printf "resolve(%s, %s, %s) -> %s" root srcDir m path
     let cm = emptyHsModule {HsModule._package = Cabal._name p, _name = m, _path = path, HsModule._pkgK = Cabal.key p}
-    withExceptT (srcDir,m,) (parseModule cm)
+    parseModule cm
+      `catchError` \e1 ->
+        parseModule (cm {_path = path ++ "c"})
+          `catchError` \e2 -> throwError $ printf "error parsing module %s/%s: (%s, %s)" (show srcDir) (show m) (show e1) (show e2)
 
 module'1 :: Cabal.PackageWithResolvedDependencies -> ModuleNameS -> (MonadLoggerIO m) => m ([String], Maybe HsModule)
-module'1 p m = do
-  es <- module'2 p m
-
-  let (errors, ms) = partitionEithers es
-  let errorsS = (\(srcDir, modS, e) -> printf "error parsing module %s/%s: %s" (show srcDir) (show modS) (show $ take 512 e)) <$> errors
-
-  return $ case length ms of
-    0 -> (errorsS, Nothing)
-    1 -> (errorsS, Just $ head ms)
-    _ -> (errorsS ++ [printf "multiple modules found: %s" (show $ HsModule._name <$> ms)], Nothing)
+module'1 p mn = do
+  (errs, ms) <- partitionEithers <$> module'2 p mn
+  let shouldBePresent = Set.member mn (Cabal._allKnownModules . Cabal._modules $ p)
+  return $ case ms of
+    [] -> (if shouldBePresent then errs else [], Nothing)
+    [m] -> (errs, Just m)
+    _ -> (errs ++ [printf "multiple modules found: %s" (show $ liftA2 (,) HsModule._name HsModule._path <$> ms)], Nothing)
 
 module' :: Cabal.PackageWithResolvedDependencies -> ModuleNameS -> (MonadLoggerIO m) => m (Maybe HsModule)
 module' p m = do
-  let logTag = "parse module in package"
   (es, cm) <- module'1 p m
-  forM_ es (logErrorNSS logTag)
+  forM_ es $ logErrorNSS "parse module in package"
   return cm
 
 moduleR :: ModuleNameS -> (MonadLoggerIO m, MonadReader Cabal.PackageWithResolvedDependencies m) => m (Maybe HsModule)

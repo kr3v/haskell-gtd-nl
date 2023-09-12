@@ -341,6 +341,11 @@ definitionsTest = do
             expLineNo = 46
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 16, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
          in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+  let expectedGetRTSStats = 
+        let expFile = _repos consts </> "base-4.16.4.0/GHC/Stats.hsc"
+            expLineNo = 190
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 12, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
   let noDefErr = Left "No definition found"
 
   let tests =
@@ -364,7 +369,8 @@ definitionsTest = do
           ("qualified module import - go to function through qualifier", "Map.keys", expectedQMapKeys),
           ("main-to-library resolution works", "generateSurface", expectedGenerateSurface),
           ("", "printf", expectedPrintf),
-          ("", "try", expectedTry)
+          ("", "try", expectedTry),
+          ("hsc support", "getRTSStats", expectedGetRTSStats)
         ]
 
   describe descr $ do
