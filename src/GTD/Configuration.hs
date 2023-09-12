@@ -1,12 +1,17 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module GTD.Configuration where
 
+import Control.Exception (IOException, catch)
 import Control.Lens (makeLenses, (^.))
+import Control.Monad (when)
 import Control.Monad.Logger (LogLevel (..))
 import Data.Time.Clock.POSIX (getPOSIXTime)
-import Options.Applicative (Parser, auto, help, long, option, showDefault, switch, value, strOption)
-import System.Directory (createDirectoryIfMissing, getHomeDirectory)
+import Data.Version (showVersion)
+import Options.Applicative (Parser, auto, help, long, option, showDefault, strOption, switch, value)
+import qualified Paths_haskell_gtd
+import System.Directory (createDirectoryIfMissing, getHomeDirectory, removeDirectoryRecursive)
 import System.FilePath ((</>))
 
 data Args = Args
@@ -41,6 +46,7 @@ data GTDConfiguration = GTDConfiguration
     _cache :: FilePath,
     _ccGetPath :: FilePath,
     _status :: FilePath,
+    _cversion :: String,
     _args :: Args
   }
   deriving (Show)
@@ -56,6 +62,7 @@ prepareConstants a = do
           { _logs = dir </> "logs" </> show now,
             _repos = dir </> "repos",
             _cache = dir </> "cache",
+            _cversion = dir </> "version",
             _status = dir </> "status",
             _ccGetPath = dir </> "cc-get.json",
             _args = a
@@ -65,4 +72,13 @@ prepareConstants a = do
   createDirectoryIfMissing True (constants ^. repos)
   createDirectoryIfMissing True (constants ^. cache)
   createDirectoryIfMissing True (constants ^. status)
+
+  let versionCurrent = showVersion Paths_haskell_gtd.version
+  versionStored <- readFile (constants ^. cversion) `catch` \(_ :: IOException) -> return ""
+  when (versionStored /= versionCurrent) $ do
+    putStrLn $ "Version mismatch: " ++ versionStored ++ " vs " ++ versionCurrent
+    removeDirectoryRecursive (constants ^. cache)
+    createDirectoryIfMissing True (constants ^. cache)
+  writeFile (constants ^. cversion) versionCurrent
+
   return constants

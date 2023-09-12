@@ -35,7 +35,6 @@ x - apply cpphs via command
   	| - both:
   	|   - follow lsp instead of custom protocol
 
-`*.hsc` files
 cpu/memory profiling + benchmark
 
 ---

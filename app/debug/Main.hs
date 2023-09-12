@@ -59,7 +59,7 @@ import qualified GTD.Cabal.FindAt as Cabal (findAt)
 import GTD.Cabal.Get (getS)
 import qualified GTD.Cabal.Get as Cabal (getS)
 import qualified GTD.Cabal.Parse as Cabal (__read'packageDescription)
-import GTD.Cabal.Types (PackageWithUnresolvedDependencies, isMainLib)
+import GTD.Cabal.Types (isMainLib)
 import qualified GTD.Cabal.Types as Cabal (Package (..), key, resolve)
 import GTD.Configuration (defaultArgs, prepareConstants, repos)
 import GTD.Haskell.Module (emptyHsModule)
@@ -68,7 +68,8 @@ import GTD.Haskell.Parser.GhcLibParser (fakeSettings, parsePragmasIntoDynFlags, 
 import qualified GTD.Resolution.Cache as PackageCache
 import GTD.Resolution.Module (module'Dependencies)
 import GTD.Resolution.State (ccGet, emptyContext)
-import GTD.Server (cabalPackage, findAtF, modulesOrdered, package'dependencies'ordered, package'order'default, resolutionImpl)
+import GTD.Server (cabalPackage, findAtF, modulesOrdered, package'dependencies'ordered, package'order'default)
+import qualified GTD.Server as Server (resolution)
 import GTD.Utils (fromMaybeM, maybeM, ultraZoom)
 import Options.Applicative (Parser, ParserInfo, auto, command, execParser, fullDesc, help, helper, info, long, metavar, option, progDesc, strOption, subparser, (<**>))
 import System.Directory (getCurrentDirectory, makeAbsolute, setCurrentDirectory)
@@ -296,7 +297,7 @@ resolution pkg ident = do
     liftIO $ hPrint stderr f
     let m = emptyHsModule {HsModule._path = f, HsModule._pkgK = Cabal.key cPkg}
     r <- fromMaybeM (throwError "for a given module in a given package, there's no 'resolution' cache") $ PackageCache.resolution'get m
-    w <- resolutionImpl r ident
+    w <- Server.resolution r ident
     liftIO $ print w
 
   case r of

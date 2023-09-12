@@ -112,6 +112,7 @@ library
         GTD.Resolution.Utils
         GTD.Server
         GTD.Utils
+        Paths_haskell_gtd
 
     ghc-options: -O2 -g1 -Wall
 
