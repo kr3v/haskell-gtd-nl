@@ -1,5 +1,9 @@
 # Revision history for haskell-gtd
 
+## 0.0.3.0 -- 2023-09-14
+* More performance. More stuff supported. More bugs fixed. More features added. More tests. More everything.
+* Release version?
+
 ## 0.0.2.5 -- 2023-07-21
 * More performance. Prelude support. Local cache is invalidated on file saved.
 
