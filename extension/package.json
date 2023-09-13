@@ -61,6 +61,20 @@
         "command": "haskell-gtd-nl.cpphs",
         "title": "haskell-gtd-nl: applies `cpphs` to the current file"
       }
+    ],
+    "languages": [
+      {
+        "id": "haskell",
+        "extensions": [
+          ".hs"
+        ]
+      },
+      {
+        "id": "Hsc2Hs",
+        "extensions": [
+          ".hsc"
+        ]
+      }
     ]
   },
   "scripts": {

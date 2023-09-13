@@ -86,10 +86,10 @@ let port = 0;
 let stdout: FileHandle | null = null, stderr: FileHandle | null = null;
 let server: ChildProcess | null = null;
 
-async function sendHeartbeat() {
+async function sendHeartbeat0() {
 	let data = await fs.promises.readFile(serverPortF, "utf8");
 	port = parseInt(data, 10);
-	if (port <= 0) return false;
+	if (!port || port <= 0) return false;
 
 	let res = await axios.
 		post(`http://localhost:${port}/ping`, null).
@@ -101,11 +101,16 @@ async function sendHeartbeat() {
 	return res != null;
 }
 
-async function startServerIfRequired() {
+async function startServerIfRequired0() {
 	try { if (await sendHeartbeat()) return; }
 	catch (error) { outputChannel.appendLine(util.format(error)); }
 
 	outputChannel.appendLine(util.format("starting server"));
+
+	if (!await exists(serverExe)) {
+		// it is possible that server was installed after the config was initialized
+		await initConfig();
+	}
 
 	if (stdout != null) { await stdout.close(); stdout = null; }
 	if (stderr != null) { await stderr.close(); stderr = null; }
@@ -142,12 +147,28 @@ async function startServerIfRequired() {
 	await sendHeartbeat();
 }
 
-async function stopServer() {
+async function stopServer0() {
 	let pid: number = -1;
 	let data = await fs.promises.readFile(serverPidF, "utf8");
 	pid = parseInt(data, 10);
 	if (pid <= 0) return;
 	process.kill(pid);
+}
+
+async function sendHeartbeat() {
+	try { return await sendHeartbeat0(); }
+	catch (error) { outputChannel.appendLine(util.format(error)); }
+	return false;
+}
+
+async function startServerIfRequired() {
+	try { await startServerIfRequired0(); }
+	catch (error) { outputChannel.appendLine(util.format(error)); }
+}
+
+async function stopServer() {
+	try { await stopServer0(); }
+	catch (error) { outputChannel.appendLine(util.format(error)); }
 }
 
 ///
@@ -452,14 +473,21 @@ async function cpphs() {
 
 async function initConfig() {
 	let conf = vscode.workspace.getConfiguration('haskell-gtd-nl', vscode.window.activeTextEditor?.document?.uri);
-	serverRoot = await supernormalize(conf.get<string>('server.root') ?? path.join(userHomeDir, "/.local/share/haskell-gtd-nl"), false);
+	serverRoot = await supernormalize(conf.get<string>('server.root') ?? path.join(userHomeDir, ".local", "share", "haskell-gtd-nl"), false);
 	serverExe = await supernormalize(conf.get<string>('server.path') ?? "haskell-gtd-server", true);
 	packageExe = await supernormalize(conf.get<string>('parser.path') ?? "haskell-gtd-parser", true);
 	serverRepos = path.join(serverRoot, "repos");
 	serverPidF = path.join(serverRoot, 'pid');
 	serverPortF = path.join(serverRoot, 'port');
+	let serverStatusD = path.join(serverRoot, 'status');
+
+	await fs.promises.mkdir(serverRoot, { recursive: true });
+	await fs.promises.mkdir(serverStatusD, { recursive: true });
+	await fs.promises.mkdir(serverRepos, { recursive: true });
+	await fs.promises.appendFile(serverPortF, "");
+	await fs.promises.appendFile(serverPidF, "");
 	fs.watch(
-		path.join(serverRoot, "status"),
+		serverStatusD,
 		async (eventType, filename) => {
 			if (!filename) return;
 			switch (filename) {
@@ -506,7 +534,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			outputChannel.appendLine(util.format("resetting workspace cache..."));
 
 			await startServerIfRequired();
-			let body = { dcDir: wd, dcFile : document.uri.fsPath };
+			let body = { dcDir: wd, dcFile: document.uri.fsPath };
 			let res = await axios
 				.post(`http://localhost:${port}/dropcache`, body)
 				.catch(function (error) { return { "data": error }; });
