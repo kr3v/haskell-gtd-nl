@@ -38,14 +38,14 @@ __read'cache'get = binaryGet
 __read'cache'put :: FilePath -> [PackageWithUnresolvedDependencies] -> (MonadIO m) => m ()
 __read'cache'put p r = liftIO $ encodeFile p r
 
-parse :: FilePath -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m [PackageWithUnresolvedDependencies]
-parse p = do
+parse :: FilePath -> FilePath -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m [PackageWithUnresolvedDependencies]
+parse root p = do
   c <- asks _cache
   let pc = c </> pathAsFile p
   __read'cache'get pc >>= \case
     Just r -> return r
     Nothing -> do
-      r <- __read'direct p
+      r <- __read'direct root p
       __read'cache'put pc r
       return r
 
@@ -62,8 +62,8 @@ __read'packageDescription p = do
   forM_ warnings (\w -> logDebugNSS "cabal read" $ "got warnings for `" ++ p ++ "`: " ++ show w)
   liftIO $ either (fail . show) (return . flattenPackageDescription) epkg
 
-__read'direct :: FilePath -> (MonadLoggerIO m) => m [PackageWithUnresolvedDependencies]
-__read'direct p = do
+__read'direct :: FilePath -> FilePath -> (MonadLoggerIO m) => m [PackageWithUnresolvedDependencies]
+__read'direct root p = do
   logDebugNSS "cabal read" p
   pd <- __read'packageDescription p
 
@@ -75,6 +75,7 @@ __read'direct p = do
               _version = pkgVersion $ Cabal.package pd,
               _root = normalise $ takeDirectory p,
               _path = p,
+              _projectRoot = root,
               _designation = Designation {_desType = Library, _desName = Nothing},
               _modules = emptyPackageModules,
               _dependencies = []

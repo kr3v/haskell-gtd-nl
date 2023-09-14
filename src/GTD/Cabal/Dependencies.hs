@@ -10,7 +10,6 @@
 
 module GTD.Cabal.Dependencies where
 
-import Control.Applicative (Applicative (..))
 import Control.Concurrent.Async.Lifted (forConcurrently)
 import Control.Lens (use, (%~), (.=))
 import Control.Monad (forM)
@@ -19,12 +18,12 @@ import Control.Monad.RWS (MonadReader (..), MonadState, asks)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Foldable (find)
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes, isNothing)
+import Data.Maybe (catMaybes)
 import Distribution.Pretty (prettyShow)
 import Distribution.Types.VersionRange (withinRange)
 import GTD.Cabal.Get (get)
 import GTD.Cabal.Parse (parse)
-import GTD.Cabal.Types (Dependency (..), Designation (..), DesignationType (..), Package (..), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, isMainLib)
+import GTD.Cabal.Types (Dependency (..), Package (..), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, isMainLib)
 import qualified GTD.Cabal.Types as Cabal
 import GTD.Configuration (GTDConfiguration (..))
 import GTD.Resolution.State (Context (..), ccFull, ccGet)
@@ -65,7 +64,7 @@ __full ctx pkg = do
   reposR <- asks _repos
   -- parse resolved dependencies' cabal files
   depsR <- forM pkgs $ \(Dependency {..}, p) -> do
-    r <- parse $ reposR </> p </> (_dName ++ ".cabal")
+    r <- parse (_projectRoot pkg) (reposR </> p </> (_dName ++ ".cabal"))
     -- we are only interested in the package main library
     return $ find isMainLib r
   logDebugNSS logTag $ printf "resolved dependencies: %s" $ show $ Cabal.key <$> catMaybes depsR

@@ -1,12 +1,11 @@
 {-# LANGUAGE BlockArguments #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
 
 module GTD.Resolution.Module where
 
+import Control.Applicative (Applicative (liftA2))
 import Control.Monad.Cont (forM, forM_, when)
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.Logger (MonadLoggerIO, NoLoggingT (runNoLoggingT))
@@ -16,19 +15,18 @@ import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Writer (execWriterT)
 import Data.Either (partitionEithers)
 import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 import Distribution.ModuleName (fromString, toFilePath)
 import GTD.Cabal.Types (ModuleNameS)
-import qualified GTD.Cabal.Types as Cabal (Package (_modules, _name, _root), PackageModules (_srcDirs, _allKnownModules), PackageWithResolvedDependencies, key)
+import qualified GTD.Cabal.Types as Cabal (Package (_modules, _name, _root), PackageModules (_allKnownModules, _srcDirs), PackageWithResolvedDependencies, key)
 import GTD.Configuration (GTDConfiguration)
 import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Module (..), ModuleImportType (..), allImportedModules, asDeclsMap)
-import GTD.Haskell.Module (HsModule (..), HsModuleData (..), HsModuleP (..), HsModuleParams (..), emptyHsModule, parseModule)
+import GTD.Haskell.Module (HsModule(..), HsModuleData (..), HsModuleP (..), HsModuleParams (..), emptyHsModule, parseModule)
 import qualified GTD.Haskell.Module as HsModule
 import qualified GTD.Resolution.Cache as PackageCache
 import GTD.Utils (logDebugNSS, logErrorNSS, mapFrom)
 import System.FilePath (normalise, (</>))
 import Text.Printf (printf)
-import Control.Applicative (Applicative(liftA2))
-import qualified Data.Set as Set
 
 ---
 
@@ -41,7 +39,7 @@ resolve repoRoot srcDir moduleName = normalise $ repoRoot </> srcDir </> ((toFil
 -- its main purpose is to accumulate errors atm
 
 module'Dependencies :: HsModule -> [ModuleNameS]
-module'Dependencies m = filter (_name m /=) (allImportedModules . _imports . _info $ m)
+module'Dependencies m = filter (HsModule._name m /=) (allImportedModules . _imports . HsModule._info $ m)
 
 module'2 :: Cabal.PackageWithResolvedDependencies -> ModuleNameS -> (MonadLoggerIO m) => m [Either String HsModule]
 module'2 p m = do
@@ -50,10 +48,10 @@ module'2 p m = do
   forM srcDirs $ \srcDir -> runExceptT $ do
     let path = resolve root srcDir m
     logDebugNSS "module'2" $ printf "resolve(%s, %s, %s) -> %s" root srcDir m path
-    let cm = emptyHsModule {HsModule._package = Cabal._name p, _name = m, _path = path, HsModule._pkgK = Cabal.key p}
+    let cm = emptyHsModule {HsModule._package = Cabal._name p, HsModule._name = m, HsModule._path = path, HsModule._pkgK = Cabal.key p}
     parseModule cm
       `catchError` \e1 ->
-        parseModule (cm {_path = path ++ "c"})
+        parseModule (cm {HsModule._path = path ++ "c"})
           `catchError` \e2 -> throwError $ printf "error parsing module %s/%s: (%s, %s)" (show srcDir) (show m) (show e1) (show e2)
 
 module'1 :: Cabal.PackageWithResolvedDependencies -> ModuleNameS -> (MonadLoggerIO m) => m ([String], Maybe HsModule)

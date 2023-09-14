@@ -10,9 +10,9 @@
 
 module GTD.Haskell.Declaration where
 
-import Control.Lens (Each (..), Traversal', makeLenses, use, (%=))
+import Control.Lens (Each (..), makeLenses, (%=))
 import Control.Monad.RWS (MonadState, MonadTrans (lift))
-import Control.Monad.State (StateT, execStateT)
+import Control.Monad.State (execStateT)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Binary (Binary)
 import qualified Data.Map.Strict as Map

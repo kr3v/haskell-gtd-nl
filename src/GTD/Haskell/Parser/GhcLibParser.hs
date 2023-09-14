@@ -115,7 +115,7 @@ declS :: String -> String -> Declaration
 declS m k = Declaration {_declSrcOrig = emptySourceSpan, _declModule = m, _declName = k}
 
 identifiers :: HsModuleX -> (MonadWriter Declarations m, MonadLoggerIO m) => m ()
-identifiers (HsModuleX HsModule {hsmodName = Just (L _ (ModuleName nF)), hsmodDecls = decls} _) = do
+identifiers (HsModuleX HsModule {hsmodName = Just (L (SrcSpanAnn _ _) (ModuleName nF)), hsmodDecls = decls} _) = do
   let mN = unpackFS nF
   let decl = declM mN
   let tellD l k = tell mempty {_decls = asDeclsMap [decl l k]}

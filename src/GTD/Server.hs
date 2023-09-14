@@ -45,7 +45,7 @@ import GTD.Resolution.Module (figureOutExports1, module'Dependencies, moduleR)
 import GTD.Resolution.State (Context (..), Package (Package, _cabalPackage, _modules), cExports, cLocalPackages, cResolution)
 import qualified GTD.Resolution.State as Package
 import GTD.Resolution.Utils (ParallelizedState (..), parallelized, reverseDependencies, scheme)
-import GTD.Utils (getUsableFreeMemory, logDebugNSS, mapFrom, modifyMS, stats, storeIOExceptionToMonadError, updateStatus, (<==<))
+import GTD.Utils (getUsableFreeMemory, logDebugNSS, mapFrom, modifyMS, peekM, stats, storeIOExceptionToMonadError, updateStatus, (<==<))
 import System.FilePath (normalise, (</>))
 import System.IO (IOMode (AppendMode), withFile)
 import System.Process (CreateProcess (..), StdStream (..), createProcess, proc, waitForProcess)
@@ -182,7 +182,7 @@ package'resolution'withDependencies'concurrently cPkg0 = do
 
 package'resolution'withDependencies'forked :: Cabal.Package a -> (MS m) => m ()
 package'resolution'withDependencies'forked p = do
-  let d = Cabal._root p
+  let d = Cabal._projectRoot p
   Args {_dynamicMemoryUsage = dm, _logLevel = ll, _parserExe = pe, _parserArgs = pa, _root = r} <- view args
 
   let pArgs' memFree
@@ -261,11 +261,12 @@ instance FromJSON DefinitionResponse
 noDefinitionFoundError :: MonadError String m => m a
 noDefinitionFoundError = throwError "No definition found"
 
-cabalPackage'unresolved :: FilePath -> (MS m, MonadError String m) => m [Cabal.PackageWithUnresolvedDependencies]
-cabalPackage'unresolved = CabalCache.findAt
+cabalPackage'unresolved'plusStoreInLocals :: FilePath -> (MS m, MonadError String m) => m [Cabal.PackageWithUnresolvedDependencies]
+cabalPackage'unresolved'plusStoreInLocals f = peekM cabalPackage'contextWithLocals (CabalCache.findAt f)
 
 cabalPackage'contextWithLocals :: (MS m) => [Cabal.PackageWithUnresolvedDependencies] -> m ()
 cabalPackage'contextWithLocals cPkgsU = do
+  logDebugNSS "cabalPackage'contextWithLocals" $ printf "cPkgsU = %s" (show $ Cabal.key <$> cPkgsU)
   let libs = filter (\p -> (Cabal._desType . Cabal._designation $ p) == Cabal.Library) cPkgsU
   cLocalPackages .= mempty
   forM_ libs $ \cPkg -> do
@@ -280,13 +281,12 @@ findAtF ::
   FilePath ->
   (MS m, MonadError String m) => m [PackageWithResolvedDependencies]
 findAtF wd = do
-  cPkgsU <- cabalPackage'unresolved wd
-  cabalPackage'contextWithLocals cPkgsU
+  cPkgsU <- cabalPackage'unresolved'plusStoreInLocals wd
   cabalPackage'resolve cPkgsU
 
 cabalPackage :: FilePath -> FilePath -> (MS m, MonadError String m) => m PackageWithUnresolvedDependencies
 cabalPackage wd rf = do
-  cPkgs <- cabalPackage'unresolved wd
+  cPkgs <- cabalPackage'unresolved'plusStoreInLocals wd
   let srcDirs p = (\d -> normalise $ Cabal._root p </> d) <$> (Cabal._srcDirs . Cabal._modules $ p)
       cPkgM = find (any (`isPrefixOf` rf) . srcDirs) cPkgs
   cPkg <- maybe (throwError "cannot find a cabal 'item' with source directory that owns given file") return cPkgM

@@ -8,17 +8,17 @@ module GTD.Resolution.Cache where
 
 import Control.Lens (over, view)
 import Control.Monad.Except (MonadIO (..))
-import Control.Monad.Logger (MonadLoggerIO)
+import Control.Monad.Logger (MonadLoggerIO, LogLevel (LevelDebug))
 import Control.Monad.RWS (MonadReader (..), MonadState (..), asks, gets, modify)
-import Data.Binary (Binary, encodeFile)
+import qualified Data.Binary as Binary (Binary, encodeFile)
 import qualified Data.Cache.LRU as LRU
 import qualified Data.Map as Map
 import Data.Maybe (isJust)
-import qualified GTD.Cabal.Types as Cabal (ModuleNameS, Package (_designation, _root), PackageKey, PackageWithResolvedDependencies, dKey, key, pKey)
-import GTD.Configuration (GTDConfiguration (..))
+import qualified GTD.Cabal.Types as Cabal (ModuleNameS, Package (..), PackageKey, PackageWithResolvedDependencies, dKey, key, pKey)
+import GTD.Configuration (Args (..), GTDConfiguration (..))
 import GTD.Haskell.Declaration (Declarations)
 import GTD.Haskell.Lines (Lines)
-import GTD.Haskell.Module (HsModule)
+import GTD.Haskell.Module (HsModule (..))
 import qualified GTD.Haskell.Module as HsModule
 import GTD.Resolution.Caching.Utils (binaryGet, pathAsFile)
 import GTD.Resolution.State (Context, Package (..), cExports)
@@ -27,6 +27,8 @@ import GTD.Utils (logDebugNSS, removeIfExistsL)
 import System.Directory (createDirectoryIfMissing, doesFileExist, removeDirectoryRecursive)
 import System.FilePath.Posix ((</>))
 import Text.Printf (printf)
+import Control.Monad (when)
+import qualified Data.Aeson as JSON
 
 exportsN :: String
 exportsN = "exports.binary"
@@ -42,7 +44,7 @@ path cPkg f = do
       p = Cabal.dKey . Cabal._designation $ cPkg
   return $ c </> d </> (r ++ ":" ++ p ++ ":" ++ f)
 
-__pGet :: Cabal.Package b -> FilePath -> (MonadLoggerIO m, MonadReader GTDConfiguration m, Binary a) => m (Maybe a)
+__pGet :: Cabal.Package b -> FilePath -> (MonadLoggerIO m, MonadReader GTDConfiguration m, Binary.Binary a) => m (Maybe a)
 __pGet cPkg f = do
   p <- path cPkg f
   binaryGet p
@@ -67,10 +69,14 @@ pStore ::
   Package ->
   (MonadLoggerIO m, MonadReader GTDConfiguration m) => m ()
 pStore cPkg pkg = do
+  ll <- asks $ _logLevel . _args
   modulesP <- path cPkg modulesN
   exportsP <- path cPkg exportsN
-  liftIO $ encodeFile modulesP $ Package._modules pkg
-  liftIO $ encodeFile exportsP $ Package._exports pkg
+  liftIO $ Binary.encodeFile modulesP $ Package._modules pkg
+  liftIO $ Binary.encodeFile exportsP $ Package._exports pkg
+  liftIO $ when (ll == LevelDebug) $ do
+    JSON.encodeFile (modulesP ++ ".json") (Package._modules pkg)
+    JSON.encodeFile (exportsP ++ ".json") (Package._exports pkg)
   logDebugNSS "package cached put" $ printf "%s -> (%d, %d)" (show $ Cabal.key cPkg) (length $ Package._modules pkg) (length $ Package._exports pkg)
 
 pRemove ::
@@ -123,15 +129,17 @@ __resolution'path n m = do
   let r = pathAsFile $ HsModule._path m
   return $ d </> (r ++ ":" ++ n)
 
-resolution'get'generic :: String -> HsModule -> (MonadLoggerIO m, MonadReader GTDConfiguration m, Binary a) => m (Maybe a)
+resolution'get'generic :: String -> HsModule -> (MonadLoggerIO m, MonadReader GTDConfiguration m, Binary.Binary a) => m (Maybe a)
 resolution'get'generic n m = do
   p <- __resolution'path n m
   binaryGet p
 
-resolution'put'generic :: String -> HsModule -> (Binary a) => a -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m ()
+resolution'put'generic :: JSON.ToJSON a => String -> HsModule -> (Binary.Binary a, JSON.ToJSON a) => a -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m ()
 resolution'put'generic n m r = do
   p <- __resolution'path n m
-  liftIO $ encodeFile p r
+  liftIO $ Binary.encodeFile p r
+  ll <- asks $ _logLevel . _args
+  liftIO $ when (ll == LevelDebug) $ JSON.encodeFile (p ++ ".json") r
 
 resolution'exists'generic :: String -> HsModule -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m Bool
 resolution'exists'generic n m = do

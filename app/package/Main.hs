@@ -19,7 +19,7 @@ import qualified GTD.Cabal.Get as Cabal (changed)
 import GTD.Cabal.Types (Designation (..), Package (..))
 import qualified GTD.Configuration as Conf (Args (..), GTDConfiguration (..), defaultArgs, prepareConstants)
 import GTD.Resolution.State (ccGet, emptyContext)
-import GTD.Server (cabalPackage'contextWithLocals, cabalPackage'unresolved, package'resolution'withDependencies'concurrently)
+import GTD.Server (cabalPackage'unresolved'plusStoreInLocals, package'resolution'withDependencies'concurrently)
 import GTD.Utils (combine, logErrorNSS, stats, statusL, updateStatus)
 import Options.Applicative (Parser, ParserInfo, auto, execParser, fullDesc, help, helper, info, long, option, optional, showDefault, strOption, value, (<**>))
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
@@ -57,7 +57,8 @@ main = do
   a@Args {dir = d, logLevel = ll} <- execParser opts
   print a
 
-  constants <- Conf.prepareConstants =<< Conf.defaultArgs
+  serverArgs <- Conf.defaultArgs
+  constants <- Conf.prepareConstants $ serverArgs {Conf._logLevel = ll}
   let r = Conf._root . Conf._args $ constants
   setCurrentDirectory r
   getCurrentDirectory >>= print
@@ -73,8 +74,7 @@ main = do
           flip runReaderT constants $ flip execStateT emptyContext $ do
             Cabal.load
             e <- runExceptT $ do
-              cPkgsU <- cabalPackage'unresolved d
-              cabalPackage'contextWithLocals cPkgsU
+              cPkgsU <- cabalPackage'unresolved'plusStoreInLocals d
               forM_ cPkgsU $ \p ->
                 when (maybe True (_designation p ==) (designation a)) $
                   void $

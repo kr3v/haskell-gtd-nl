@@ -14,7 +14,7 @@
 
 module GTD.Cabal.Get where
 
-import Control.Lens (At (..), makeLenses, use, view, (%=), (%~), (.=), (.~))
+import Control.Lens (makeLenses, use, view, (%~), (.=), (.~))
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (MonadReader (..), MonadState)
 import Control.Monad.Trans (MonadIO (liftIO))
@@ -25,7 +25,6 @@ import qualified Data.Map as Map
 import Distribution.Compat.Prelude (ExitCode (ExitFailure), Generic, fromMaybe)
 import GTD.Configuration (GTDConfiguration (..), repos)
 import GTD.Utils (logDebugNSS')
-import System.Exit (ExitCode)
 import System.IO (hGetContents)
 import System.Process (CreateProcess (..), StdStream (CreatePipe), createProcess, proc, waitForProcess)
 import Text.Printf (printf)

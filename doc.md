@@ -36,10 +36,24 @@ x - apply cpphs via command
   	|   - follow lsp instead of custom protocol
 
 cpu/memory profiling + benchmark
+Update README.md (plus the recording).
+Consider adding documentation.
+Try using the extension on a real project (HLS, Servant, Cabal, ..., maybe something from IOHK).
 
+`build-depends: plutus-core:{plutus-core, plutus-ir}  ^>=1.12` -- presumably fixed, need tests.
+
+```
+module Text.Pretty
+    ( module Export
+    ) where
+import Prettyprinter as Export
+```
+  
 ---
 
 ### HLS
 Two concerns:
 1. HLS does not support `base` package, so I wasn't sure that navigation in it would work.
 2. I was not sure if whatever in-HLS implementation I would come up with would be accepted by the HLS team, so I decided to go with my own extension just to be sure that I would be able using it in the future.
+
+---

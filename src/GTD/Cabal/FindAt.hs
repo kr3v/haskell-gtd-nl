@@ -58,7 +58,7 @@ findAt'regular wd = do
     [f] -> return $ wd </> f
     _ -> throwError "Multiple cabal files found"
   logDebugNSS "definition" $ "Found cabal file: " ++ cabalFile
-  parse cabalFile
+  parse wd cabalFile
 
 findAt'cabalProject ::
   FilePath ->
@@ -77,4 +77,4 @@ findAt'cabalProject wd = do
   locs :: [ProjectPackageLocation] <- liftIO $ runRebuild wd (findProjectPackages ddl pc) `catch` (\(_ :: BadPackageLocations) -> return [])
   let locsP = (wd </>) <$> mapMaybe __location locs
   logDebugNSS logTag $ printf "%s -> %s" wd (show locsP)
-  concatMapM parse locsP
+  concatMapM (parse wd) locsP

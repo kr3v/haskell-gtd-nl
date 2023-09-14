@@ -98,6 +98,7 @@ data Package a = Package
     _name :: PackageNameS,
     _version :: Version,
     _root :: FilePath,
+    _projectRoot :: FilePath,
     _path :: FilePath,
     _modules :: PackageModules,
     _dependencies :: [a]
