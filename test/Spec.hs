@@ -207,7 +207,7 @@ figureOutExportsTest = do
 
         importsE <- runStdoutLoggingT $ forM importsP \f -> do
           let p = root </> test </> f
-          mapRight (p,) . mapLeft (printf "failed to parse %s: %s" p) <$> runExceptT (parseModule emptyMetadata {_mPath = mainFileP})
+          mapRight (p,) . mapLeft (printf "failed to parse %s: %s" p) <$> runExceptT (parseModule emptyMetadata {_mPath = p})
         let (errors :: [String], importedModules :: [(String, HsModule)]) = partitionEithers importsE
         liftIO $ print errors
 
@@ -409,8 +409,7 @@ definitionsPlutusTests = do
           ("plutus-core/plutus-core/src/PlutusCore/Evaluation/Machine/Ck.hs", "?", "ThrowableBuiltins", noDefErr),
           ("plutus-core/untyped-plutus-core/src/UntypedPlutusCore/Evaluation/Machine/Cek.hs", "?", "ThrowableBuiltins", noDefErr),
           ("plutus-core/plutus-core/src/PlutusCore/Pretty/PrettyConst.hs", "?", "ThrowableBuiltins", noDefErr),
-          ("plutus-core/plutus-core/src/PlutusCore/Evaluation/Machine/Ck.hs", "?", "ThrowableBuiltins", noDefErr),
-          ("plutus-core/untyped-plutus-core/src/UntypedPlutusCore/Evaluation/Machine/Cek.hs", "?", "ThrowableBuiltins", noDefErr)
+          ("plutus-core/plutus-core/src/PlutusCore/Pretty.hs", "?", "ThrowableBuiltins", noDefErr)
         ]
 
   describe descr $ do
@@ -636,13 +635,13 @@ main = do
   removeDirectoryRecursive $ _cache c
 
   hspecWith defaultConfig {configPrintCpuTime = False} $ do
-    -- haskellApplyCppHsTest
-    -- haskellGetIdentifiersTest
-    -- haskellGetExportsTest
-    -- haskellGetImportsTest
-    -- linesTest
+    haskellApplyCppHsTest
+    haskellGetIdentifiersTest
+    haskellGetExportsTest
+    haskellGetImportsTest
+    linesTest
     figureOutExportsTest
-    -- cabalFullTest
-    -- definitionsTest
-    -- dropCacheTest
+    cabalFullTest
+    definitionsTest
+    dropCacheTest
     definitionsPlutusTests

@@ -233,7 +233,7 @@
         },
         "_name": "aeson",
         "_path": ".repos/aeson-2.1.2.1/aeson.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/aeson-2.1.2.1",
         "_version": "mkVersion [2,1,2,1]"
       },
@@ -783,7 +783,7 @@
         },
         "_name": "base",
         "_path": ".repos/base-4.16.4.0/base.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/base-4.16.4.0",
         "_version": "mkVersion [4,16,4,0]"
       },
@@ -862,7 +862,7 @@
         },
         "_name": "bytestring",
         "_path": ".repos/bytestring-0.11.5.2/bytestring.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/bytestring-0.11.5.2",
         "_version": "mkVersion [0,11,5,2]"
       },
@@ -966,7 +966,7 @@
         },
         "_name": "containers",
         "_path": ".repos/containers-0.6.7/containers.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/containers-0.6.7",
         "_version": "mkVersion [0,6,7]"
       },
@@ -1574,7 +1574,7 @@
         },
         "_name": "lens",
         "_path": ".repos/lens-5.2.3/lens.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/lens-5.2.3",
         "_version": "mkVersion [5,2,3]"
       },
@@ -1646,7 +1646,7 @@
         },
         "_name": "mtl",
         "_path": ".repos/mtl-2.2.2/mtl.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/mtl-2.2.2",
         "_version": "mkVersion [2,2,2]"
       },
@@ -1792,7 +1792,7 @@
         },
         "_name": "random",
         "_path": ".repos/random-1.2.1.1/random.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/random-1.2.1.1",
         "_version": "mkVersion [1,2,1,1]"
       },
@@ -1888,7 +1888,7 @@
         },
         "_name": "time",
         "_path": ".repos/time-1.12.2/time.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/time-1.12.2",
         "_version": "mkVersion [1,12,2]"
       }
@@ -2289,7 +2289,7 @@
         },
         "_name": "aeson",
         "_path": ".repos/aeson-2.1.2.1/aeson.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/aeson-2.1.2.1",
         "_version": "mkVersion [2,1,2,1]"
       },
@@ -2839,7 +2839,7 @@
         },
         "_name": "base",
         "_path": ".repos/base-4.16.4.0/base.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/base-4.16.4.0",
         "_version": "mkVersion [4,16,4,0]"
       },
@@ -2918,7 +2918,7 @@
         },
         "_name": "bytestring",
         "_path": ".repos/bytestring-0.11.5.2/bytestring.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/bytestring-0.11.5.2",
         "_version": "mkVersion [0,11,5,2]"
       },
@@ -3022,7 +3022,7 @@
         },
         "_name": "containers",
         "_path": ".repos/containers-0.6.7/containers.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/containers-0.6.7",
         "_version": "mkVersion [0,6,7]"
       },
@@ -3531,7 +3531,7 @@
         },
         "_name": "lens",
         "_path": ".repos/lens-5.2.3/lens.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/lens-5.2.3",
         "_version": "mkVersion [5,2,3]"
       },
@@ -3603,7 +3603,7 @@
         },
         "_name": "mtl",
         "_path": ".repos/mtl-2.2.2/mtl.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/mtl-2.2.2",
         "_version": "mkVersion [2,2,2]"
       },
@@ -3658,7 +3658,7 @@
         },
         "_name": "random",
         "_path": ".repos/random-1.2.1.1/random.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/random-1.2.1.1",
         "_version": "mkVersion [1,2,1,1]"
       },
@@ -3754,7 +3754,7 @@
         },
         "_name": "time",
         "_path": ".repos/time-1.12.2/time.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/time-1.12.2",
         "_version": "mkVersion [1,12,2]"
       }
@@ -4124,7 +4124,7 @@
         },
         "_name": "aeson",
         "_path": ".repos/aeson-2.1.2.1/aeson.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/aeson-2.1.2.1",
         "_version": "mkVersion [2,1,2,1]"
       },
@@ -4674,7 +4674,7 @@
         },
         "_name": "base",
         "_path": ".repos/base-4.16.4.0/base.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/base-4.16.4.0",
         "_version": "mkVersion [4,16,4,0]"
       },
@@ -4753,7 +4753,7 @@
         },
         "_name": "bytestring",
         "_path": ".repos/bytestring-0.11.5.2/bytestring.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/bytestring-0.11.5.2",
         "_version": "mkVersion [0,11,5,2]"
       },
@@ -4857,7 +4857,7 @@
         },
         "_name": "containers",
         "_path": ".repos/containers-0.6.7/containers.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/containers-0.6.7",
         "_version": "mkVersion [0,6,7]"
       },
@@ -5366,7 +5366,7 @@
         },
         "_name": "lens",
         "_path": ".repos/lens-5.2.3/lens.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/lens-5.2.3",
         "_version": "mkVersion [5,2,3]"
       },
@@ -5438,7 +5438,7 @@
         },
         "_name": "mtl",
         "_path": ".repos/mtl-2.2.2/mtl.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/mtl-2.2.2",
         "_version": "mkVersion [2,2,2]"
       },
@@ -5493,7 +5493,7 @@
         },
         "_name": "random",
         "_path": ".repos/random-1.2.1.1/random.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/random-1.2.1.1",
         "_version": "mkVersion [1,2,1,1]"
       },
@@ -5589,7 +5589,7 @@
         },
         "_name": "time",
         "_path": ".repos/time-1.12.2/time.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/time-1.12.2",
         "_version": "mkVersion [1,12,2]"
       }
@@ -5835,7 +5835,7 @@
         },
         "_name": "QuickCheck",
         "_path": ".repos/QuickCheck-2.14.3/QuickCheck.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/QuickCheck-2.14.3",
         "_version": "mkVersion [2,14,3]"
       },
@@ -6071,7 +6071,7 @@
         },
         "_name": "aeson",
         "_path": ".repos/aeson-2.1.2.1/aeson.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/aeson-2.1.2.1",
         "_version": "mkVersion [2,1,2,1]"
       },
@@ -6621,7 +6621,7 @@
         },
         "_name": "base",
         "_path": ".repos/base-4.16.4.0/base.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/base-4.16.4.0",
         "_version": "mkVersion [4,16,4,0]"
       },
@@ -6700,7 +6700,7 @@
         },
         "_name": "bytestring",
         "_path": ".repos/bytestring-0.11.5.2/bytestring.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/bytestring-0.11.5.2",
         "_version": "mkVersion [0,11,5,2]"
       },
@@ -6804,7 +6804,7 @@
         },
         "_name": "containers",
         "_path": ".repos/containers-0.6.7/containers.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/containers-0.6.7",
         "_version": "mkVersion [0,6,7]"
       },
@@ -7367,7 +7367,7 @@
         },
         "_name": "lens",
         "_path": ".repos/lens-5.2.3/lens.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/lens-5.2.3",
         "_version": "mkVersion [5,2,3]"
       },
@@ -7439,7 +7439,7 @@
         },
         "_name": "mtl",
         "_path": ".repos/mtl-2.2.2/mtl.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/mtl-2.2.2",
         "_version": "mkVersion [2,2,2]"
       },
@@ -7494,7 +7494,7 @@
         },
         "_name": "random",
         "_path": ".repos/random-1.2.1.1/random.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/random-1.2.1.1",
         "_version": "mkVersion [1,2,1,1]"
       },
@@ -7590,7 +7590,7 @@
         },
         "_name": "time",
         "_path": ".repos/time-1.12.2/time.cabal",
-        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+        "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/plutus",
         "_root": ".repos/time-1.12.2",
         "_version": "mkVersion [1,12,2]"
       }
