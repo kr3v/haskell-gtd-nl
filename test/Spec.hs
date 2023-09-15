@@ -342,6 +342,16 @@ definitionsTest = do
             expLineNo = 190
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 12, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
          in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+  let expectedState =
+        let expFile = _repos consts </> "transformers-0.5.6.2/Control/Monad/Trans/State/Lazy.hs"
+            expLineNo = 97
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 6, sourceSpanEndColumn = 11, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+  let expectedDataMapStrict =
+        let expFile = _repos consts </> "containers-0.6.7/src/Data/Map/Strict.hs"
+            expLineNo = 1
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 0, sourceSpanStartLine = expLineNo, sourceSpanEndLine = 0}
+         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
   let noDefErr = Left "No definition found"
 
   let tests =
@@ -349,7 +359,7 @@ definitionsTest = do
           ("re-exported regular function", "mkStdGen", expectedMkStdGen),
           ("from prelude - function", "return", expectedPreludeReturn),
           ("from prelude - data ctor", "Nothing", expectedPreludeNothing),
-          ("re-exported throughout packages (?) class name", "State", noDefErr),
+          ("re-exported throughout packages (?) class name", "State", expectedState),
           ("cross-package module re-export", "runState", expectedRunState),
           ("multiple imports of the same module", "GG.Picture", expectedPicture),
           ("(re-export)? data name", "Picture", expectedPicture),
@@ -360,7 +370,7 @@ definitionsTest = do
           ("in-package module re-export + operator form", "%=", expectedLensOverOperator),
           ("in-package module re-export + function", "view", expectedLensView),
           ("qualified module import - go to module via qualifier", "Map", expectedQMap),
-          ("qualified module import - go to module via 'original' name", "Data.Map.Strict", noDefErr),
+          ("qualified module import - go to module via 'original' name", "Data.Map.Strict", expectedDataMapStrict),
           ("regular module import - go to module via 'original' name", "Data.Time.Clock.POSIX", expectedDTClockPosix),
           ("qualified module import - go to function through qualifier", "Map.keys", expectedQMapKeys),
           ("main-to-library resolution works", "generateSurface", expectedGenerateSurface),
@@ -401,15 +411,25 @@ definitionsPlutusTests = do
             expLineNo = 947
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 5, sourceSpanEndColumn = 11, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
          in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+      expectedToData =
+        let expFile = workDir </> "plutus-tx/src/PlutusTx/IsData/Class.hs"
+            expLineNo = 38
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 7, sourceSpanEndColumn = 13, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+      expectedThrowableBuiltins =
+        let expFile = workDir </> "plutus-core/plutus-core/src/PlutusCore/Pretty/PrettyConst.hs"
+            expLineNo = 89
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 6, sourceSpanEndColumn = 23, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
   let noDefErr = Left "No definition found"
 
   let tests =
         [ ("plutus-tx/src/PlutusTx/AssocMap.hs", "from prelude - function", "return", expectedPreludeReturn),
-          ("plutus-tx/src/PlutusTx/AssocMap.hs", "export (module X) where import I1 as X and import I2 as X", "ToData", noDefErr),
-          ("plutus-core/plutus-core/src/PlutusCore/Evaluation/Machine/Ck.hs", "?", "ThrowableBuiltins", noDefErr),
-          ("plutus-core/untyped-plutus-core/src/UntypedPlutusCore/Evaluation/Machine/Cek.hs", "?", "ThrowableBuiltins", noDefErr),
-          ("plutus-core/plutus-core/src/PlutusCore/Pretty/PrettyConst.hs", "?", "ThrowableBuiltins", noDefErr),
-          ("plutus-core/plutus-core/src/PlutusCore/Pretty.hs", "?", "ThrowableBuiltins", noDefErr)
+          ("plutus-tx/src/PlutusTx/AssocMap.hs", "export (module X) where import I1 as X and import I2 as X", "ToData", expectedToData),
+          ("plutus-core/plutus-core/src/PlutusCore/Evaluation/Machine/Ck.hs", "?", "ThrowableBuiltins", expectedThrowableBuiltins),
+          ("plutus-core/untyped-plutus-core/src/UntypedPlutusCore/Evaluation/Machine/Cek.hs", "?", "ThrowableBuiltins", expectedThrowableBuiltins),
+          ("plutus-core/plutus-core/src/PlutusCore/Pretty/PrettyConst.hs", "?", "ThrowableBuiltins", expectedThrowableBuiltins),
+          ("plutus-core/plutus-core/src/PlutusCore/Pretty.hs", "?", "ThrowableBuiltins", expectedThrowableBuiltins)
         ]
 
   describe descr $ do
@@ -635,13 +655,13 @@ main = do
   removeDirectoryRecursive $ _cache c
 
   hspecWith defaultConfig {configPrintCpuTime = False} $ do
-    -- haskellApplyCppHsTest
-    -- haskellGetIdentifiersTest
-    -- haskellGetExportsTest
-    -- haskellGetImportsTest
-    -- linesTest
-    -- figureOutExportsTest
-    -- cabalFullTest
-    -- definitionsTest
-    -- dropCacheTest
+    haskellApplyCppHsTest
+    haskellGetIdentifiersTest
+    haskellGetExportsTest
+    haskellGetImportsTest
+    linesTest
+    figureOutExportsTest
+    cabalFullTest
+    definitionsTest
+    dropCacheTest
     definitionsPlutusTests

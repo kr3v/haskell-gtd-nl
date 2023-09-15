@@ -119,6 +119,7 @@ identifiers (HsModuleX HsModule {hsmodName = Just (L (SrcSpanAnn _ _) (ModuleNam
   let mN = unpackFS nF
   let decl = declM mN
   let tellD l k = tell mempty {_decls = asDeclsMap [decl l k]}
+      tellC l k fs = tell mempty {_dataTypes = Map.singleton (showO k) ClassOrData {_cdtName = decl l k, _cdtFields = fs, _eWildcard = False}}
 
   forM_ decls $ \(L _ d) -> case d of
     SigD _ s -> case s of
@@ -126,8 +127,8 @@ identifiers (HsModuleX HsModule {hsmodName = Just (L (SrcSpanAnn _ _) (ModuleNam
         forM_ names $ \(L (SrcSpanAnn _ l) k) -> tellD l k
       _ -> return ()
     TyClD _ tc -> case tc of
-      FamDecl {tcdFam = FamilyDecl {fdLName = (L (SrcSpanAnn _ l) k)}} -> tellD l k -- TODO: add more stuff?
-      SynDecl {tcdLName = (L (SrcSpanAnn _ l) k)} -> tellD l k
+      FamDecl {tcdFam = FamilyDecl {fdLName = (L (SrcSpanAnn _ l) k)}} -> tellC l k mempty -- TODO: add more stuff?
+      SynDecl {tcdLName = (L (SrcSpanAnn _ l) k)} -> tellC l k mempty
       DataDecl {tcdLName = (L (SrcSpanAnn _ l) k), tcdDataDefn = (HsDataDefn _ _ _ _ ctorsD _)} -> do
         let ctors = case ctorsD of
               NewTypeCon a -> [a]
@@ -142,13 +143,13 @@ identifiers (HsModuleX HsModule {hsmodName = Just (L (SrcSpanAnn _ _) (ModuleNam
                           decl loc2 k2
                 fields ++ [decl loc1 k1]
               _ -> []
-        tell mempty {_dataTypes = Map.singleton (showO k) ClassOrData {_cdtName = decl l k, _cdtFields = asDeclsMap fs, _eWildcard = False}}
+        tellC l k (asDeclsMap fs)
       ClassDecl {tcdLName = (L (SrcSpanAnn _ l) k), tcdSigs = ms} -> do
         let fs = flip concatMap ms $ \(L _ m) -> case m of
               TypeSig _ names _ -> flip fmap names $ \(L (SrcSpanAnn _ l) k) -> decl l k
               ClassOpSig _ _ names _ -> flip fmap names $ \(L (SrcSpanAnn _ l) k) -> decl l k
               _ -> []
-        tell mempty {_dataTypes = Map.singleton (showO k) ClassOrData {_cdtName = decl l k, _cdtFields = asDeclsMap fs, _eWildcard = False}}
+        tellC l k (asDeclsMap fs)
     _ -> return ()
 identifiers _ = return ()
 
