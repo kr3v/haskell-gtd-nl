@@ -48,7 +48,7 @@ module Text.Pretty
     ) where
 import Prettyprinter as Export
 ```
-  
+
 ---
 
 ### HLS
@@ -56,4 +56,5 @@ Two concerns:
 1. HLS does not support `base` package, so I wasn't sure that navigation in it would work.
 2. I was not sure if whatever in-HLS implementation I would come up with would be accepted by the HLS team, so I decided to go with my own extension just to be sure that I would be able using it in the future.
 
+The application is standalone (it does not depend on HLS in any way) 
 ---

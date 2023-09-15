@@ -10,18 +10,21 @@
 
 module GTD.Server where
 
+import Control.Applicative (Alternative (..))
 import Control.Exception.Safe (tryAny)
 import Control.Lens (over, use, view, (%=), (.=))
 import Control.Monad (forM, forM_, join, mapAndUnzipM, unless, void)
 import Control.Monad.Except (MonadError (..), MonadIO (..))
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (MonadReader (..), MonadState (..), gets)
-import Control.Monad.State (evalStateT, modify)
+import Control.Monad.State (modify)
 import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.Trans.Maybe (MaybeT (..))
 import Control.Monad.Trans.Reader (ReaderT (..))
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Bifunctor (Bifunctor (..))
 import qualified Data.Cache.LRU as LRU
+import Data.Foldable (foldlM)
 import Data.List (find, isPrefixOf, singleton)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
@@ -37,7 +40,7 @@ import qualified GTD.Cabal.Types as Cabal (Dependency, Designation (..), Designa
 import GTD.Configuration (Args (..), GTDConfiguration (..), args)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Identifier, SourceSpan (..), asDeclsMap, emptySourceSpan)
-import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule)
+import GTD.Haskell.Module (HsModule (..), HsModuleMetadata (..), HsModuleP (..), emptyHsModule, emptyMetadata)
 import qualified GTD.Haskell.Module as HsModule
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import qualified GTD.Resolution.Cache as PackageCache
@@ -45,7 +48,7 @@ import GTD.Resolution.Module (figureOutExports1, module'Dependencies, moduleR)
 import GTD.Resolution.State (Context (..), Package (Package, _cabalPackage, _modules), cExports, cLocalPackages, cResolution)
 import qualified GTD.Resolution.State as Package
 import GTD.Resolution.Utils (ParallelizedState (..), parallelized, reverseDependencies, scheme)
-import GTD.Utils (getUsableFreeMemory, logDebugNSS, mapFrom, modifyMS, peekM, stats, storeIOExceptionToMonadError, updateStatus, (<==<))
+import GTD.Utils (getUsableFreeMemory, logDebugNSS, mapFrom, maybeToMaybeT, modifyMS, peekM, stats, storeIOExceptionToMonadError, updateStatus, (<==<))
 import System.FilePath (normalise, (</>))
 import System.IO (IOMode (AppendMode), withFile)
 import System.Process (CreateProcess (..), StdStream (..), createProcess, proc, waitForProcess)
@@ -79,7 +82,7 @@ modules1 pkg c = do
     (ParallelizedState modsO Map.empty Map.empty (_modules pkg) False)
     ("modules", Cabal.key c)
     figureOutExports1
-    (const "tbd")
+    (show . Map.keys)
     HsModule._name
     (return . module'Dependencies)
 
@@ -289,7 +292,7 @@ cabalPackage wd rf = do
   cPkgs <- cabalPackage'unresolved'plusStoreInLocals wd
   let srcDirs p = (\d -> normalise $ Cabal._root p </> d) <$> (Cabal._srcDirs . Cabal._modules $ p)
       cPkgM = find (any (`isPrefixOf` rf) . srcDirs) cPkgs
-  cPkg <- maybe (throwError "cannot find a cabal 'item' with source directory that owns given file") return cPkgM
+  cPkg <- maybe (throwError $ "cannot find a cabal 'item' with source directory that owns file " ++ rf) return cPkgM
   e <- PackageCache.pExists cPkg
   unless e $ void $ package_ cPkg
   return cPkg
@@ -300,30 +303,47 @@ resolution'simplify Declarations {_decls = ds, _dataTypes = dts} =
       dts' = concatMap (\cd -> [_cdtName cd] <> Map.elems (_cdtFields cd)) (Map.elems dts)
    in asDeclsMap $ ds' <> dts'
 
-resolution :: (MonadLoggerIO m, MonadError String m) => Map.Map String Declarations -> String -> m DefinitionResponse
-resolution resolutionMap w =
-  case w `Map.lookup` resolutionMap of
-    Just d -> case Map.elems $ resolution'simplify d of
-      (d : _) -> return $ DefinitionResponse {srcSpan = Just $ emptySourceSpan {sourceSpanFileName = sourceSpanFileName . _declSrcOrig $ d, sourceSpanStartColumn = 1, sourceSpanStartLine = 1}, err = Nothing}
-      _ -> throwError "given word is a known module, but it has no declarations"
-    Nothing -> do
-      let (q, w') = fromMaybe ("", w) $ GHC.identifier w
-      let look q1 w1 = join $ do
-            mQ <- Map.lookup q1 resolutionMap
-            d <- Map.lookup w1 $ resolution'simplify mQ
-            return $ Just DefinitionResponse {srcSpan = Just $ _declSrcOrig d, err = Nothing}
-      let cases = if w == w' then [("", w)] else [(q, w'), ("", w)]
-      casesM <- forM cases $ \(q1, w1) -> do
-        let r = look q1 w1
-        logDebugNSS "definition" $ printf "%s -> `%s`.`%s` -> %s" w q1 w1 (show r)
-        return r
-      case catMaybes casesM of
-        (x : _) -> return x
-        _ -> noDefinitionFoundError
+resolution'qualified ::
+  Map.Map String Declarations ->
+  String ->
+  (MonadLoggerIO m, MonadError String m) => MaybeT m DefinitionResponse
+resolution'qualified rm w = do
+  y <- maybeToMaybeT $ w `Map.lookup` rm
+  case Map.elems $ resolution'simplify y of
+    (d : _) -> return $ DefinitionResponse {srcSpan = Just $ emptySourceSpan {sourceSpanFileName = sourceSpanFileName . _declSrcOrig $ d, sourceSpanStartColumn = 1, sourceSpanStartLine = 1}, err = Nothing}
+    _ -> throwError "given word is a known module, but it has no declarations"
+
+resolution'word ::
+  Map.Map String Declarations ->
+  String ->
+  (MonadLoggerIO m, MonadError String m) => MaybeT m DefinitionResponse
+resolution'word rm w = do
+  let (q, w') = fromMaybe ("", w) $ GHC.identifier w
+  let look q1 w1 = join $ do
+        mQ <- Map.lookup q1 rm
+        d <- Map.lookup w1 $ resolution'simplify mQ
+        return $ Just DefinitionResponse {srcSpan = Just $ _declSrcOrig d, err = Nothing}
+  let cases = if w == w' then [("", w)] else [(q, w'), ("", w)]
+  casesM <- forM cases $ \(q1, w1) -> do
+    let r = look q1 w1
+    logDebugNSS "definition" $ printf "%s -> `%s`.`%s` -> %s" w q1 w1 (show r)
+    return r
+  case catMaybes casesM of
+    (x : _) -> return x
+    _ -> noDefinitionFoundError
+
+resolution :: (MonadLoggerIO m, MonadError String m) => Map.Map String Declarations -> String -> m (Maybe DefinitionResponse)
+resolution rm w = do
+  let opts =
+        [ resolution'qualified rm (w ++ "*"),
+          resolution'qualified rm w,
+          resolution'word rm w
+        ]
+  foldlM (\a b -> case a of Just _ -> return a; Nothing -> b) Nothing $ runMaybeT <$> opts
 
 definition ::
   DefinitionRequest ->
-  (MS m, MonadError String m) => m DefinitionResponse
+  (MS m, Alternative m, MonadError String m) => m DefinitionResponse
 definition (DefinitionRequest {workDir = wd, file = rf0, word = w}) = do
   let rf = normalise rf0
   updateStatus $ printf "resolving Cabal package for %s" wd
@@ -335,18 +355,17 @@ definition (DefinitionRequest {workDir = wd, file = rf0, word = w}) = do
   resM <- case mL of
     Just x -> return x
     Nothing -> do
-      let m = emptyHsModule {_path = rf, HsModule._pkgK = Cabal.key cPkg}
+      let m = emptyHsModule {_metadata = emptyMetadata {_mPath = rf, _mPkgK = Cabal.key cPkg}}
       r <- PackageCache.resolution'get m
       cResolution %= LRU.insert rf r
       return r
-  resolutionMap <- maybe noDefinitionFoundError return resM
+  rm <- maybe noDefinitionFoundError return resM
 
   -- TODO: check both? prioritize the latter?
   updateStatus $ printf "figuring out what `%s` is" w
-  r <- resolution resolutionMap w
-
+  rM <- resolution rm w
   liftIO stats
-  return r
+  maybe noDefinitionFoundError return rM
 
 ---
 

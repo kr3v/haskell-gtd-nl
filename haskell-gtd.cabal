@@ -42,6 +42,7 @@ common common-deps
         , unliftio ^>= 0.2.24.0
 
         , aeson ^>= 2.1.2.1
+        , aeson-pretty
         , binary ^>= 0.8.9.1
 
         , bytestring ^>= 0.11.4.0

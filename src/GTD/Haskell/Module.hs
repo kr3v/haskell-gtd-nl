@@ -33,12 +33,14 @@ newtype HsModuleParams = HsModuleParams
   }
   deriving (Show, Eq, Generic)
 
-emptyParams :: HsModuleParams
-emptyParams = HsModuleParams {_isImplicitExportAll = False}
-
 instance FromJSON HsModuleParams
 
 instance ToJSON HsModuleParams
+
+instance Binary HsModuleParams
+
+emptyParams :: HsModuleParams
+emptyParams = HsModuleParams {_isImplicitExportAll = False}
 
 data HsModuleData = HsModuleData
   { _exports0 :: Exports,
@@ -54,22 +56,48 @@ instance ToJSON HsModuleData
 emptyData :: HsModuleData
 emptyData = HsModuleData {_exports0 = Map.empty, _imports = [], _locals = Declarations {_decls = Map.empty, _dataTypes = Map.empty}}
 
+data HsModuleMetadata = HsModuleMetadata
+  { _mPackage :: Cabal.PackageNameS,
+    _mPkgK :: Cabal.PackageKey,
+    _mName :: Cabal.ModuleNameS,
+    _mPath :: FilePath
+  }
+  deriving (Show, Eq, Generic)
+
+instance FromJSON HsModuleMetadata
+
+instance ToJSON HsModuleMetadata
+
+instance Binary HsModuleMetadata
+
+emptyMetadata :: HsModuleMetadata
+emptyMetadata = HsModuleMetadata {_mPackage = "", _mPkgK = Cabal.emptyPackageKey, _mName = "", _mPath = ""}
+
 data HsModule = HsModule
-  { _package :: Cabal.PackageNameS,
-    _pkgK :: Cabal.PackageKey,
-    _name :: Cabal.ModuleNameS,
-    _path :: FilePath,
+  { _metadata :: HsModuleMetadata,
     _info :: HsModuleData,
     _params :: HsModuleParams,
     _lines :: Lines.Lines
   }
   deriving (Show, Eq, Generic)
 
-$(makeLenses ''HsModule)
-
 instance FromJSON HsModule
 
 instance ToJSON HsModule
+
+_name :: HsModule -> Cabal.ModuleNameS
+_name = _mName . _metadata
+
+_path :: HsModule -> FilePath
+_path = _mPath . _metadata
+
+_package :: HsModule -> Cabal.PackageNameS
+_package = _mPackage . _metadata
+
+_pkgK :: HsModule -> Cabal.PackageKey
+_pkgK = _mPkgK . _metadata
+
+$(makeLenses ''HsModule)
 
 emptySrcSpan :: SrcSpan
 emptySrcSpan = SrcSpan {srcSpanFilename = "", srcSpanStartLine = 0, srcSpanStartColumn = 0, srcSpanEndLine = 0, srcSpanEndColumn = 0}
@@ -83,17 +111,14 @@ emptyHaskellModule = Module emptySrcSpanInfo Nothing [] [] []
 emptyHsModule :: HsModule
 emptyHsModule =
   HsModule
-    { _package = "",
-      _name = "",
-      _pkgK = Cabal.emptyPackageKey,
-      _path = "",
+    { _metadata = emptyMetadata,
       _info = emptyData,
       _params = emptyParams,
       _lines = mempty
     }
 
-parseModule :: HsModule -> (MonadLoggerIO m, MonadError String m) => m HsModule
-parseModule cm@HsModule {_path = srcP} = do
+parseModule :: HsModuleMetadata -> (MonadLoggerIO m, MonadError String m) => m HsModule
+parseModule cm@HsModuleMetadata {_mPath = srcP} = do
   let logTag = "parsing module " ++ srcP
   logDebugNSS logTag ""
 
@@ -114,17 +139,18 @@ parseModule cm@HsModule {_path = srcP} = do
       Just Lines.Line {path = p, num = n} -> d {_declSrcOrig = (_declSrcOrig d) {sourceSpanFileName = p, sourceSpanStartLine = n, sourceSpanEndLine = n}}
       Nothing -> d
   return $
-    cm
+    HsModule
       { _info = HsModuleData {_exports0 = es, _imports = is, _locals = locals},
         _params = HsModuleParams {_isImplicitExportAll = iiea},
-        _name = GHC.name a,
+        _metadata = cm {_mName = GHC.name a},
         _lines = lines
       }
 
 ---
 
-newtype HsModuleP = HsModuleP
-  { _exports :: Declarations
+data HsModuleP = HsModuleP
+  { _exports :: Declarations,
+    _ometadata :: HsModuleMetadata
   }
   deriving (Show, Eq, Generic)
 

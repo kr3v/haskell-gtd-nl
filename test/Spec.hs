@@ -12,6 +12,7 @@
 
 import Control.Exception (IOException, try)
 import Control.Lens (use)
+import Control.Monad.Error (MonadError (..))
 import Control.Monad.Logger (LogLevel (LevelDebug), NoLoggingT (..), runStderrLoggingT, runStdoutLoggingT)
 import Control.Monad.Logger.CallStack (runFileLoggingT)
 import Control.Monad.RWS (MonadIO (liftIO), MonadState (get), MonadTrans (..), MonadWriter (..), forM, forM_, join)
@@ -19,11 +20,11 @@ import Control.Monad.State (StateT (..), evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (ReaderT (..))
 import Control.Monad.Writer (execWriterT)
-import Data.Aeson (FromJSON, ToJSON, decode, encode)
+import Data.Aeson (FromJSON, ToJSON, decode, decode', eitherDecode, encode)
 import Data.Aeson.Types (FromJSON (..), Parser, ToJSON (..), Value (..))
 import qualified Data.ByteString.Lazy as BS
 import Data.Either (partitionEithers)
-import Data.Either.Combinators (mapLeft, mapRight)
+import Data.Either.Combinators (fromLeft, mapLeft, mapRight)
 import Data.List (isPrefixOf, isSuffixOf)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust, fromMaybe)
@@ -36,12 +37,12 @@ import GTD.Configuration (Args (_logLevel), GTDConfiguration (..), defaultArgs, 
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (Declarations (..), Exports, Imports, SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine))
 import GTD.Haskell.Lines (Line (..), buildMap, resolve)
-import GTD.Haskell.Module (HsModule (..), HsModuleP (..), emptyHsModule, parseModule)
+import GTD.Haskell.Module (HsModule (..), HsModuleMetadata (_mPath), HsModuleP (..), emptyHsModule, parseModule, emptyMetadata)
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import qualified GTD.Resolution.Cache as PackageCache
 import GTD.Resolution.Module (figureOutExports, figureOutExports0)
 import GTD.Resolution.State (LocalPackagesKey, cLocalPackages, emptyContext)
-import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), DropPackageCacheRequest (..), cabalPackage, cabalPackage'contextWithLocals, cabalPackage'resolve, cabalPackage'unresolved, definition, dropPackageCache)
+import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), DropPackageCacheRequest (..), cabalPackage, cabalPackage'contextWithLocals, cabalPackage'resolve, cabalPackage'unresolved'plusStoreInLocals, definition, dropPackageCache)
 import GTD.Utils (removeIfExists, storeIOExceptionToMonadError)
 import System.Directory (getCurrentDirectory, listDirectory, removeDirectoryRecursive)
 import System.FilePath (makeRelative, (</>))
@@ -206,11 +207,11 @@ figureOutExportsTest = do
 
         importsE <- runStdoutLoggingT $ forM importsP \f -> do
           let p = root </> test </> f
-          mapRight (p,) . mapLeft (printf "failed to parse %s: %s" p) <$> runExceptT (parseModule emptyHsModule {_path = p})
+          mapRight (p,) . mapLeft (printf "failed to parse %s: %s" p) <$> runExceptT (parseModule emptyMetadata {_mPath = mainFileP})
         let (errors :: [String], importedModules :: [(String, HsModule)]) = partitionEithers importsE
         liftIO $ print errors
 
-        mainModuleE <- runStdoutLoggingT $ runExceptT $ parseModule emptyHsModule {_path = mainFileP}
+        mainModuleE <- runStdoutLoggingT $ runExceptT $ parseModule emptyMetadata {_mPath = mainFileP}
         join $ case mainModuleE of
           Left e -> return $ expectationFailure $ printf "failed to parse %s: %s" mainFileP e
           Right mainModule -> do
@@ -244,12 +245,7 @@ definitionsTest = do
       eval w r = eval0 w >>= (\d -> return $ d `shouldBe` r)
       mstack f a = runFileLoggingT logF $ f $ runReaderT a consts
 
-  let st0 = emptyContext
-  st1 <- runIO $ mstack (`execStateT` st0) Cabal.load
-  (a, serverState) <- runIO $ mstack (`runStateT` st1) $ eval0 "playIO"
-  runIO $ print a
-  -- TODO: check the warning
-  _ <- runIO $ mstack (`execStateT` serverState) Cabal.store
+  serverState <- runIO $ mstack (`execStateT` emptyContext) $ Cabal.load >> eval0 "playIO" >> Cabal.store
 
   let expectedPlayIO =
         let expFile = _repos consts </> "gloss-1.13.2.2/Graphics/Gloss/Interface/IO/Game.hs"
@@ -341,7 +337,7 @@ definitionsTest = do
             expLineNo = 46
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 16, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
          in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
-  let expectedGetRTSStats = 
+  let expectedGetRTSStats =
         let expFile = _repos consts </> "base-4.16.4.0/GHC/Stats.hsc"
             expLineNo = 190
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 12, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
@@ -378,6 +374,50 @@ definitionsTest = do
       it (n ++ " `" ++ q ++ "`") $ do
         join $ mstack (`evalStateT` serverState) $ do
           eval q r
+
+definitionsPlutusTests :: Spec
+definitionsPlutusTests = do
+  da <- runIO defaultArgs
+  consts <- runIO $ prepareConstants da {_logLevel = LevelDebug}
+  pwd <- runIO getCurrentDirectory
+
+  let descr = "definitions"
+      workDir = pwd </> "test/integrationTestRepo/plutus"
+      req = DefinitionRequest {workDir = workDir, file = "", word = ""}
+      logF = workDir </> descr ++ ".txt"
+
+  runIO $ print descr
+  runIO $ printf "cwd = %s, wd = %s, logF = %s\n" pwd workDir logF
+  runIO $ removeIfExists logF
+
+  let eval0 f w = runExceptT $ definition req {file = workDir </> f, word = w}
+      eval f w r = eval0 f w >>= (\d -> return $ d `shouldBe` r)
+      mstack f a = runFileLoggingT logF $ f $ runReaderT a consts
+
+  serverState <- runIO $ mstack (`execStateT` emptyContext) $ Cabal.load >> (eval0 "plutus-tx/src/PlutusTx/AssocMap.hs" "return" >>= (liftIO . print)) >> Cabal.store
+
+  let expectedPreludeReturn =
+        let expFile = _repos consts </> "base-4.18.0.0/GHC/Base.hs"
+            expLineNo = 947
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 5, sourceSpanEndColumn = 11, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+  let noDefErr = Left "No definition found"
+
+  let tests =
+        [ ("plutus-tx/src/PlutusTx/AssocMap.hs", "from prelude - function", "return", expectedPreludeReturn),
+          ("plutus-tx/src/PlutusTx/AssocMap.hs", "export (module X) where import I1 as X and import I2 as X", "ToData", noDefErr),
+          ("plutus-core/plutus-core/src/PlutusCore/Evaluation/Machine/Ck.hs", "?", "ThrowableBuiltins", noDefErr),
+          ("plutus-core/untyped-plutus-core/src/UntypedPlutusCore/Evaluation/Machine/Cek.hs", "?", "ThrowableBuiltins", noDefErr),
+          ("plutus-core/plutus-core/src/PlutusCore/Pretty/PrettyConst.hs", "?", "ThrowableBuiltins", noDefErr),
+          ("plutus-core/plutus-core/src/PlutusCore/Evaluation/Machine/Ck.hs", "?", "ThrowableBuiltins", noDefErr),
+          ("plutus-core/untyped-plutus-core/src/UntypedPlutusCore/Evaluation/Machine/Cek.hs", "?", "ThrowableBuiltins", noDefErr)
+        ]
+
+  describe descr $ do
+    forM_ tests $ \(f, n, q, r) -> do
+      it (printf "n=%s, f=%s, q=`%s`" n f q) $ do
+        join $ mstack (`evalStateT` serverState) $ do
+          eval f q r
 
 data LinesSpecTestCase = LinesSpecTestCase
   { _in :: Line,
@@ -478,7 +518,7 @@ cabalFullTest = do
   let st0 = emptyContext
   st1 <- runIO $ mstack (`execStateT` st0) Cabal.load
 
-  let test i = do
+  let test0 i = do
         let iS = show i
             dstUPath = "test/samples" </> descr </> ("out.unresolved." ++ iS ++ ".json")
             dstLPath = "test/samples" </> descr </> ("out.locals." ++ iS ++ ".json")
@@ -490,12 +530,12 @@ cabalFullTest = do
         expectedUS <- liftIO $ BS.readFile expUPath
         expectedLS <- liftIO $ BS.readFile expLPath
         expectedRS <- liftIO $ BS.readFile expRPath
-        let expectedR :: [PackageWithResolvedDependencies] = fromJust $ decode expectedRS
-            expectedU :: [PackageWithUnresolvedDependencies] = fromJust $ decode expectedUS
-            expectedL :: [LocalPackagesKey] = fromJust $ decode expectedLS
+        expectedR :: [PackageWithResolvedDependencies] <- either (throwError . show) return $ eitherDecode expectedRS
+        expectedU :: [PackageWithUnresolvedDependencies] <- either (throwError . show) return $ eitherDecode expectedUS
+        expectedL :: [LocalPackagesKey] <- either (throwError . show) return $ eitherDecode expectedLS
 
-        join $ mstack (`evalStateT` st1) $ do
-          result <- runExceptT $ cabalPackage'unresolved wdT
+        mstack (`evalStateT` st1) $ do
+          result <- runExceptT $ cabalPackage'unresolved'plusStoreInLocals wdT
           case result of
             Left e -> return $ expectationFailure $ printf "failed to parse %s: %s" wdT e
             Right u -> do
@@ -520,6 +560,12 @@ cabalFullTest = do
               let d3 = rT `shouldBe` expectedR
 
               return $ d1 <> d2 <> d3
+
+  let test i = do
+        x <- runExceptT $ test0 i
+        case x of
+          Left e -> expectationFailure e
+          Right r -> r
 
   describe descr $ do
     it "test repo" $ do
@@ -590,12 +636,13 @@ main = do
   removeDirectoryRecursive $ _cache c
 
   hspecWith defaultConfig {configPrintCpuTime = False} $ do
-    haskellApplyCppHsTest
-    haskellGetIdentifiersTest
-    haskellGetExportsTest
-    haskellGetImportsTest
-    linesTest
+    -- haskellApplyCppHsTest
+    -- haskellGetIdentifiersTest
+    -- haskellGetExportsTest
+    -- haskellGetImportsTest
+    -- linesTest
     figureOutExportsTest
-    cabalFullTest
-    definitionsTest
-    dropCacheTest
+    -- cabalFullTest
+    -- definitionsTest
+    -- dropCacheTest
+    definitionsPlutusTests

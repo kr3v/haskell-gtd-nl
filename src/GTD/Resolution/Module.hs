@@ -20,8 +20,8 @@ import Distribution.ModuleName (fromString, toFilePath)
 import GTD.Cabal.Types (ModuleNameS)
 import qualified GTD.Cabal.Types as Cabal (Package (_modules, _name, _root), PackageModules (_allKnownModules, _srcDirs), PackageWithResolvedDependencies, key)
 import GTD.Configuration (GTDConfiguration)
-import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Module (..), ModuleImportType (..), allImportedModules, asDeclsMap)
-import GTD.Haskell.Module (HsModule(..), HsModuleData (..), HsModuleP (..), HsModuleParams (..), emptyHsModule, parseModule)
+import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Module (..), ModuleImportType (..), SourceSpan (..), allImportedModules, asDeclsMap, emptySourceSpan)
+import GTD.Haskell.Module (HsModule (..), HsModuleData (..), HsModuleMetadata (HsModuleMetadata), HsModuleP (..), HsModuleParams (..), parseModule, _name)
 import qualified GTD.Haskell.Module as HsModule
 import qualified GTD.Resolution.Cache as PackageCache
 import GTD.Utils (logDebugNSS, logErrorNSS, mapFrom)
@@ -48,10 +48,10 @@ module'2 p m = do
   forM srcDirs $ \srcDir -> runExceptT $ do
     let path = resolve root srcDir m
     logDebugNSS "module'2" $ printf "resolve(%s, %s, %s) -> %s" root srcDir m path
-    let cm = emptyHsModule {HsModule._package = Cabal._name p, HsModule._name = m, HsModule._path = path, HsModule._pkgK = Cabal.key p}
+    let cm = HsModuleMetadata {HsModule._mPackage = Cabal._name p, HsModule._mName = m, HsModule._mPath = path, HsModule._mPkgK = Cabal.key p}
     parseModule cm
       `catchError` \e1 ->
-        parseModule (cm {HsModule._path = path ++ "c"})
+        parseModule (cm {HsModule._mPath = path ++ "c"})
           `catchError` \e2 -> throwError $ printf "error parsing module %s/%s: (%s, %s)" (show srcDir) (show m) (show e1) (show e2)
 
 module'1 :: Cabal.PackageWithResolvedDependencies -> ModuleNameS -> (MonadLoggerIO m) => m ([String], Maybe HsModule)
@@ -97,13 +97,16 @@ resolution'direct sM m = flip execStateT Map.empty $ do
   let locals = _locals . _info $ m
       name = _name m
 
-  forM_ (_imports . _info $ m) $ \Module {_mName = k, _mType = mt, _mAllowNoQualifier = mnq, _mQualifier = mq, _mDecls = md, _mCDs = mc} -> forM_ (Map.lookup k sM) $ \c -> do
-    let stuff = case mt of
-          All -> _exports c
-          EverythingBut -> Declarations {_decls = Map.withoutKeys (_decls $ _exports c) (Map.keysSet $ asDeclsMap md), _dataTypes = Map.withoutKeys (_dataTypes $ _exports c) (Map.keysSet $ mapFrom (_declName . _cdtName) mc)}
-          Exactly -> Declarations {_decls = Map.intersection (_decls $ _exports c) (asDeclsMap md), _dataTypes = Map.intersection (_dataTypes $ _exports c) (mapFrom (_declName . _cdtName) mc)}
-    modify $ Map.insertWith (<>) mq stuff
-    when mnq $ modify $ Map.insertWith (<>) "" stuff
+  forM_ (_imports . _info $ m) $
+    \Module {_mName = k, _mType = mt, _mAllowNoQualifier = mnq, _mQualifier = mq, _mDecls = md, _mCDs = mc} ->
+      forM_ (Map.lookup k sM) $ \c -> do
+        modify $ Map.insertWith (<>) (k ++ "*") mempty {_decls = Map.singleton "" Declaration {_declModule = k, _declName = "", _declSrcOrig = emptySourceSpan {sourceSpanFileName = HsModule._mPath . HsModule._ometadata $ c, sourceSpanStartColumn = 1, sourceSpanStartLine = 1}}}
+        let stuff = case mt of
+              All -> _exports c
+              EverythingBut -> Declarations {_decls = Map.withoutKeys (_decls $ _exports c) (Map.keysSet $ asDeclsMap md), _dataTypes = Map.withoutKeys (_dataTypes $ _exports c) (Map.keysSet $ mapFrom (_declName . _cdtName) mc)}
+              Exactly -> Declarations {_decls = Map.intersection (_decls $ _exports c) (asDeclsMap md), _dataTypes = Map.intersection (_dataTypes $ _exports c) (mapFrom (_declName . _cdtName) mc)}
+        modify $ Map.insertWith (<>) mq stuff
+        when mnq $ modify $ Map.insertWith (<>) "" stuff
   modify $ Map.insertWith (<>) name locals
   modify $ Map.insertWith (<>) "" locals
 
@@ -142,9 +145,10 @@ figureOutExports0 sM m = do
             then
               if k == n
                 then tell $ _locals . _info $ m
-                else forM_ (Map.lookup k sM) $ \c -> tell (_exports c)
+                else forM_ (Map.lookup k liM) $ \c -> tell c
             else forM_ (Map.lookup k liM) $ \c -> do
               let eD = Declarations {_decls = Map.intersection (_decls c) (asDeclsMap $ _mDecls e), _dataTypes = Map.intersection (_dataTypes c) (mapFrom (_declName . _cdtName) $ _mCDs e)}
               tell eD
 
-  return (HsModuleP {HsModule._exports = r}, Map.insert (_name m) (HsModuleP {_exports = r}), liM)
+  let x = HsModuleP {HsModule._exports = r, HsModule._ometadata = _metadata m}
+  return (x, Map.insert (_name m) x, liM)
