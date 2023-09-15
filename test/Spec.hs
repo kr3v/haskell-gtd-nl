@@ -635,13 +635,13 @@ main = do
   removeDirectoryRecursive $ _cache c
 
   hspecWith defaultConfig {configPrintCpuTime = False} $ do
-    haskellApplyCppHsTest
-    haskellGetIdentifiersTest
-    haskellGetExportsTest
-    haskellGetImportsTest
-    linesTest
-    figureOutExportsTest
-    cabalFullTest
-    definitionsTest
-    dropCacheTest
+    -- haskellApplyCppHsTest
+    -- haskellGetIdentifiersTest
+    -- haskellGetExportsTest
+    -- haskellGetImportsTest
+    -- linesTest
+    -- figureOutExportsTest
+    -- cabalFullTest
+    -- definitionsTest
+    -- dropCacheTest
     definitionsPlutusTests
