@@ -29,8 +29,8 @@ x - apply cpphs via command
     |     - 'global' Cabal language directives
 		| - undecided:
 		|   - consider supporting projects where:
-		|     - there's no `.cabal` file => base only? 
-		|     - there's a `.cabal` file, but it's not in the root directcory
+		|     - there's no `.cabal` file => base only?
+		|     - there's a `.cabal` file, but it's not in the root directory
 		|       `./src/A/B/C/D.hs` -> check for `.cabal` in `.`, `.src`, ...; use the first that has `A.B.C.D` resolvable through `src-dirs`
   	| - both:
   	|   - follow lsp instead of custom protocol
@@ -42,12 +42,29 @@ Try using the extension on a real project (HLS, Servant, Cabal, ..., maybe somet
 
 `build-depends: plutus-core:{plutus-core, plutus-ir}  ^>=1.12` -- presumably fixed, need tests.
 
-```
+Add a 'initialize everything' command.
+Add an 'immutable' mode, where no cache gets reset.
+Add support for Cabal-provided `version` and `getDataFileName` (at least to a virtual file)
+
+```haskell
 module Text.Pretty
     ( module Export
     ) where
 import Prettyprinter as Export
 ```
+
+```haskell
+instance uni1 ~ uni2 => PLC.AsNormCheckError (CompileError uni1 fun a) PLC.TyName PLC.Name uni2 fun a where
+    _NormCheckError = _NoContext . _PLCError . PLC._NormCheckError
+
+AsFreeVariableError
+
+import Control.Lens hiding (Index, Level, index, ix)
+--                          ^^^^^  ^^^^^  ^^^^^  ^^
+--                          these terms are resolvable (why?)
+```
+
+Executables resolution should involve looking for the main file first.
 
 ---
 
@@ -58,3 +75,13 @@ Two concerns:
 
 The application is standalone (it does not depend on HLS in any way) 
 ---
+
+```shell
+npm install
+npm install webpack webpack-cli
+# npm install -g webpack webpack-cli
+```
+
+```shell @ ubuntu
+apt install libgmp3-dev zlib1g-dev
+```

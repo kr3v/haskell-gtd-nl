@@ -8,23 +8,26 @@
 
 module GTD.Cabal.Parse where
 
-import Control.Monad (forM_)
-import Control.Monad.Logger (MonadLoggerIO (..))
+import Control.Monad (forM_, when)
+import Control.Monad.Logger (LogLevel (LevelDebug), MonadLoggerIO (..))
 import Control.Monad.RWS (MonadReader (..), MonadWriter (..), asks)
 import Control.Monad.Trans (MonadIO (liftIO))
 import Control.Monad.Trans.Writer (execWriter, execWriterT)
+import Data.Aeson.Encode.Pretty (encodePretty)
 import Data.Binary (encodeFile)
-import qualified Data.ByteString.UTF8 as BS
+import qualified Data.ByteString.Lazy as BSL
+import qualified Data.ByteString.UTF8 as BSU8
+import Data.Function ((&))
 import qualified Data.Set as Set
 import Distribution.Package (PackageIdentifier (..), packageName, unPackageName)
-import Distribution.PackageDescription (BuildInfo (..), LibraryName (..), PackageDescription, unUnqualComponentName)
-import qualified Distribution.PackageDescription as Cabal (Benchmark (..), BenchmarkInterface (..), BuildInfo (..), Dependency (..), Executable (..), Library (..), PackageDescription (..), TestSuite (..), explicitLibModules, unPackageName, TestSuiteInterface (..))
+import Distribution.PackageDescription (BuildInfo (..), LibraryName (..), unUnqualComponentName)
+import qualified Distribution.PackageDescription as Cabal (Benchmark (..), BenchmarkInterface (..), BuildInfo (..), Dependency (..), Executable (..), Library (..), PackageDescription (..), TestSuite (..), TestSuiteInterface (..), explicitLibModules, unPackageName)
 import Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import Distribution.PackageDescription.Parsec (parseGenericPackageDescription, runParseResult)
 import Distribution.Pretty (prettyShow)
 import Distribution.Utils.Path (getSymbolicPath)
 import GTD.Cabal.Types (Dependency (..), Designation (Designation, _desName, _desType), DesignationType (..), Package (..), PackageModules (..), PackageWithUnresolvedDependencies, emptyPackageModules)
-import GTD.Configuration (GTDConfiguration (..))
+import GTD.Configuration (Args (_logLevel), GTDConfiguration (..))
 import GTD.Resolution.Caching.Utils (binaryGet, pathAsFile)
 import GTD.Utils (logDebugNSS, removeIfExistsL)
 import System.FilePath (dropExtension, normalise, takeDirectory, (</>))
@@ -41,12 +44,14 @@ __read'cache'put p r = liftIO $ encodeFile p r
 parse :: FilePath -> FilePath -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m [PackageWithUnresolvedDependencies]
 parse root p = do
   c <- asks _cache
+  ll <- asks $ _logLevel . _args
   let pc = c </> pathAsFile p
   __read'cache'get pc >>= \case
     Just r -> return r
     Nothing -> do
       r <- __read'direct root p
       __read'cache'put pc r
+      liftIO $ when (ll == LevelDebug) $ BSL.writeFile pc (encodePretty r)
       return r
 
 remove :: FilePath -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m ()
@@ -58,7 +63,7 @@ remove p = do
 __read'packageDescription :: FilePath -> (MonadLoggerIO m) => m Cabal.PackageDescription
 __read'packageDescription p = do
   handle <- liftIO $ openFile p ReadMode
-  (warnings, epkg) <- liftIO $ runParseResult . parseGenericPackageDescription . BS.fromString <$> hGetContents handle
+  (warnings, epkg) <- liftIO $ runParseResult . parseGenericPackageDescription . BSU8.fromString <$> hGetContents handle
   forM_ warnings (\w -> logDebugNSS "cabal read" $ "got warnings for `" ++ p ++ "`: " ++ show w)
   liftIO $ either (fail . show) (return . flattenPackageDescription) epkg
 

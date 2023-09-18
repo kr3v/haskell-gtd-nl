@@ -103,15 +103,20 @@ library
         GTD.Configuration
         GTD.Haskell.Cpphs
         GTD.Haskell.Declaration
-        GTD.Haskell.Lines 
+        GTD.Haskell.Lines
         GTD.Haskell.Module
         GTD.Haskell.Parser.GhcLibParser
         GTD.Resolution.Cache
         GTD.Resolution.Caching.Utils
         GTD.Resolution.Module
-        GTD.Resolution.State
+        GTD.Resolution.Package
+        GTD.Resolution.Types
         GTD.Resolution.Utils
         GTD.Server
+        GTD.Server.Cpphs
+        GTD.Server.Definition
+        GTD.Server.DropPackageCache
+        GTD.State
         GTD.Utils
         Paths_haskell_gtd
 

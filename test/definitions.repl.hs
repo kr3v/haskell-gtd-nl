@@ -34,7 +34,7 @@ import GTD.Haskell.Module
 import GTD.Haskell.Parser.GhcLibParser
 import GTD.Resolution.Definition
 import GTD.Resolution.Module
-import GTD.Resolution.State
+import GTD.State
 import GTD.Cabal.Cache
 import GTD.Resolution.Cache
 import GTD.Resolution.Utils

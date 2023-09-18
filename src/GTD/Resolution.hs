@@ -1,0 +1,1 @@
+module GTD.Resolution where

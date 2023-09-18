@@ -41,7 +41,7 @@ import GTD.Haskell.Module (HsModule (..), HsModuleMetadata (_mPath), HsModuleP (
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import qualified GTD.Resolution.Cache as PackageCache
 import GTD.Resolution.Module (figureOutExports, figureOutExports0)
-import GTD.Resolution.State (LocalPackagesKey, cLocalPackages, emptyContext)
+import GTD.State (LocalPackagesKey, cLocalPackages, emptyContext)
 import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), DropPackageCacheRequest (..), cabalPackage, cabalPackage'contextWithLocals, cabalPackage'resolve, cabalPackage'unresolved'plusStoreInLocals, definition, dropPackageCache)
 import GTD.Utils (removeIfExists, storeIOExceptionToMonadError)
 import System.Directory (getCurrentDirectory, listDirectory, removeDirectoryRecursive)
@@ -492,34 +492,17 @@ linesTest = do
 instance FromJSON Version where
   parseJSON :: Value -> Parser Version
   parseJSON (String t) = pure $ read $ unpack t
-
-instance ToJSON Version where
-  toJSON :: Version -> Value
-  toJSON = String . pack . show
-
 instance FromJSON VersionRange where
   parseJSON :: Value -> Parser VersionRange
   parseJSON (String t) = pure $ read $ unpack t
 
-instance ToJSON VersionRange where
-  toJSON :: VersionRange -> Value
-  toJSON = String . pack . show
-
 instance FromJSON Dependency
-
-instance ToJSON Dependency
 
 instance FromJSON PackageModules
 
-instance ToJSON PackageModules
-
 instance FromJSON PackageWithUnresolvedDependencies
 
-instance ToJSON PackageWithUnresolvedDependencies
-
 instance FromJSON PackageWithResolvedDependencies
-
-instance ToJSON PackageWithResolvedDependencies
 
 cabalFullTest :: Spec
 cabalFullTest = do

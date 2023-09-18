@@ -18,7 +18,7 @@ import GTD.Cabal.Parse (remove)
 import GTD.Cabal.Types (Package (..))
 import qualified GTD.Cabal.Types as Cabal
 import GTD.Configuration (GTDConfiguration (..))
-import GTD.Resolution.State (Context, ccGet)
+import GTD.State (Context, ccGet)
 import GTD.Utils (logDebugNSS, logErrorNSS)
 import Text.Printf (printf)
 

@@ -5,30 +5,33 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# HLINT ignore "Avoid lambda" #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# LANGUAGE RecordWildCards #-}
 
 module GTD.Cabal.Types where
 
 import Control.Applicative (Applicative (..))
 import Control.Lens (makeLenses)
-import Data.Aeson (FromJSON, ToJSON)
+import Control.Monad (forM)
+import Data.Aeson (FromJSON, ToJSON, Value)
+import Data.Aeson.Types (ToJSON (..), Value (..))
+import Data.List (find)
 import Data.Maybe (isNothing)
 import qualified Data.Set as Set
+import Data.Text (pack)
 import Distribution.Compat.Prelude (Binary, Generic, fromMaybe)
+import Distribution.ModuleName (fromString, toFilePath)
 import Distribution.Pretty (prettyShow)
 import Distribution.Types.VersionRange (VersionRange)
 import qualified Distribution.Version as Cabal
 import System.Directory (doesFileExist)
-import Control.Monad (forM)
 import System.FilePath ((</>))
-import Data.List (find)
-import Distribution.ModuleName (toFilePath, fromString)
 
 type PackageNameS = String
 
@@ -59,7 +62,7 @@ dKeyType TestSuite = "test"
 dKeyType Benchmark = "bench"
 
 dKey :: Designation -> String
-dKey Designation{..} = dKeyType _desType ++ ":" ++ fromMaybe "" _desName
+dKey Designation {..} = dKeyType _desType ++ ":" ++ fromMaybe "" _desName
 
 data Dependency = Dependency
   { _dName :: PackageNameS,
@@ -116,6 +119,28 @@ transformPaths f p = p {_root = f (_root p), _path = f (_path p)}
 instance Binary (Package (Package Dependency))
 
 instance Binary (Package Dependency)
+
+---
+
+-- Those ToJSON instances are used for mere debugging purposes.
+
+instance ToJSON PackageModules
+
+instance ToJSON Version where
+  toJSON :: Version -> Value
+  toJSON = String . pack . show
+
+instance ToJSON VersionRange where
+  toJSON :: VersionRange -> Value
+  toJSON = String . pack . show
+
+instance ToJSON Dependency
+
+instance ToJSON (Package Dependency)
+
+instance ToJSON (Package (Package Dependency))
+
+---
 
 data PackageKey = PackageKey
   { _pkName :: PackageNameS,

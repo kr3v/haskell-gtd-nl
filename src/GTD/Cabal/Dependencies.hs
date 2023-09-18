@@ -26,7 +26,7 @@ import GTD.Cabal.Parse (parse)
 import GTD.Cabal.Types (Dependency (..), Package (..), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, isMainLib)
 import qualified GTD.Cabal.Types as Cabal
 import GTD.Configuration (GTDConfiguration (..))
-import GTD.Resolution.State (Context (..), ccFull, ccGet)
+import GTD.State (Context (..), ccFull, ccGet)
 import GTD.Utils (deduplicate, logDebugNSS, mapFrom)
 import System.FilePath ((</>))
 import Text.Printf (printf)

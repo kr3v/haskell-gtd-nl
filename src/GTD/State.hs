@@ -1,7 +1,9 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 
-module GTD.Resolution.State where
+module GTD.State where
 
 import Control.Lens (makeLenses)
 import qualified Data.Cache.LRU as LRU
@@ -12,17 +14,10 @@ import GTD.Cabal.Types (ModuleNameS, PackageNameS)
 import qualified GTD.Cabal.Types as Cabal
 import GTD.Haskell.Declaration (Declarations)
 import GTD.Haskell.Module (HsModuleP)
-
-data Package = Package
-  { _cabalPackage :: Cabal.PackageWithResolvedDependencies,
-    _modules :: Map.Map ModuleNameS HsModuleP,
-    _exports :: Map.Map ModuleNameS HsModuleP
-  }
-  deriving (Show, Generic)
-
-$(makeLenses ''Package)
-
----
+import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.Logger (MonadLoggerIO)
+import Control.Monad.RWS (MonadState, MonadReader)
+import GTD.Configuration (GTDConfiguration)
 
 type LocalPackagesKey = (PackageNameS, Maybe String, Cabal.Version)
 
@@ -42,3 +37,5 @@ $(makeLenses ''Context)
 
 emptyContext :: Context
 emptyContext = Context mempty mempty (Cabal.GetCache mempty False) (LRU.newLRU Nothing) (LRU.newLRU $ Just 4) mempty
+
+type MS m = (MonadBaseControl IO m, MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m)

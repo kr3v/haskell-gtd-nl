@@ -7,9 +7,11 @@
 module GTD.Resolution.Cache where
 
 import Control.Lens (over, view)
+import Control.Monad (when)
 import Control.Monad.Except (MonadIO (..))
-import Control.Monad.Logger (MonadLoggerIO, LogLevel (LevelDebug))
+import Control.Monad.Logger (LogLevel (LevelDebug), MonadLoggerIO)
 import Control.Monad.RWS (MonadReader (..), MonadState (..), asks, gets, modify)
+import qualified Data.Aeson as JSON
 import qualified Data.Binary as Binary (Binary, encodeFile)
 import qualified Data.Cache.LRU as LRU
 import qualified Data.Map as Map
@@ -21,14 +23,13 @@ import GTD.Haskell.Lines (Lines)
 import GTD.Haskell.Module (HsModule (..))
 import qualified GTD.Haskell.Module as HsModule
 import GTD.Resolution.Caching.Utils (binaryGet, pathAsFile)
-import GTD.Resolution.State (Context, Package (..), cExports)
-import qualified GTD.Resolution.State as Package
+import GTD.Resolution.Types (Package (..))
+import qualified GTD.Resolution.Types as Package
+import GTD.State (Context, cExports)
 import GTD.Utils (logDebugNSS, removeIfExistsL)
 import System.Directory (createDirectoryIfMissing, doesFileExist, removeDirectoryRecursive)
 import System.FilePath.Posix ((</>))
 import Text.Printf (printf)
-import Control.Monad (when)
-import qualified Data.Aeson as JSON
 
 exportsN :: String
 exportsN = "exports.binary"

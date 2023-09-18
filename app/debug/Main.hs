@@ -67,7 +67,7 @@ import qualified GTD.Haskell.Module as HsModule
 import GTD.Haskell.Parser.GhcLibParser (fakeSettings, parsePragmasIntoDynFlags, showO)
 import qualified GTD.Resolution.Cache as PackageCache
 import GTD.Resolution.Module (module'Dependencies)
-import GTD.Resolution.State (ccGet, emptyContext)
+import GTD.State (ccGet, emptyContext)
 import GTD.Server (cabalPackage, findAtF, modulesOrdered, package'dependencies'ordered, package'order'default)
 import qualified GTD.Server as Server (resolution)
 import GTD.Utils (fromMaybeM, maybeM, ultraZoom)

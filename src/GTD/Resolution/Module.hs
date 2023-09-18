@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module GTD.Resolution.Module where
 
@@ -12,18 +13,22 @@ import Control.Monad.Logger (MonadLoggerIO, NoLoggingT (runNoLoggingT))
 import Control.Monad.RWS (MonadReader (ask), MonadWriter (..))
 import Control.Monad.State.Lazy (MonadState (..), execStateT, modify)
 import Control.Monad.Trans.Except (runExceptT)
+import Control.Monad.Trans.Reader (ReaderT (..))
 import Control.Monad.Trans.Writer (execWriterT)
 import Data.Either (partitionEithers)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Distribution.ModuleName (fromString, toFilePath)
 import GTD.Cabal.Types (ModuleNameS)
-import qualified GTD.Cabal.Types as Cabal (Package (_modules, _name, _root), PackageModules (_allKnownModules, _srcDirs), PackageWithResolvedDependencies, key)
+import qualified GTD.Cabal.Types as Cabal (Package (_modules, _name, _root), PackageModules (_allKnownModules, _srcDirs), PackageWithResolvedDependencies, key, _exports)
 import GTD.Configuration (GTDConfiguration)
 import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Module (..), ModuleImportType (..), SourceSpan (..), allImportedModules, asDeclsMap, emptySourceSpan)
 import GTD.Haskell.Module (HsModule (..), HsModuleData (..), HsModuleMetadata (HsModuleMetadata), HsModuleP (..), HsModuleParams (..), parseModule, _name)
 import qualified GTD.Haskell.Module as HsModule
 import qualified GTD.Resolution.Cache as PackageCache
+import qualified GTD.Resolution.Types as Package (Package (..))
+import GTD.Resolution.Utils (ParallelizedState (ParallelizedState), parallelized, scheme)
+import GTD.State (MS)
 import GTD.Utils (logDebugNSS, logErrorNSS, mapFrom)
 import System.FilePath (normalise, (</>))
 import Text.Printf (printf)
@@ -52,7 +57,7 @@ module'2 p m = do
     parseModule cm
       `catchError` \e1 ->
         parseModule (cm {HsModule._mPath = path ++ "c"})
-          `catchError` \e2 -> throwError $ printf "error parsing module %s/%s: (%s, %s)" (show srcDir) (show m) (show e1) (show e2)
+          `catchError` \e2 -> throwError $ printf "error parsing module %s/%s (hs,hsc): (%s, %s)" (show srcDir) (show m) (show e1) (show e2)
 
 module'1 :: Cabal.PackageWithResolvedDependencies -> ModuleNameS -> (MonadLoggerIO m) => m ([String], Maybe HsModule)
 module'1 p mn = do
@@ -152,3 +157,31 @@ figureOutExports0 sM m = do
 
   let x = HsModuleP {HsModule._exports = r, HsModule._ometadata = _metadata m}
   return (x, Map.insert (_name m) x, liM)
+
+---
+
+modules :: Package.Package -> (MS m) => m Package.Package
+modules pkg@Package.Package {Package._cabalPackage = c} = do
+  mods <- modules1 pkg c
+  return pkg {Package._exports = Map.restrictKeys mods (Cabal._exports . Cabal._modules $ c), Package._modules = mods}
+
+-- for a given Cabal package, it returns a list of modules in the order they should be processed
+modulesOrdered :: Cabal.PackageWithResolvedDependencies -> (MS m) => m [HsModule]
+modulesOrdered c =
+  flip runReaderT c $
+    scheme moduleR HsModule._name id (return . module'Dependencies) (Set.toList . Cabal._exports . Cabal._modules $ c)
+
+-- for a given Cabal package and list of its modules in the 'right' order, concurrently parses all the modules
+modules1 ::
+  Package.Package ->
+  Cabal.PackageWithResolvedDependencies ->
+  (MS m) => m (Map.Map ModuleNameS HsModuleP)
+modules1 pkg c = do
+  modsO <- modulesOrdered c
+  parallelized
+    (ParallelizedState modsO Map.empty Map.empty (Package._modules pkg) False)
+    ("modules", Cabal.key c)
+    figureOutExports1
+    (show . Map.keys)
+    HsModule._name
+    (return . module'Dependencies)

@@ -22,7 +22,7 @@ import Data.Proxy (Proxy (..))
 import GHC.TypeLits (KnownSymbol)
 import qualified GTD.Cabal.Cache as CabalCache
 import GTD.Configuration (Args (..), GTDConfiguration (..), args, argsP, prepareConstants)
-import GTD.Resolution.State (Context, emptyContext)
+import GTD.State (Context, emptyContext)
 import GTD.Server (CpphsRequest, CpphsResponse (..), DefinitionRequest (..), DefinitionResponse (..), DropPackageCacheRequest, cpphs, definition, dropPackageCache)
 import GTD.Utils (combine, statusL, ultraZoom, updateStatus)
 import Network.Socket (Family (AF_INET), SockAddr (SockAddrInet), SocketType (Stream), bind, defaultProtocol, listen, socket, socketPort, tupleToHostAddress, withSocketsDo)

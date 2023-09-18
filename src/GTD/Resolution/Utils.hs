@@ -19,6 +19,7 @@ import Data.Maybe (catMaybes, fromJust, mapMaybe)
 import qualified Data.Set as Set
 import GTD.Utils (flipTuple, logDebugNSS, mapFrom, updateStatus)
 import Text.Printf (printf)
+import Control.Concurrent.MVar.Lifted
 
 data SchemeState k a b = SchemeState
   { _schemeStateA :: Map.Map k a,
@@ -164,6 +165,7 @@ parallelized0 ::
 parallelized0 n f ps kb ds = do
   ParallelizedState {_queue = q, _asyncs = a, _shouldUpdateStatus = us} <- get
   let logTag = printf "parallelized %s" (show n)
+  finishedButNotConsumed <- newMVar (0 :: Int)
 
   case q of
     [] -> do
@@ -181,6 +183,7 @@ parallelized0 n f ps kb ds = do
           a <- lift $ async $ do
             logDebugNSS logTag $ printf "%s starting;\ndeps = %s\nstate = %s" (show $ kb x) (show xD) (ps s)
             z <- f s x
+            modifyMVar_ finishedButNotConsumed $ return . (+ 1)
             logDebugNSS logTag $ printf "%s finished" (show $ kb x)
             return z
           asyncs %= Map.insert (kb x) a
@@ -188,6 +191,7 @@ parallelized0 n f ps kb ds = do
         else do
           let (aK, xDA) = unzip $ mapMaybe (\y -> (y,) <$> (y `Map.lookup` a)) (Set.toList is)
           (rs, ss) <- lift $ mapAndUnzipM wait xDA
+          modifyMVar_ finishedButNotConsumed $ return . (`subtract` length xDA)
 
           processed %= Map.union (Map.fromList $ zip aK rs)
           asyncs %= flip (foldr Map.delete) is
@@ -196,9 +200,10 @@ parallelized0 n f ps kb ds = do
           state .= foldr ($) s0 ss
           s1 <- use state
 
+          fbnc <- readMVar finishedButNotConsumed
           when us $
             updateStatus $
-              printf "%s: %s tasks executing, %s in queue" logTag (show $ length a) (show $ length xs)
+              printf "%s: %s tasks executing, %s in queue" logTag (show $ length a - fbnc) (show $ length xs)
           logDebugNSS logTag $
             printf
               "asyncs=%s, queue=%s\nwaited for=%s\nss=%s\ns0=%s\ns1=%s\nus=%s"
