@@ -66,9 +66,10 @@ import GTD.Haskell.Module (emptyHsModule, emptyMetadata)
 import qualified GTD.Haskell.Module as HsModule
 import GTD.Haskell.Parser.GhcLibParser (fakeSettings, parsePragmasIntoDynFlags, showO)
 import qualified GTD.Resolution.Cache as PackageCache
-import GTD.Resolution.Module (module'Dependencies)
 import GTD.State (ccGet, emptyContext)
-import GTD.Server (cabalPackage, findAtF, modulesOrdered, package'dependencies'ordered, package'order'default)
+import GTD.Server (cabalPackage, findAtF)
+import GTD.Resolution.Package
+import GTD.Resolution.Module hiding (resolution)
 import qualified GTD.Server as Server (resolution)
 import GTD.Utils (fromMaybeM, maybeM, ultraZoom)
 import Options.Applicative (Parser, ParserInfo, auto, command, execParser, fullDesc, help, helper, info, long, metavar, option, progDesc, strOption, subparser, (<**>))
@@ -291,7 +292,7 @@ resolution pkg ident = do
       PDir {_dir = dir, _dfile = f} -> do
         fA <- liftIO $ makeAbsolute $ if isRelative f then dir </> f else f
         liftIO $ hPrint stderr fA
-        (,fA) <$> cabalPackage dir fA
+        (,fA) . head <$> cabalPackage dir fA
 
     liftIO $ hPrint stderr $ Cabal.key cPkg
     liftIO $ hPrint stderr f

@@ -43,22 +43,23 @@ dropPackageCache (DropCacheRequest {dcDir = d, dcFile = f}) = do
 
   cPkgs <- findAtF d
   let cPkgsM = mapFrom Cabal.key cPkgs
-  cPkgU <- cabalPackage d f
-  cPkg0 <- maybe (throwError "???") return $ Cabal.key cPkgU `Map.lookup` cPkgsM
-  cPkgsD <-
-    reverseDependencies
-      (return . Just)
-      Cabal.key
-      Cabal.key
-      (return . mapMaybe ((`Map.lookup` cPkgsM) . Cabal.key) . Cabal._dependencies)
-      cPkgs
-      (Cabal.key cPkg0)
+  cPkgsU <- cabalPackage d f
+  forM_ cPkgsU $ \cPkgU -> do
+    cPkg0 <- maybe (throwError "???") return $ Cabal.key cPkgU `Map.lookup` cPkgsM
+    cPkgsD <-
+      reverseDependencies
+        (return . Just)
+        Cabal.key
+        Cabal.key
+        (return . mapMaybe ((`Map.lookup` cPkgsM) . Cabal.key) . Cabal._dependencies)
+        cPkgs
+        (Cabal.key cPkg0)
 
-  forM_ (concat cPkgsD) $ \cPkg -> do
-    PackageCache.pRemove cPkg
-    PackageCache.resolution'remove cPkg
-    CabalCache.dropCache cPkg
-    cExports %= fst . LRU.delete (Cabal.key cPkg)
-  cResolution %= LRU.newLRU . LRU.maxSize
-  updateStatus ""
+    forM_ (concat cPkgsD) $ \cPkg -> do
+      PackageCache.pRemove cPkg
+      PackageCache.resolution'remove cPkg
+      CabalCache.dropCache cPkg
+      cExports %= fst . LRU.delete (Cabal.key cPkg)
+    cResolution %= LRU.newLRU . LRU.maxSize
+    updateStatus ""
   return "OK"

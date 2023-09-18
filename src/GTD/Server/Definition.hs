@@ -10,7 +10,7 @@ module GTD.Server.Definition where
 
 import Control.Applicative (Alternative (..))
 import Control.Lens (use, (%=), (.=))
-import Control.Monad (forM, forM_, join, unless, void)
+import Control.Monad (forM, forM_, join, unless, void, when)
 import Control.Monad.Except (MonadError (..), MonadIO (..))
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (gets)
@@ -18,14 +18,14 @@ import Control.Monad.Trans.Maybe (MaybeT (..))
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Cache.LRU as LRU
 import Data.Foldable (foldlM)
-import Data.List (find, isPrefixOf)
+import Data.List (isPrefixOf)
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes, fromMaybe)
+import Data.Maybe (catMaybes, fromMaybe, isJust)
 import GHC.Generics (Generic)
 import qualified GTD.Cabal.Dependencies as Cabal (fullS)
 import qualified GTD.Cabal.FindAt as CabalCache (findAt)
 import GTD.Cabal.Types (PackageWithResolvedDependencies, PackageWithUnresolvedDependencies)
-import qualified GTD.Cabal.Types as Cabal (Dependency, Designation (..), DesignationType (..), Package (..), PackageModules (..), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, key)
+import qualified GTD.Cabal.Types as Cabal (Dependency, Designation (..), DesignationType (..), Package (..), PackageModules (..), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, key, pKey)
 import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Identifier, SourceSpan (..), asDeclsMap, emptySourceSpan)
 import GTD.Haskell.Module (HsModule (..), HsModuleMetadata (..), emptyHsModule, emptyMetadata)
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
@@ -72,15 +72,17 @@ cabalPackage'resolve = mapM Cabal.fullS
 findAtF :: FilePath -> (MS m, MonadError String m) => m [PackageWithResolvedDependencies]
 findAtF wd = cabalPackage'unresolved'plusStoreInLocals wd >>= cabalPackage'resolve
 
-cabalPackage :: FilePath -> FilePath -> (MS m, MonadError String m) => m PackageWithUnresolvedDependencies
+cabalPackage :: FilePath -> FilePath -> (MS m, MonadError String m) => m [PackageWithUnresolvedDependencies]
 cabalPackage wd rf = do
-  cPkgs <- cabalPackage'unresolved'plusStoreInLocals wd
+  cPkgsU <- cabalPackage'unresolved'plusStoreInLocals wd
   let srcDirs p = (\d -> normalise $ Cabal._root p </> d) <$> (Cabal._srcDirs . Cabal._modules $ p)
-      cPkgM = find (any (`isPrefixOf` rf) . srcDirs) cPkgs
-  cPkg <- maybe (throwError $ "cannot find a cabal 'item' with source directory that owns file " ++ rf) return cPkgM
-  e <- PackageCache.pExists cPkg
-  unless e $ void $ package_ cPkg
-  return cPkg
+      cPkgs = filter (any (`isPrefixOf` rf) . srcDirs) cPkgsU
+  when (null cPkgs) $ throwError $ "cannot find a cabal 'item' with source directory that owns file " ++ rf
+  forM_ cPkgs $ \cPkg -> do
+    e <- PackageCache.pExists cPkg
+    unless e $ void $ package_ cPkg
+  logDebugNSS "cabalPackage" $ printf "cPkgs = %s" (show $ Cabal.key <$> cPkgs)
+  return cPkgs
 
 ---
 
@@ -92,7 +94,7 @@ data DefinitionRequest = DefinitionRequest
   deriving (Show, Generic)
 
 data DefinitionResponse = DefinitionResponse
-  { srcSpan :: Maybe SourceSpan,
+  { srcSpan :: [SourceSpan],
     err :: Maybe String
   }
   deriving (Show, Generic, Eq)
@@ -105,9 +107,6 @@ instance ToJSON DefinitionResponse
 
 instance FromJSON DefinitionResponse
 
-noDefinitionFoundError :: MonadError String m => m a
-noDefinitionFoundError = throwError "No definition found"
-
 resolution'simplify :: Declarations -> Map.Map Identifier Declaration
 resolution'simplify Declarations {_decls = ds, _dataTypes = dts} =
   let ds' = Map.elems ds
@@ -117,23 +116,23 @@ resolution'simplify Declarations {_decls = ds, _dataTypes = dts} =
 resolution'qualified ::
   Map.Map String Declarations ->
   String ->
-  (MonadLoggerIO m, MonadError String m) => MaybeT m DefinitionResponse
+  (MonadLoggerIO m, MonadError String m) => MaybeT m SourceSpan
 resolution'qualified rm w = do
   y <- maybeToMaybeT $ w `Map.lookup` rm
   case Map.elems $ resolution'simplify y of
-    (d : _) -> return $ DefinitionResponse {srcSpan = Just $ emptySourceSpan {sourceSpanFileName = sourceSpanFileName . _declSrcOrig $ d, sourceSpanStartColumn = 1, sourceSpanStartLine = 1}, err = Nothing}
+    (d : _) -> return $ emptySourceSpan {sourceSpanFileName = sourceSpanFileName . _declSrcOrig $ d, sourceSpanStartColumn = 1, sourceSpanStartLine = 1}
     _ -> throwError "given word is a known module, but it has no declarations"
 
 resolution'word ::
   Map.Map String Declarations ->
   String ->
-  (MonadLoggerIO m, MonadError String m) => MaybeT m DefinitionResponse
+  (MonadLoggerIO m, MonadError String m) => MaybeT m SourceSpan
 resolution'word rm w = do
   let (q, w') = fromMaybe ("", w) $ GHC.identifier w
   let look q1 w1 = join $ do
         mQ <- Map.lookup q1 rm
         d <- Map.lookup w1 $ resolution'simplify mQ
-        return $ Just DefinitionResponse {srcSpan = Just $ _declSrcOrig d, err = Nothing}
+        return $ Just $ _declSrcOrig d
   let cases = if w == w' then [("", w)] else [(q, w'), ("", w)]
   casesM <- forM cases $ \(q1, w1) -> do
     let r = look q1 w1
@@ -141,9 +140,9 @@ resolution'word rm w = do
     return r
   case catMaybes casesM of
     (x : _) -> return x
-    _ -> noDefinitionFoundError
+    _ -> MaybeT $ return Nothing
 
-resolution :: (MonadLoggerIO m, MonadError String m) => Map.Map String Declarations -> String -> m (Maybe DefinitionResponse)
+resolution :: (MonadLoggerIO m, MonadError String m) => Map.Map String Declarations -> String -> m (Maybe SourceSpan)
 resolution rm w = do
   let opts =
         [ resolution'qualified rm (w ++ "*"),
@@ -154,28 +153,34 @@ resolution rm w = do
 
 definition ::
   DefinitionRequest ->
-  (MS m, Alternative m, MonadError String m) => m DefinitionResponse
+  (MS m, MonadError String m) => m DefinitionResponse
 definition (DefinitionRequest {workDir = wd, file = rf0, word = w}) = do
   let rf = normalise rf0
   updateStatus $ printf "resolving Cabal package for %s" wd
-  cPkg <- cabalPackage wd rf
+  cPkgs <- cabalPackage wd rf
 
-  updateStatus $ printf "fetching 'resolution' map for %s" rf
-  (l, mL) <- gets $ LRU.lookup rf . _cResolution
-  cResolution .= l
-  resM <- case mL of
-    Just x -> return x
-    Nothing -> do
-      let m = emptyHsModule {_metadata = emptyMetadata {_mPath = rf, _mPkgK = Cabal.key cPkg}}
-      r <- PackageCache.resolution'get m
-      cResolution %= LRU.insert rf r
-      return r
-  rm <- maybe noDefinitionFoundError return resM
+  ss <- forM cPkgs $ \cPkg -> do
+    let pn = show $ Cabal.pKey . Cabal.key $ cPkg
+    updateStatus $ printf "fetching 'resolution' map for %s in %s" rf pn
 
-  -- TODO: check both? prioritize the latter?
-  updateStatus $ printf "figuring out what `%s` is" w
-  rM <- resolution rm w
+    let k = (Cabal.key cPkg, rf)
+    (l, mL) <- gets $ LRU.lookup k . _cResolution
+    cResolution .= l
+    resM <- case mL of
+      Just x -> return x
+      Nothing -> do
+        let m = emptyHsModule {_metadata = emptyMetadata {_mPath = rf, _mPkgK = Cabal.key cPkg}}
+        r <- PackageCache.resolution'get m
+        cResolution %= LRU.insert k r
+        return r
+
+    r <- case resM of
+      Nothing -> return Nothing
+      Just rm -> do
+        updateStatus $ printf "figuring out what `%s` is in %s" w pn
+        resolution rm w
+    logDebugNSS "definition" $ printf "resolution %s (resM = %s) = %s" pn (show $ isJust resM) (show r)
+    return r
   liftIO stats
-  maybe noDefinitionFoundError return rM
-
----
+  updateStatus ""
+  return DefinitionResponse {srcSpan = catMaybes ss, err = Nothing}

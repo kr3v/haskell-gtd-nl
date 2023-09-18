@@ -107,7 +107,7 @@ definitionH ::
   DefinitionRequest ->
   Handler (Headers '[Header hs String] DefinitionResponse)
 definitionH c m req = do
-  let defH = either (\e -> DefinitionResponse {err = Just e, srcSpan = Nothing}) id
+  let defH = either (\e -> DefinitionResponse {err = Just e, srcSpan = []}) id
   h "definition" c m definition (\r e -> addHeader r $ defH e) req
 
 pingH :: MVar ServerState -> Handler String

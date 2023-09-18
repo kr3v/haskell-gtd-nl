@@ -251,107 +251,107 @@ definitionsTest = do
         let expFile = _repos consts </> "gloss-1.13.2.2/Graphics/Gloss/Interface/IO/Game.hs"
             expLineNo = 20
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 7, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
   let expectedMkStdGen =
         let expFile = _repos consts </> "random-1.2.1.1/src/System/Random/Internal.hs"
             expLineNo = 582
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 9, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
   let expectedLensView =
         let expFile = _repos consts </> "lens-5.2.3/src/Control/Lens/Getter.hs"
             expLineNo = 244
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
   let expectedLensViewOperator =
         let expFile = _repos consts </> "lens-5.2.3/src/Control/Lens/Getter.hs"
             expLineNo = 316
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
   let expectedLensOverOperator =
         let expFile = _repos consts </> "lens-5.2.3/src/Control/Lens/Setter.hs"
             expLineNo = 792
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
   let expectedDisplay =
         let expFile = _repos consts </> "gloss-1.13.2.2/Graphics/Gloss/Data/Display.hs"
             expLineNo = 7
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 6, sourceSpanEndColumn = 13, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
   let expectedInWindow =
         let expFile = _repos consts </> "gloss-1.13.2.2/Graphics/Gloss/Data/Display.hs"
             expLineNo = 9
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 11, sourceSpanEndColumn = 19, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
   let expectedProxy =
         let expFile = _repos consts </> "base-4.16.4.0/Data/Proxy.hs"
             expLineNo = 56
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 16, sourceSpanEndColumn = 21, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
   let expectedPreludeNothing =
         let expFile = _repos consts </> "base-4.16.4.0/GHC/Maybe.hs"
             expLineNo = 29
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 19, sourceSpanEndColumn = 26, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
   let expectedPicture =
         let expFile = _repos consts </> "gloss-rendering-1.13.1.2/Graphics/Gloss/Internals/Data/Picture.hs"
             expLineNo = 60
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 6, sourceSpanEndColumn = 13, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
   let expectedRunState =
         let expFile = _repos consts </> "transformers-0.5.6.2/Control/Monad/Trans/State/Lazy.hs"
             expLineNo = 109
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 9, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
   let expectedPreludeReturn =
         let expFile = _repos consts </> "base-4.16.4.0/GHC/Base.hs"
             expLineNo = 862
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 5, sourceSpanEndColumn = 11, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
   let expectedPrintf =
         let expFile = _repos consts </> "base-4.16.4.0/Text/Printf.hs"
             expLineNo = 257
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 7, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
   let expectedTry =
         let expFile = _repos consts </> "base-4.16.4.0/Control/Exception/Base.hs"
             expLineNo = 174
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 4, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
   let expectedQMap =
         let expFile = _repos consts </> "containers-0.6.7/src/Data/Map/Internal.hs"
             expLineNo = 1
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 0, sourceSpanStartLine = expLineNo, sourceSpanEndLine = 0}
-         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
   let expectedDTClockPosix =
         let expFile = _repos consts </> "time-1.12.2/lib/Data/Time/Clock/POSIX.hs"
             expLineNo = 1
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 0, sourceSpanStartLine = expLineNo, sourceSpanEndLine = 0}
-         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
   let expectedQMapKeys =
         let expFile = _repos consts </> "containers-0.6.7/src/Data/Map/Internal.hs"
             expLineNo = 3347
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
   let expectedGenerateSurface =
         let expFile = workDir </> "src/ScEaHs/Game/Surface/Generator.hs"
             expLineNo = 46
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 16, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
   let expectedGetRTSStats =
         let expFile = _repos consts </> "base-4.16.4.0/GHC/Stats.hsc"
             expLineNo = 190
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 12, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
   let expectedState =
         let expFile = _repos consts </> "transformers-0.5.6.2/Control/Monad/Trans/State/Lazy.hs"
             expLineNo = 97
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 6, sourceSpanEndColumn = 11, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
   let expectedDataMapStrict =
         let expFile = _repos consts </> "containers-0.6.7/src/Data/Map/Strict.hs"
             expLineNo = 1
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 0, sourceSpanStartLine = expLineNo, sourceSpanEndLine = 0}
-         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
   let noDefErr = Left "No definition found"
 
   let tests =
@@ -410,17 +410,17 @@ definitionsPlutusTests = do
         let expFile = _repos consts </> "base-4.18.0.0/GHC/Base.hs"
             expLineNo = 947
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 5, sourceSpanEndColumn = 11, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
       expectedToData =
         let expFile = workDir </> "plutus-tx/src/PlutusTx/IsData/Class.hs"
             expLineNo = 38
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 7, sourceSpanEndColumn = 13, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
       expectedThrowableBuiltins =
         let expFile = workDir </> "plutus-core/plutus-core/src/PlutusCore/Pretty/PrettyConst.hs"
             expLineNo = 89
             expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 6, sourceSpanEndColumn = 23, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = Just expSrcSpan, err = Nothing}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
   let noDefErr = Left "No definition found"
 
   let tests =
@@ -597,8 +597,8 @@ dropCacheTest = do
   describe descr $ do
     it "test repo" $ do
       x :: Either String Expectation <- mstack (`evalStateT` st2) $ runExceptT $ execWriterT $ do
-        cpkgM <- cabalPackage wdT mainF
-        cpkgL <- cabalPackage wdT libF
+        cpkgM <- head <$> cabalPackage wdT mainF
+        cpkgL <- head <$>cabalPackage wdT libF
 
         PackageCache.pExists cpkgM >>= tell . (`shouldBe` True)
         PackageCache.pExists cpkgL >>= tell . (`shouldBe` True)

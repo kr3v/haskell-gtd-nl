@@ -394,38 +394,42 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 		}
 		outputChannel.appendLine(util.format("response = %s", data));
 
-		// HLS BUG #1: in case definition is located at `repos` directory, rewrite the path to local symlink to `repos` (named `./{wd}/.repos`) to prevent Haskell VS Code extension from spawning a new instance of the HLS
-		// HLS interoperability: if HLS is provided via `haskell.haskell` extension, then this extension should not provide local resolutions until they become the same as the ones provided by `haskell.haskell` extension
-		let wordSourcePathO = data.srcSpan.sourceSpanFileName;
-		let wordSourcePath;
-		if (isParentOf(wd, wordSourcePathO) && !isParentOf(repos, wd)) {
-			wordSourcePath = wordSourcePathO;
-			if (isMainHaskellExtensionActive()) {
-				let conf = vscode.workspace.getConfiguration('haskell-gtd-nl');
-				let disableLocDefs = conf.get<boolean>("extension.disable-local-definitions-when-hls-is-active") ?? true;
-				if (disableLocDefs) {
-					outputChannel.appendLine(util.format("HLS is active, disabling local definitions; got %s", wordSourcePathO));
-					return Promise.resolve([]);
+		let locs = [];
+		for (const span of data.srcSpan) {
+			// HLS BUG #1: in case definition is located at `repos` directory, rewrite the path to local symlink to `repos` (named `./{wd}/.repos`) to prevent Haskell VS Code extension from spawning a new instance of the HLS
+			// HLS interoperability: if HLS is provided via `haskell.haskell` extension, then this extension should not provide local resolutions until they become the same as the ones provided by `haskell.haskell` extension
+			let wordSourcePathO = span.sourceSpanFileName;
+			let wordSourcePath;
+			if (isParentOf(wd, wordSourcePathO) && !isParentOf(repos, wd)) {
+				wordSourcePath = wordSourcePathO;
+				if (isMainHaskellExtensionActive()) {
+					let conf = vscode.workspace.getConfiguration('haskell-gtd-nl');
+					let disableLocDefs = conf.get<boolean>("extension.disable-local-definitions-when-hls-is-active") ?? true;
+					if (disableLocDefs) {
+						outputChannel.appendLine(util.format("HLS is active, disabling local definitions; got %s", wordSourcePathO));
+						return Promise.resolve([]);
+					}
 				}
+			} else if (wordSourcePathO == file || isParentOf(repos, wordSourcePathO)) {
+				wordSourcePath = wordSourcePathO;
+			} else if (isParentOf(serverRepos, wordSourcePathO)) {
+				wordSourcePath = path.resolve(repos, path.relative(serverRepos, wordSourcePathO))
+			} else {
+				outputChannel.appendLine(util.format("BUG: wordSourcePathO (%s) is neither original file (%s) nor is present in neither serverRepos (%s) nor current work directory (%s)", wordSourcePathO, file, serverRepos, wd));
+				return Promise.resolve([]);
 			}
-		} else if (wordSourcePathO == file || isParentOf(repos, wordSourcePathO)) {
-			wordSourcePath = wordSourcePathO;
-		} else if (isParentOf(serverRepos, wordSourcePathO)) {
-			wordSourcePath = path.resolve(repos, path.relative(serverRepos, wordSourcePathO))
-		} else {
-			outputChannel.appendLine(util.format("BUG: wordSourcePathO (%s) is neither original file (%s) nor is present in neither serverRepos (%s) nor current work directory (%s)", wordSourcePathO, file, serverRepos, wd));
-			return Promise.resolve([]);
-		}
-		wordSourcePath = path.normalize(wordSourcePath);
-		outputChannel.appendLine(util.format("path rewritten: %s -> %s", wordSourcePathO, wordSourcePath));
-		let wordSourceURI = vscode.Uri.file(path.normalize(wordSourcePath));
+			wordSourcePath = path.normalize(wordSourcePath);
+			outputChannel.appendLine(util.format("path rewritten: %s -> %s", wordSourcePathO, wordSourcePath));
+			let wordSourceURI = vscode.Uri.file(path.normalize(wordSourcePath));
 
-		// return the actual definition location
-		let line = data.srcSpan.sourceSpanStartLine - 1; // 0-based line number
-		let character = data.srcSpan.sourceSpanStartColumn - 1; // 0-based character position
-		let definitionPosition = new vscode.Position(line, character);
-		let definitionLocation = new vscode.Location(wordSourceURI, definitionPosition);
-		return Promise.resolve(definitionLocation);
+			// return the actual definition location
+			let line = span.sourceSpanStartLine - 1; // 0-based line number
+			let character = span.sourceSpanStartColumn - 1; // 0-based character position
+			let definitionPosition = new vscode.Position(line, character);
+			let definitionLocation = new vscode.Location(wordSourceURI, definitionPosition);
+			locs.push(definitionLocation);
+		}
+		return Promise.resolve(locs);
 	}
 }
 

@@ -114,7 +114,7 @@ transformPathsR :: (FilePath -> FilePath) -> PackageWithResolvedDependencies -> 
 transformPathsR f p = transformPaths f p {_dependencies = transformPaths f <$> _dependencies p}
 
 transformPaths :: (FilePath -> FilePath) -> Package a -> Package a
-transformPaths f p = p {_root = f (_root p), _path = f (_path p)}
+transformPaths f p = p {_root = f (_root p), _path = f (_path p), _projectRoot = f (_projectRoot p)}
 
 instance Binary (Package (Package Dependency))
 

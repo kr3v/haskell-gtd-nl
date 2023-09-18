@@ -110,7 +110,7 @@
     },
     "_name": "sc-ea-hs",
     "_path": "test/integrationTestRepo/sc-ea-hs/sc-ea-hs.cabal",
-    "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+    "_projectRoot": "test/integrationTestRepo/sc-ea-hs",
     "_root": "test/integrationTestRepo/sc-ea-hs",
     "_version": "mkVersion [0,0,0,1]"
   },
@@ -184,7 +184,7 @@
     },
     "_name": "sc-ea-hs",
     "_path": "test/integrationTestRepo/sc-ea-hs/sc-ea-hs.cabal",
-    "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+    "_projectRoot": "test/integrationTestRepo/sc-ea-hs",
     "_root": "test/integrationTestRepo/sc-ea-hs",
     "_version": "mkVersion [0,0,0,1]"
   },
@@ -255,7 +255,7 @@
     },
     "_name": "sc-ea-hs",
     "_path": "test/integrationTestRepo/sc-ea-hs/sc-ea-hs.cabal",
-    "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+    "_projectRoot": "test/integrationTestRepo/sc-ea-hs",
     "_root": "test/integrationTestRepo/sc-ea-hs",
     "_version": "mkVersion [0,0,0,1]"
   },
@@ -339,7 +339,7 @@
     },
     "_name": "sc-ea-hs",
     "_path": "test/integrationTestRepo/sc-ea-hs/sc-ea-hs.cabal",
-    "_projectRoot": "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/test/integrationTestRepo/sc-ea-hs",
+    "_projectRoot": "test/integrationTestRepo/sc-ea-hs",
     "_root": "test/integrationTestRepo/sc-ea-hs",
     "_version": "mkVersion [0,0,0,1]"
   }

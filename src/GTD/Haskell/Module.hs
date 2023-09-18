@@ -73,6 +73,9 @@ instance Binary HsModuleMetadata
 emptyMetadata :: HsModuleMetadata
 emptyMetadata = HsModuleMetadata {_mPackage = "", _mPkgK = Cabal.emptyPackageKey, _mName = "", _mPath = ""}
 
+metadataPrettyShow :: HsModuleMetadata -> String
+metadataPrettyShow m = show (_mPkgK m) ++ ":" ++ show (_mName m)
+
 data HsModule = HsModule
   { _metadata :: HsModuleMetadata,
     _info :: HsModuleData,

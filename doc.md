@@ -55,7 +55,12 @@ import Prettyprinter as Export
 
 ```haskell
 instance uni1 ~ uni2 => PLC.AsNormCheckError (CompileError uni1 fun a) PLC.TyName PLC.Name uni2 fun a where
-    _NormCheckError = _NoContext . _PLCError . PLC._NormCheckError
+  _NormCheckError = _NoContext . _PLCError . PLC._NormCheckError
+
+instance uni ~ DefaultUni => ToBuiltinMeaning uni NopFun where
+  type CostingPart uni NopFun = NopCostModel
+
+  data BuiltinSemanticsVariant NopFun = NopFunSemanticsVariant1
 
 AsFreeVariableError
 

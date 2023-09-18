@@ -28,7 +28,7 @@ data Context = Context
     _ccFull :: Map.Map Cabal.PackageKey Cabal.PackageWithResolvedDependencies,
     _ccGet :: Cabal.GetCache,
     _cExports :: LRU.LRU Cabal.PackageKey (Map.Map ModuleNameS HsModuleP),
-    _cResolution :: LRU.LRU FilePath (Maybe (Map.Map ModuleNameS Declarations)),
+    _cResolution :: LRU.LRU (Cabal.PackageKey, FilePath) (Maybe (Map.Map ModuleNameS Declarations)),
     _cLocalPackages :: LocalPackagesMap
   }
   deriving (Show, Generic)

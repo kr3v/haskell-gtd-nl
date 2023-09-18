@@ -20,7 +20,7 @@ import qualified GTD.Cabal.Types as Cabal (ModuleNameS, Package (..), PackageKey
 import GTD.Configuration (Args (..), GTDConfiguration (..))
 import GTD.Haskell.Declaration (Declarations)
 import GTD.Haskell.Lines (Lines)
-import GTD.Haskell.Module (HsModule (..))
+import GTD.Haskell.Module (HsModule (..), metadataPrettyShow)
 import qualified GTD.Haskell.Module as HsModule
 import GTD.Resolution.Caching.Utils (binaryGet, pathAsFile)
 import GTD.Resolution.Types (Package (..))
@@ -133,7 +133,9 @@ __resolution'path n m = do
 resolution'get'generic :: String -> HsModule -> (MonadLoggerIO m, MonadReader GTDConfiguration m, Binary.Binary a) => m (Maybe a)
 resolution'get'generic n m = do
   p <- __resolution'path n m
-  binaryGet p
+  r <- binaryGet p
+  logDebugNSS "resolution get generic" $ printf "(%s,%s)@%s -> %s" (metadataPrettyShow $ _metadata m) n p (show $ isJust r)
+  return r
 
 resolution'put'generic :: JSON.ToJSON a => String -> HsModule -> (Binary.Binary a, JSON.ToJSON a) => a -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m ()
 resolution'put'generic n m r = do
