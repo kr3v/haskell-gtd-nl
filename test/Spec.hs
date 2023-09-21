@@ -37,12 +37,12 @@ import GTD.Configuration (Args (_logLevel), GTDConfiguration (..), defaultArgs, 
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (Declarations (..), Exports, Imports, SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine))
 import GTD.Haskell.Lines (Line (..), buildMap, resolve)
-import GTD.Haskell.Module (HsModule (..), HsModuleMetadata (_mPath), HsModuleP (..), emptyHsModule, parseModule, emptyMetadata)
+import GTD.Haskell.Module (HsModule (..), HsModuleMetadata (_mPath), HsModuleP (..), emptyHsModule, emptyMetadata, parseModule)
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import qualified GTD.Resolution.Cache as PackageCache
 import GTD.Resolution.Module (figureOutExports, figureOutExports0)
-import GTD.State (LocalPackagesKey, cLocalPackages, emptyContext)
 import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), DropPackageCacheRequest (..), cabalPackage, cabalPackage'contextWithLocals, cabalPackage'resolve, cabalPackage'unresolved'plusStoreInLocals, definition, dropPackageCache)
+import GTD.State (LocalPackagesKey, cLocalPackages, emptyContext)
 import GTD.Utils (removeIfExists, storeIOExceptionToMonadError)
 import System.Directory (getCurrentDirectory, listDirectory, removeDirectoryRecursive)
 import System.FilePath (makeRelative, (</>))
@@ -227,164 +227,6 @@ figureOutExportsTest = do
               liftIO $ BS.writeFile outRP $ encode result
               return $ result `shouldBe` expectedR
 
-definitionsTest :: Spec
-definitionsTest = do
-  da <- runIO defaultArgs
-  consts <- runIO $ prepareConstants da {_logLevel = LevelDebug}
-  pwd <- runIO getCurrentDirectory
-
-  let descr = "definitions"
-      workDir = pwd </> "test/integrationTestRepo/sc-ea-hs"
-      file = workDir </> "app/game/Main.hs"
-      req = DefinitionRequest {workDir = workDir, file = file, word = ""}
-      logF = workDir </> descr ++ ".txt"
-
-  runIO $ removeIfExists logF
-
-  let eval0 w = runExceptT $ definition req {word = w}
-      eval w r = eval0 w >>= (\d -> return $ d `shouldBe` r)
-      mstack f a = runFileLoggingT logF $ f $ runReaderT a consts
-
-  serverState <- runIO $ mstack (`execStateT` emptyContext) $ Cabal.load >> eval0 "playIO" >> Cabal.store
-
-  let expectedPlayIO =
-        let expFile = _repos consts </> "gloss-1.13.2.2/Graphics/Gloss/Interface/IO/Game.hs"
-            expLineNo = 20
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 7, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
-  let expectedMkStdGen =
-        let expFile = _repos consts </> "random-1.2.1.1/src/System/Random/Internal.hs"
-            expLineNo = 582
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 9, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
-  let expectedLensView =
-        let expFile = _repos consts </> "lens-5.2.3/src/Control/Lens/Getter.hs"
-            expLineNo = 244
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
-  let expectedLensViewOperator =
-        let expFile = _repos consts </> "lens-5.2.3/src/Control/Lens/Getter.hs"
-            expLineNo = 316
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
-  let expectedLensOverOperator =
-        let expFile = _repos consts </> "lens-5.2.3/src/Control/Lens/Setter.hs"
-            expLineNo = 792
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
-  let expectedDisplay =
-        let expFile = _repos consts </> "gloss-1.13.2.2/Graphics/Gloss/Data/Display.hs"
-            expLineNo = 7
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 6, sourceSpanEndColumn = 13, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
-  let expectedInWindow =
-        let expFile = _repos consts </> "gloss-1.13.2.2/Graphics/Gloss/Data/Display.hs"
-            expLineNo = 9
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 11, sourceSpanEndColumn = 19, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
-  let expectedProxy =
-        let expFile = _repos consts </> "base-4.16.4.0/Data/Proxy.hs"
-            expLineNo = 56
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 16, sourceSpanEndColumn = 21, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
-  let expectedPreludeNothing =
-        let expFile = _repos consts </> "base-4.16.4.0/GHC/Maybe.hs"
-            expLineNo = 29
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 19, sourceSpanEndColumn = 26, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
-  let expectedPicture =
-        let expFile = _repos consts </> "gloss-rendering-1.13.1.2/Graphics/Gloss/Internals/Data/Picture.hs"
-            expLineNo = 60
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 6, sourceSpanEndColumn = 13, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
-  let expectedRunState =
-        let expFile = _repos consts </> "transformers-0.5.6.2/Control/Monad/Trans/State/Lazy.hs"
-            expLineNo = 109
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 9, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
-  let expectedPreludeReturn =
-        let expFile = _repos consts </> "base-4.16.4.0/GHC/Base.hs"
-            expLineNo = 862
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 5, sourceSpanEndColumn = 11, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
-  let expectedPrintf =
-        let expFile = _repos consts </> "base-4.16.4.0/Text/Printf.hs"
-            expLineNo = 257
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 7, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
-  let expectedTry =
-        let expFile = _repos consts </> "base-4.16.4.0/Control/Exception/Base.hs"
-            expLineNo = 174
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 4, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
-  let expectedQMap =
-        let expFile = _repos consts </> "containers-0.6.7/src/Data/Map/Internal.hs"
-            expLineNo = 1
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 0, sourceSpanStartLine = expLineNo, sourceSpanEndLine = 0}
-         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
-  let expectedDTClockPosix =
-        let expFile = _repos consts </> "time-1.12.2/lib/Data/Time/Clock/POSIX.hs"
-            expLineNo = 1
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 0, sourceSpanStartLine = expLineNo, sourceSpanEndLine = 0}
-         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
-  let expectedQMapKeys =
-        let expFile = _repos consts </> "containers-0.6.7/src/Data/Map/Internal.hs"
-            expLineNo = 3347
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
-  let expectedGenerateSurface =
-        let expFile = workDir </> "src/ScEaHs/Game/Surface/Generator.hs"
-            expLineNo = 46
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 16, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
-  let expectedGetRTSStats =
-        let expFile = _repos consts </> "base-4.16.4.0/GHC/Stats.hsc"
-            expLineNo = 190
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 12, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
-  let expectedState =
-        let expFile = _repos consts </> "transformers-0.5.6.2/Control/Monad/Trans/State/Lazy.hs"
-            expLineNo = 97
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 6, sourceSpanEndColumn = 11, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
-  let expectedDataMapStrict =
-        let expFile = _repos consts </> "containers-0.6.7/src/Data/Map/Strict.hs"
-            expLineNo = 1
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 0, sourceSpanStartLine = expLineNo, sourceSpanEndLine = 0}
-         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
-  let noDefErr = Left "No definition found"
-
-  let tests =
-        [ ("directly exported regular function", "playIO", expectedPlayIO),
-          ("re-exported regular function", "mkStdGen", expectedMkStdGen),
-          ("from prelude - function", "return", expectedPreludeReturn),
-          ("from prelude - data ctor", "Nothing", expectedPreludeNothing),
-          ("re-exported throughout packages (?) class name", "State", expectedState),
-          ("cross-package module re-export", "runState", expectedRunState),
-          ("multiple imports of the same module", "GG.Picture", expectedPicture),
-          ("(re-export)? data name", "Picture", expectedPicture),
-          ("data type name", "Display", expectedDisplay),
-          ("data constructor", "InWindow", expectedInWindow),
-          ("data type with type variable", "Proxy", expectedProxy),
-          ("in-package module re-export + operator form", "^.", expectedLensViewOperator),
-          ("in-package module re-export + operator form", "%=", expectedLensOverOperator),
-          ("in-package module re-export + function", "view", expectedLensView),
-          ("qualified module import - go to module via qualifier", "Map", expectedQMap),
-          ("qualified module import - go to module via 'original' name", "Data.Map.Strict", expectedDataMapStrict),
-          ("regular module import - go to module via 'original' name", "Data.Time.Clock.POSIX", expectedDTClockPosix),
-          ("qualified module import - go to function through qualifier", "Map.keys", expectedQMapKeys),
-          ("main-to-library resolution works", "generateSurface", expectedGenerateSurface),
-          ("", "printf", expectedPrintf),
-          ("", "try", expectedTry),
-          ("hsc support", "getRTSStats", expectedGetRTSStats)
-        ]
-
-  describe descr $ do
-    forM_ tests $ \(n, q, r) -> do
-      it (n ++ " `" ++ q ++ "`") $ do
-        join $ mstack (`evalStateT` serverState) $ do
-          eval q r
-
 definitionsPlutusTests :: Spec
 definitionsPlutusTests = do
   da <- runIO defaultArgs
@@ -431,6 +273,220 @@ definitionsPlutusTests = do
           ("plutus-core/plutus-core/src/PlutusCore/Pretty/PrettyConst.hs", "?", "ThrowableBuiltins", expectedThrowableBuiltins),
           ("plutus-core/plutus-core/src/PlutusCore/Pretty.hs", "?", "ThrowableBuiltins", expectedThrowableBuiltins)
         ]
+
+  describe descr $ do
+    forM_ tests $ \(f, n, q, r) -> do
+      it (printf "n=%s, f=%s, q=`%s`" n f q) $ do
+        join $ mstack (`evalStateT` serverState) $ do
+          eval f q r
+
+definitionTests :: Spec
+definitionTests = do
+  da <- runIO defaultArgs
+  consts <- runIO $ prepareConstants da {_logLevel = LevelDebug}
+  pwd <- runIO getCurrentDirectory
+
+  let descr = "definitions"
+      wd = pwd </> "test/integrationTestRepo/fake"
+      req = DefinitionRequest {workDir = wd, file = "", word = ""}
+      logF = wd </> descr ++ ".txt"
+
+  runIO $ print descr
+  runIO $ printf "cwd = %s, wd = %s, logF = %s\n" pwd wd logF
+  runIO $ removeIfExists logF
+
+  let eval0 f w = runExceptT $ definition req {file = wd </> f, word = w}
+      eval f w r = eval0 f w >>= (\d -> return $ d `shouldBe` r)
+      mstack f a = runFileLoggingT logF $ f $ runReaderT a consts
+
+  let lib1 = "lib1/src/Lib1.hs"
+      lib2 = "lib2/src/Lib2.hs"
+      exe1 = "executables/app/exe1/Main.hs"
+      exe2 = "executables/app/exe2/Main.hs"
+      exe3 = "executables/app/exe3/Main.hs"
+      ents = [lib1, lib2, exe1, exe2, exe3]
+  serverState <- runIO $ mstack (`execStateT` emptyContext) $ Cabal.load >> (eval0 lib1 "return" >>= (liftIO . print)) >> Cabal.store
+
+  let expectedPreludeReturn =
+        let expFile = _repos consts </> "base-4.16.4.0/GHC/Base.hs"
+            expLineNo = 862
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 5, sourceSpanEndColumn = 11, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedLib1 =
+        let expFile = wd </> "lib1/src/Lib1.hs"
+            expLineNo = 5
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedLib2 =
+        let expFile = wd </> "lib2/src/Lib2.hs"
+            expLineNo = 3
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedExe1 =
+        let expFile = wd </> "executables/app/exe1/Main.hs"
+            expLineNo = 6
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedExe2 =
+        let expFile = wd </> "executables/app/exe2/Main.hs"
+            expLineNo = 6
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedExe3 =
+        let expFile = wd </> "executables/app/exe3/Main.hs"
+            expLineNo = 20
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedLib2ReexportedTypeAlias =
+        let expFile = wd </> "lib2/src/Lib2.hs"
+            expLineNo = 6
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 6, sourceSpanEndColumn = 30, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+
+      expectedMkStdGen =
+        let expFile = _repos consts </> "random-1.2.1.1/src/System/Random/Internal.hs"
+            expLineNo = 582
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 9, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedLensView =
+        let expFile = _repos consts </> "lens-5.2.3/src/Control/Lens/Getter.hs"
+            expLineNo = 244
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedLensViewOperator =
+        let expFile = _repos consts </> "lens-5.2.3/src/Control/Lens/Getter.hs"
+            expLineNo = 316
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedLensOverOperator =
+        let expFile = _repos consts </> "lens-5.2.3/src/Control/Lens/Setter.hs"
+            expLineNo = 792
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedProxy =
+        let expFile = _repos consts </> "base-4.16.4.0/Data/Proxy.hs"
+            expLineNo = 56
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 16, sourceSpanEndColumn = 21, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedPreludeNothing =
+        let expFile = _repos consts </> "base-4.16.4.0/GHC/Maybe.hs"
+            expLineNo = 29
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 19, sourceSpanEndColumn = 26, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedRunState =
+        let expFile = _repos consts </> "transformers-0.5.6.2/Control/Monad/Trans/State/Lazy.hs"
+            expLineNo = 109
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 9, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedPrintf =
+        let expFile = _repos consts </> "base-4.16.4.0/Text/Printf.hs"
+            expLineNo = 257
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 7, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedTry =
+        let expFile = _repos consts </> "base-4.16.4.0/Control/Exception/Base.hs"
+            expLineNo = 174
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 4, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedQMap =
+        let expFile = _repos consts </> "containers-0.6.7/src/Data/Map/Internal.hs"
+            expLineNo = 1
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 0, sourceSpanStartLine = expLineNo, sourceSpanEndLine = 0}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedDTClockPosix =
+        let expFile = _repos consts </> "time-1.12.2/lib/Data/Time/Clock/POSIX.hs"
+            expLineNo = 1
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 0, sourceSpanStartLine = expLineNo, sourceSpanEndLine = 0}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedQMapKeys =
+        let expFile = _repos consts </> "containers-0.6.7/src/Data/Map/Internal.hs"
+            expLineNo = 3347
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedGetRTSStats =
+        let expFile = _repos consts </> "base-4.16.4.0/GHC/Stats.hsc"
+            expLineNo = 190
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 12, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedState =
+        let expFile = _repos consts </> "transformers-0.5.6.2/Control/Monad/Trans/State/Lazy.hs"
+            expLineNo = 97
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 6, sourceSpanEndColumn = 11, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedDataMapStrict =
+        let expFile = _repos consts </> "containers-0.6.7/src/Data/Map/Strict.hs"
+            expLineNo = 1
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 0, sourceSpanStartLine = expLineNo, sourceSpanEndLine = 0}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedGetter =
+        let expFile = _repos consts </> "lens-5.2.3/src/Control/Lens/Type.hs"
+            expLineNo = 490
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 6, sourceSpanEndColumn = 12, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedConst =
+        let expFile = _repos consts </> "base-4.18.0.0/Data/Functor/Const.hs"
+            expLineNo = 39
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 21, sourceSpanEndColumn = 26, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedContravariant =
+        let expFile = _repos consts </> "base-4.18.0.0/Data/Functor/Contravariant.hs"
+            expLineNo = 99
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 7, sourceSpanEndColumn = 20, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedSetter =
+        let expFile = _repos consts </> "lens-5.2.3/src/Control/Lens/Type.hs"
+            expLineNo = 292
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 6, sourceSpanEndColumn = 12, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedSettable =
+        let expFile = _repos consts </> "lens-5.2.3/src/Control/Lens/Internal/Setter.hs"
+            expLineNo = 32
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 57, sourceSpanEndColumn = 65, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+      expectedIdentity =
+        let expFile = _repos consts </> "base-4.18.0.0/Data/Functor/Identity.hs"
+            expLineNo = 57
+            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 22, sourceSpanEndColumn = 30, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
+         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
+  let noDefErr = Right $ DefinitionResponse {srcSpan = [], err = Nothing}
+
+  let tests =
+        [(x, "from prelude - class function", "return", expectedPreludeReturn) | x <- ents]
+          ++ [(x, "is visible", "lib2", expectedLib2) | x <- [lib1, lib2, exe3]]
+          ++ [(x, "type alias re-export works", "Lib2_ReexportedTypeAlias", expectedLib2ReexportedTypeAlias) | x <- [lib1, lib2, exe3]]
+          ++ [ (lib1, "is visible", "lib1", expectedLib1),
+               (exe1, "is visible", "exe1", expectedExe1),
+               (exe2, "is visible", "exe2", expectedExe2),
+               (exe3, "is visible", "exe3", expectedExe3)
+             ]
+          ++ concat
+            [ [ (x, "from prelude - function", "return", expectedPreludeReturn),
+                (x, "from prelude - data ctor", "Nothing", expectedPreludeNothing),
+                (x, "data type with type variable", "Proxy", expectedProxy),
+                (x, "cross package re-export: class name", "State", expectedState),
+                (x, "cross package re-export: module", "runState", expectedRunState),
+                (x, "operator + in-package re-export: module", "^.", expectedLensViewOperator),
+                (x, "operator + in-package re-export: module", "%=", expectedLensOverOperator),
+                (x, "function + in-package re-export: module", "view", expectedLensView),
+                (x, "function in-package re-export", "mkStdGen", expectedMkStdGen),
+                (x, "qualified module import - go to module via qualifier", "Map", expectedQMap),
+                (x, "qualified module import - go to module via 'original' name", "Data.Map.Strict", expectedDataMapStrict),
+                (x, "ordinary module import - go to module via 'original' name", "Data.Time.Clock.POSIX", expectedDTClockPosix),
+                (x, "qualified module import - go to function through qualifier", "Map.keys", expectedQMapKeys),
+                (x, "", "printf", expectedPrintf),
+                (x, "", "try", expectedTry),
+                (x, "hsc support", "getRTSStats", expectedGetRTSStats),
+                (x, "two qualified imports under the same name + type alias: does not work when no qualifier", "Getter", noDefErr),
+                (x, "two qualified imports under the same name + type alias: does not work when no qualifier", "Setter", noDefErr),
+                (x, "two qualified imports under the same name + type alias", "Lens.Getter", expectedGetter),
+                (x, "two qualified imports under the same name + type alias", "Lens.Const", expectedConst),
+                (x, "two qualified imports under the same name + type alias", "Lens.Contravariant", expectedContravariant),
+                (x, "two qualified imports under the same name + type alias", "Lens.Setter", expectedSetter),
+                (x, "two qualified imports under the same name + type alias", "Lens.Identity", expectedIdentity),
+                (x, "two qualified imports under the same name + type alias", "Lens.Settable", expectedSettable)
+              ]
+              | x <- [exe3]
+            ]
 
   describe descr $ do
     forM_ tests $ \(f, n, q, r) -> do
@@ -492,6 +548,7 @@ linesTest = do
 instance FromJSON Version where
   parseJSON :: Value -> Parser Version
   parseJSON (String t) = pure $ read $ unpack t
+
 instance FromJSON VersionRange where
   parseJSON :: Value -> Parser VersionRange
   parseJSON (String t) = pure $ read $ unpack t
@@ -598,7 +655,7 @@ dropCacheTest = do
     it "test repo" $ do
       x :: Either String Expectation <- mstack (`evalStateT` st2) $ runExceptT $ execWriterT $ do
         cpkgM <- head <$> cabalPackage wdT mainF
-        cpkgL <- head <$>cabalPackage wdT libF
+        cpkgL <- head <$> cabalPackage wdT libF
 
         PackageCache.pExists cpkgM >>= tell . (`shouldBe` True)
         PackageCache.pExists cpkgL >>= tell . (`shouldBe` True)
@@ -645,6 +702,6 @@ main = do
     linesTest
     figureOutExportsTest
     cabalFullTest
-    definitionsTest
     dropCacheTest
+    definitionTests
     definitionsPlutusTests

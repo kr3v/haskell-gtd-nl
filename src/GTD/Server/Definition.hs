@@ -8,7 +8,6 @@
 
 module GTD.Server.Definition where
 
-import Control.Applicative (Alternative (..))
 import Control.Lens (use, (%=), (.=))
 import Control.Monad (forM, forM_, join, unless, void, when)
 import Control.Monad.Except (MonadError (..), MonadIO (..))
@@ -179,7 +178,7 @@ definition (DefinitionRequest {workDir = wd, file = rf0, word = w}) = do
       Just rm -> do
         updateStatus $ printf "figuring out what `%s` is in %s" w pn
         resolution rm w
-    logDebugNSS "definition" $ printf "resolution %s (resM = %s) = %s" pn (show $ isJust resM) (show r)
+    logDebugNSS "definition" $ printf "resolution %s %s (resM = %s) = %s" w pn (show $ isJust resM) (show r)
     return r
   liftIO stats
   updateStatus ""

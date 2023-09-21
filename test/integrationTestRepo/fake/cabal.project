@@ -1,0 +1,4 @@
+packages:
+    ./lib1
+    ./lib2
+    ./executables
