@@ -12,32 +12,33 @@
 
 import Control.Exception (IOException, try)
 import Control.Lens (use)
-import Control.Monad.Error (MonadError (..))
+import Control.Monad.Except (MonadError (..))
 import Control.Monad.Logger (LogLevel (LevelDebug), NoLoggingT (..), runStderrLoggingT, runStdoutLoggingT)
 import Control.Monad.Logger.CallStack (runFileLoggingT)
-import Control.Monad.RWS (MonadIO (liftIO), MonadState (get), MonadTrans (..), MonadWriter (..), forM, forM_, join)
+import Control.Monad.RWS (MonadIO (liftIO), MonadState (get), MonadWriter (..), forM, forM_, join)
 import Control.Monad.State (StateT (..), evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (ReaderT (..))
 import Control.Monad.Writer (execWriterT)
-import Data.Aeson (FromJSON, ToJSON, decode, decode', eitherDecode, encode)
-import Data.Aeson.Types (FromJSON (..), Parser, ToJSON (..), Value (..))
+import Data.Aeson (FromJSON, ToJSON, decode, eitherDecode, encode)
+import Data.Aeson.Types (FromJSON (..), Parser, Value (..))
 import qualified Data.ByteString.Lazy as BS
 import Data.Either (partitionEithers)
-import Data.Either.Combinators (fromLeft, mapLeft, mapRight)
-import Data.List (isPrefixOf, isSuffixOf)
+import Data.Either.Combinators (mapLeft, mapRight)
+import Data.List (find, isPrefixOf, isSuffixOf)
 import qualified Data.Map as Map
 import Data.Maybe (fromJust, fromMaybe)
-import Data.Text (pack, unpack)
+import Data.Text (unpack)
 import Distribution.Version (VersionRange)
 import GHC.Generics (Generic)
 import GTD.Cabal.Cache as Cabal (load, store)
 import GTD.Cabal.Types (Dependency, PackageModules, PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, Version, transformPaths, transformPathsR)
+import qualified GTD.Cabal.Types as Cabal
 import GTD.Configuration (Args (_logLevel), GTDConfiguration (..), defaultArgs, prepareConstants)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (Declarations (..), Exports, Imports, SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine))
 import GTD.Haskell.Lines (Line (..), buildMap, resolve)
-import GTD.Haskell.Module (HsModule (..), HsModuleMetadata (_mPath), HsModuleP (..), emptyHsModule, emptyMetadata, parseModule)
+import GTD.Haskell.Module (HsModule (..), HsModuleMetadata (_mPath), HsModuleP (..), emptyMetadata, parseModule)
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import qualified GTD.Resolution.Cache as PackageCache
 import GTD.Resolution.Module (figureOutExports, figureOutExports0)
@@ -227,8 +228,6 @@ figureOutExportsTest = do
               liftIO $ BS.writeFile outRP $ encode result
               return $ result `shouldBe` expectedR
 
-definitionsPlutusTests :: Spec
-definitionsPlutusTests = do
   da <- runIO defaultArgs
   consts <- runIO $ prepareConstants da {_logLevel = LevelDebug}
   pwd <- runIO getCurrentDirectory
@@ -568,7 +567,7 @@ cabalFullTest = do
   wd <- runIO getCurrentDirectory
 
   let descr = "cabalFull"
-      wdT = wd </> "test/integrationTestRepo/sc-ea-hs"
+      wdT = wd </> "test/integrationTestRepo/fake"
       logF = wdT </> descr ++ ".txt"
   runIO $ removeIfExists logF
 
@@ -637,12 +636,12 @@ dropCacheTest = do
   wd <- runIO getCurrentDirectory
 
   let descr = "dropCache"
-      wdT = wd </> "test/integrationTestRepo/sc-ea-hs"
-      mainF = wdT </> "app/game/Main.hs"
-      libF = wdT </> "src/ScEaHs/Game/Surface/Generator.hs"
+      wdT = wd </> "test/integrationTestRepo/fake"
+      mainF = wdT </> "executables/app/exe3/Main.hs"
+      libF = wdT </> "lib1/src/Lib1.hs"
       logF = wdT </> descr ++ ".txt"
-      reqM = DefinitionRequest {workDir = wdT, file = mainF, word = "playIO"}
-      reqL = DefinitionRequest {workDir = wdT, file = libF, word = "randomR"}
+      reqM = DefinitionRequest {workDir = wdT, file = mainF, word = "return"}
+      reqL = DefinitionRequest {workDir = wdT, file = libF, word = "return"}
   runIO $ removeIfExists logF
 
   let mstack f a = runFileLoggingT logF $ f $ runReaderT a consts
@@ -652,9 +651,12 @@ dropCacheTest = do
   (_, st2) <- runIO $ mstack (`runStateT` st1) $ runExceptT $ definition reqM
 
   describe descr $ do
-    it "test repo" $ do
+    it "" $ do
       x :: Either String Expectation <- mstack (`evalStateT` st2) $ runExceptT $ execWriterT $ do
-        cpkgM <- head <$> cabalPackage wdT mainF
+        cpkgM <-
+          maybe (throwError "exe3 not found") return
+            . find (\x -> (Cabal._desName . Cabal._designation $ x) == Just "exe3")
+            =<< cabalPackage wdT mainF
         cpkgL <- head <$> cabalPackage wdT libF
 
         PackageCache.pExists cpkgM >>= tell . (`shouldBe` True)
@@ -704,4 +706,3 @@ main = do
     cabalFullTest
     dropCacheTest
     definitionTests
-    definitionsPlutusTests
