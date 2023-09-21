@@ -228,57 +228,6 @@ figureOutExportsTest = do
               liftIO $ BS.writeFile outRP $ encode result
               return $ result `shouldBe` expectedR
 
-  da <- runIO defaultArgs
-  consts <- runIO $ prepareConstants da {_logLevel = LevelDebug}
-  pwd <- runIO getCurrentDirectory
-
-  let descr = "definitions"
-      workDir = pwd </> "test/integrationTestRepo/plutus"
-      req = DefinitionRequest {workDir = workDir, file = "", word = ""}
-      logF = workDir </> descr ++ ".txt"
-
-  runIO $ print descr
-  runIO $ printf "cwd = %s, wd = %s, logF = %s\n" pwd workDir logF
-  runIO $ removeIfExists logF
-
-  let eval0 f w = runExceptT $ definition req {file = workDir </> f, word = w}
-      eval f w r = eval0 f w >>= (\d -> return $ d `shouldBe` r)
-      mstack f a = runFileLoggingT logF $ f $ runReaderT a consts
-
-  serverState <- runIO $ mstack (`execStateT` emptyContext) $ Cabal.load >> (eval0 "plutus-tx/src/PlutusTx/AssocMap.hs" "return" >>= (liftIO . print)) >> Cabal.store
-
-  let expectedPreludeReturn =
-        let expFile = _repos consts </> "base-4.18.0.0/GHC/Base.hs"
-            expLineNo = 947
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 5, sourceSpanEndColumn = 11, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
-      expectedToData =
-        let expFile = workDir </> "plutus-tx/src/PlutusTx/IsData/Class.hs"
-            expLineNo = 38
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 7, sourceSpanEndColumn = 13, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
-      expectedThrowableBuiltins =
-        let expFile = workDir </> "plutus-core/plutus-core/src/PlutusCore/Pretty/PrettyConst.hs"
-            expLineNo = 89
-            expSrcSpan = SourceSpan {sourceSpanFileName = expFile, sourceSpanStartColumn = 6, sourceSpanEndColumn = 23, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
-         in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
-  let noDefErr = Left "No definition found"
-
-  let tests =
-        [ ("plutus-tx/src/PlutusTx/AssocMap.hs", "from prelude - function", "return", expectedPreludeReturn),
-          ("plutus-tx/src/PlutusTx/AssocMap.hs", "export (module X) where import I1 as X and import I2 as X", "ToData", expectedToData),
-          ("plutus-core/plutus-core/src/PlutusCore/Evaluation/Machine/Ck.hs", "?", "ThrowableBuiltins", expectedThrowableBuiltins),
-          ("plutus-core/untyped-plutus-core/src/UntypedPlutusCore/Evaluation/Machine/Cek.hs", "?", "ThrowableBuiltins", expectedThrowableBuiltins),
-          ("plutus-core/plutus-core/src/PlutusCore/Pretty/PrettyConst.hs", "?", "ThrowableBuiltins", expectedThrowableBuiltins),
-          ("plutus-core/plutus-core/src/PlutusCore/Pretty.hs", "?", "ThrowableBuiltins", expectedThrowableBuiltins)
-        ]
-
-  describe descr $ do
-    forM_ tests $ \(f, n, q, r) -> do
-      it (printf "n=%s, f=%s, q=`%s`" n f q) $ do
-        join $ mstack (`evalStateT` serverState) $ do
-          eval f q r
-
 definitionTests :: Spec
 definitionTests = do
   da <- runIO defaultArgs

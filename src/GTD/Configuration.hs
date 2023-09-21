@@ -46,7 +46,8 @@ defaultArgs :: IO Args
 defaultArgs = do
   home <- getHomeDirectory
   let root = home </> ".local" </> "share" </> "haskell-gtd-nl"
-  return $ Args {_ttl = 60, _dynamicMemoryUsage = True, _logLevel = LevelInfo, _parserExe = root </> "haskell-gtd-nl-parser", _parserArgs = [], _root = root}
+  let cabalBin = home </> ".cabal" </> "bin"
+  return $ Args {_ttl = 60, _dynamicMemoryUsage = True, _logLevel = LevelInfo, _parserExe = cabalBin </> "haskell-gtd-nl-parser", _parserArgs = [], _root = root}
 
 data GTDConfiguration = GTDConfiguration
   { _logs :: FilePath,
