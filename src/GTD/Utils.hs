@@ -4,17 +4,18 @@
 
 module GTD.Utils where
 
-import Control.Concurrent (myThreadId)
+import Control.Concurrent (MVar, myThreadId, newMVar, withMVar)
 import Control.Exception (IOException, catch, throwIO, try)
 import Control.Lens (Lens', use, (.=))
-import Control.Monad.Except (ExceptT, MonadError (throwError), MonadIO (liftIO), forM, when)
-import Control.Monad.Logger (LogLevel (..), MonadLogger, MonadLoggerIO, defaultLogStr, fromLogStr, logDebugNS, logErrorNS, logOtherNS)
+import Control.Monad.Except (ExceptT, MonadError (throwError), MonadIO (..), forM, when)
+import Control.Monad.Logger (Loc, LogLevel (..), LogSource, LogStr, LoggingT (..), MonadLogger, MonadLoggerIO, defaultLogStr, filterLogger, fromLogStr, logDebugNS, logErrorNS, logOtherNS)
 import qualified Control.Monad.Logger as Logger
 import Control.Monad.RWS (MonadState (..))
 import Control.Monad.State (StateT (..))
 import Control.Monad.Trans.Except (catchE, mapExceptT)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as S8
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Text (unpack)
@@ -24,6 +25,7 @@ import Data.Time.Format.ISO8601 (iso8601Show)
 import GHC.Stats (RTSStats (..), getRTSStats, getRTSStatsEnabled)
 import Numeric (showFFloat)
 import System.Directory (removeFile)
+import System.IO (BufferMode (LineBuffering), Handle, IOMode (..), hSetBuffering, withFile)
 import System.IO.Error (isDoesNotExistError)
 import Text.Printf (printf)
 
@@ -200,3 +202,16 @@ statusL p a b c d = BS.writeFile p $ BS.drop 3 $ fromLogStr $ defaultLogStr a b 
 
 updateStatus :: String -> MonadLogger m => m ()
 updateStatus s = logOtherNS (T.pack statusS) (LevelOther $ T.pack "") (T.pack s)
+
+logOutput :: MVar Handle -> Loc -> LogSource -> LogLevel -> LogStr -> IO ()
+logOutput hm loc src level msg =
+  withMVar hm $ \h ->
+    S8.hPutStr h $ fromLogStr $ defaultLogStr loc src level msg
+
+withLogging :: FilePath -> FilePath -> LogLevel -> LoggingT IO r -> IO r
+withLogging logP logS ll action = withFile logP AppendMode $ \h -> do
+  hSetBuffering h LineBuffering
+  hm <- newMVar h
+  (`runLoggingT` combine (statusL logS) (logOutput hm)) $
+    filterLogger (\_ l -> l >= ll) $ do
+      action

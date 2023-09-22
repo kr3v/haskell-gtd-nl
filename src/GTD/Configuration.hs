@@ -1,6 +1,6 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE DeriveGeneric #-}
 
 module GTD.Configuration where
 
@@ -32,22 +32,26 @@ parseJson str = case decode (BS.pack str) of
   Just v -> Right v
   Nothing -> Left "invalid value"
 
-argsP :: Parser Args
-argsP =
-  Args
-    <$> option auto (long "ttl" <> help "how long to wait before dying when idle (in seconds)" <> showDefault <> value 60)
-    <*> switch (long "dynamic-memory-usage" <> help "whether to use dynamic memory usage" <> showDefault)
-    <*> option auto (long "log-level" <> help "" <> showDefault <> value LevelInfo)
-    <*> strOption (long "parser-exe" <> help "" <> showDefault <> value "./haskell-gtd-nl-parser")
-    <*> option (eitherReader parseJson) (long "parser-args" <> help "" <> showDefault <> value [])
-    <*> strOption (long "root" <> help "" <> showDefault)
+argsP :: IO (Parser Args)
+argsP = do
+  home <- getHomeDirectory
+  let root = home </> ".local" </> "share" </> "haskell-gtd-nl"
+  let cabalBin = home </> ".cabal" </> "bin" </> "haskell-gtd-nl-parser"
+  return $
+    Args
+      <$> option auto (long "ttl" <> help "how long to wait before dying when idle (in seconds)" <> showDefault <> value 60)
+      <*> switch (long "dynamic-memory-usage" <> help "whether to use dynamic memory usage" <> showDefault)
+      <*> option auto (long "log-level" <> help "" <> showDefault <> value LevelInfo)
+      <*> strOption (long "parser-exe" <> help "" <> showDefault <> value cabalBin)
+      <*> option (eitherReader parseJson) (long "parser-args" <> help "" <> showDefault <> value [])
+      <*> strOption (long "root" <> help "" <> showDefault <> value root)
 
 defaultArgs :: IO Args
 defaultArgs = do
   home <- getHomeDirectory
   let root = home </> ".local" </> "share" </> "haskell-gtd-nl"
-  let cabalBin = home </> ".cabal" </> "bin"
-  return $ Args {_ttl = 60, _dynamicMemoryUsage = True, _logLevel = LevelInfo, _parserExe = cabalBin </> "haskell-gtd-nl-parser", _parserArgs = [], _root = root}
+  let cabalBin = home </> ".cabal" </> "bin" </> "haskell-gtd-nl-parser"
+  return $ Args {_ttl = 60, _dynamicMemoryUsage = True, _logLevel = LevelInfo, _parserExe = cabalBin, _parserArgs = [], _root = root}
 
 data GTDConfiguration = GTDConfiguration
   { _logs :: FilePath,

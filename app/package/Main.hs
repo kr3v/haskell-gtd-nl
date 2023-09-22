@@ -10,8 +10,8 @@ module Main where
 import Control.Exception.Lifted (bracket)
 import Control.Lens (use)
 import Control.Monad (forM_, void)
-import Control.Monad.Except (MonadIO (..), runExceptT, when)
-import Control.Monad.Logger (LogLevel (LevelInfo), LoggingT (..), defaultOutput, filterLogger)
+import Control.Monad.Except (runExceptT, when)
+import Control.Monad.Logger (LogLevel (LevelInfo))
 import Control.Monad.Reader (ReaderT (runReaderT))
 import Control.Monad.State (execStateT)
 import qualified GTD.Cabal.Cache as Cabal (load, store)
@@ -19,13 +19,13 @@ import qualified GTD.Cabal.Get as Cabal (changed)
 import GTD.Cabal.Types (Designation (..), Package (..))
 import qualified GTD.Configuration as Conf (Args (..), GTDConfiguration (..), defaultArgs, prepareConstants)
 import GTD.Resolution.Package (package'resolution'withDependencies'concurrently)
-import GTD.Server (cabalPackage'unresolved'plusStoreInLocals)
+import GTD.Server.Definition (cabalPackage'unresolved'plusStoreInLocals)
 import GTD.State (ccGet, emptyContext)
-import GTD.Utils (combine, logErrorNSS, stats, statusL, updateStatus)
+import GTD.Utils (logErrorNSS, stats, updateStatus, withLogging)
 import Options.Applicative (Parser, ParserInfo, auto, execParser, fullDesc, help, helper, info, long, option, optional, showDefault, strOption, value, (<**>))
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.FilePath ((</>))
-import System.IO (BufferMode (LineBuffering), IOMode (..), hSetBuffering, stderr, stdout, withFile)
+import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
 
 data Args = Args
   { dir :: String,
@@ -67,23 +67,20 @@ main = do
 
   let logP = r </> "parser.log"
       logS = r </> "status" </> "parser"
-  _ <- withFile logP AppendMode $ \h ->
-    (`runLoggingT` combine (statusL logS) (defaultOutput h)) $
-      filterLogger (\_ l -> l >= ll) $ do
-        bracket (pure ()) (const $ updateStatus "") $ \_ -> do
-          liftIO $ hSetBuffering h LineBuffering
-          flip runReaderT constants $ flip execStateT emptyContext $ do
-            Cabal.load
-            e <- runExceptT $ do
-              cPkgsU <- cabalPackage'unresolved'plusStoreInLocals d
-              forM_ cPkgsU $ \p ->
-                when (maybe True (_designation p ==) (designation a)) $
-                  void $
-                    package'resolution'withDependencies'concurrently p
-            ccGC <- use $ ccGet . Cabal.changed
-            when ccGC Cabal.store
-            case e of
-              Left err -> logErrorNSS d err
-              Right _ -> pure ()
+  _ <- withLogging logP logS ll $ do
+    bracket (pure ()) (const $ updateStatus "") $ \_ -> do
+      flip runReaderT constants $ flip execStateT emptyContext $ do
+        Cabal.load
+        e <- runExceptT $ do
+          cPkgsU <- cabalPackage'unresolved'plusStoreInLocals d
+          forM_ cPkgsU $ \p ->
+            when (maybe True (_designation p ==) (designation a)) $
+              void $
+                package'resolution'withDependencies'concurrently p
+        ccGC <- use $ ccGet . Cabal.changed
+        when ccGC Cabal.store
+        case e of
+          Left err -> logErrorNSS d err
+          Right _ -> pure ()
 
   stats

@@ -22,13 +22,13 @@ import Data.Proxy (Proxy (..))
 import GHC.TypeLits (KnownSymbol)
 import qualified GTD.Cabal.Cache as CabalCache
 import GTD.Configuration (Args (..), GTDConfiguration (..), args, argsP, prepareConstants)
-import GTD.State (Context, emptyContext)
 import GTD.Server (CpphsRequest, CpphsResponse (..), DefinitionRequest (..), DefinitionResponse (..), DropPackageCacheRequest, cpphs, definition, dropPackageCache)
-import GTD.Utils (combine, statusL, ultraZoom, updateStatus)
+import GTD.State (Context, emptyContext)
+import GTD.Utils (combine, statusL, ultraZoom, updateStatus, withLogging)
 import Network.Socket (Family (AF_INET), SockAddr (SockAddrInet), SocketType (Stream), bind, defaultProtocol, listen, socket, socketPort, tupleToHostAddress, withSocketsDo)
 import Network.Wai.Handler.Warp (defaultSettings, runSettingsSocket)
 import Options.Applicative (ParserInfo, execParser, fullDesc, helper, info, (<**>))
-import Servant (Header, Headers, JSON, Post, ReqBody, addHeader, (:<|>) (..), (:>), Delete)
+import Servant (Delete, Header, Headers, JSON, Post, ReqBody, addHeader, (:<|>) (..), (:>))
 import Servant.Server (Handler, serve)
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.Exit (ExitCode (..))
@@ -78,25 +78,19 @@ nt s x = liftIO (evalStateT x s)
 h n c m respP1 respP2 req = do
   let logP = (_root . _args $ c) </> "server.log"
       statusP = (_root . _args $ c) </> "status" </> "server"
-  liftIO $
-    withFile logP AppendMode $ \h -> do
-      hSetBuffering h LineBuffering
-      modifyMVar m $ \s -> do
-        (r, s') <- flip runStateT s $ do
-          rq <- reqId <+= 1
-          let reqId :: String = printf "%06d" rq
-          liftIO $ putStrLn $ "Got request with ID:" ++ show reqId
-          r' <-
-            ultraZoom context $
-              (`runLoggingT` combine (statusL statusP) (defaultOutput h)) $ do
-                bracket (pure ()) (const $ updateStatus "") $ \_ -> do
-                  updateStatus $ printf "preparing to execute `%s`" n
-                  filterLogger (\_ l -> l >= (_logLevel . _args $ c)) $
-                    flip runReaderT c $
-                      runExceptT $
-                        respP1 req
-          return $ respP2 reqId r'
-        return (s', r)
+  modifyMVar m $ \s -> do
+    withLogging logP statusP (_logLevel . _args $ c) $ do
+      (r, s') <- flip runStateT s $ do
+        rq <- reqId <+= 1
+        let reqId :: String = printf "%06d" rq
+        liftIO $ putStrLn $ "Got request with ID:" ++ show reqId
+        r' <-
+          ultraZoom context $
+            bracket (pure ()) (const $ updateStatus "") $ \_ -> do
+              updateStatus $ printf "preparing to execute `%s`" n
+              flip runReaderT c $ runExceptT $ respP1 req
+        return $ respP2 reqId r'
+      return (s', r)
 
 ---
 
@@ -108,7 +102,7 @@ definitionH ::
   Handler (Headers '[Header hs String] DefinitionResponse)
 definitionH c m req = do
   let defH = either (\e -> DefinitionResponse {err = Just e, srcSpan = []}) id
-  h "definition" c m definition (\r e -> addHeader r $ defH e) req
+  liftIO $ h "definition" c m definition (\r e -> addHeader r $ defH e) req
 
 pingH :: MVar ServerState -> Handler String
 pingH m = do
@@ -122,7 +116,7 @@ dropCacheH ::
   Handler String
 dropCacheH c m req = do
   let defH = either id id
-  h "dropCache" c m dropPackageCache (\_ e -> defH e) req
+  liftIO $ h "dropCache" c m dropPackageCache (\_ e -> defH e) req
 
 runCpphsH ::
   GTDConfiguration ->
@@ -131,7 +125,7 @@ runCpphsH ::
   Handler CpphsResponse
 runCpphsH c m req = do
   let defH = either (\e -> CpphsResponse {crErr = Just e, crContent = Nothing}) id
-  h "runCpphs" c m cpphs (\_ e -> defH e) req
+  liftIO $ h "runCpphs" c m cpphs (\_ e -> defH e) req
 
 ---
 
@@ -149,18 +143,17 @@ selfKiller m ttl = do
       putMVar m m'
       selfKiller m ttl
 
-opts :: ParserInfo Args
-opts =
-  info
-    (argsP <**> helper)
-    fullDesc
+opts :: IO (ParserInfo Args)
+opts = do
+  args <- argsP
+  return $ info (args <**> helper) fullDesc
 
 main :: IO ()
 main = withSocketsDo $ do
   hSetBuffering stdout LineBuffering
   hSetBuffering stderr LineBuffering
 
-  as <- execParser opts
+  as <- execParser =<< opts
   print as
 
   let addr = SockAddrInet 0 (tupleToHostAddress (127, 0, 0, 1))

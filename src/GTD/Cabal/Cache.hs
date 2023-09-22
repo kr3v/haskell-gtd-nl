@@ -1,5 +1,6 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -25,23 +26,23 @@ import Text.Printf (printf)
 load :: (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m) => m ()
 load = do
   cfgP <- asks _ccGetPath
-  cE <- liftIO $ try $ BS.readFile cfgP
-  case cE of
+  logDebugNSS "CabalCache.load" $ printf "readFile %s" cfgP
+  liftIO (try $ BS.readFile cfgP) >>= \case
     Left (e :: IOError) -> logErrorNSS "CabalCache.load" $ printf "readFile %s -> %s" cfgP (show e)
     Right c -> do
       forM_ (decode c) (ccGet .=)
       (ccGet . changed) .= False
       g <- length <$> use (ccGet . vs)
-      logDebugNSS "CabalCache.load" $ printf "loaded %s (%d)" cfgP g
+      logDebugNSS "CabalCache.load" $ printf "readFile succeeded %s (%d)" cfgP g
 
 store :: (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m) => m ()
 store = do
   cfgP <- asks _ccGetPath
   cc <- use ccGet
-  o <- liftIO $ try $ BS.writeFile cfgP $ encode cc
-  case o of
+  logDebugNSS "CabalCache.store" $ printf "writeFile %s" cfgP
+  liftIO (try $ BS.writeFile cfgP $ encode cc) >>= \case
     Left (e :: IOError) -> logErrorNSS "CabalCache.store" $ printf "writeFile %s -> %s" cfgP (show e)
-    Right _ -> logDebugNSS "CabalCache.store" $ printf "stored %s" cfgP
+    Right _ -> logDebugNSS "CabalCache.store" $ printf "writeFile succeeded %s" cfgP
 
 ---
 

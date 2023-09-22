@@ -3,7 +3,7 @@
   "displayName": "Haskell 'go to non-local definitions' extension",
   "publisher": "kr3v",
   "description": "",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "engines": {
     "vscode": "^1.79.0"
   },
