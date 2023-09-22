@@ -8,7 +8,8 @@ import * as util from 'util';
 import { FileHandle } from 'node:fs/promises';
 
 const userHomeDir = homedir();
-const cabalDir = path.join(userHomeDir, ".cabal/bin");
+const cabalBinDir = path.join(userHomeDir, ".cabal/bin");
+const localBinDir = path.join(userHomeDir, ".local/bin");
 let serverRoot: string, serverExe: string, packageExe: string, serverRepos: string, serverPidF: string, serverPortF: string, serverStatusD: string;
 let statusServerS = "", statusPackageS = "";
 let statusBar: vscode.StatusBarItem;
@@ -60,8 +61,11 @@ async function supernormalize(p: string, executable: boolean): Promise<string> {
 		if (await exists(path.join(serverRoot, p))) {
 			return path.join(serverRoot, p);
 		}
-		if (await exists(path.join(cabalDir, p))) {
-			return path.join(cabalDir, p);
+		if (await exists(path.join(localBinDir, p))) {
+			return path.join(localBinDir, p);
+		}
+		if (await exists(path.join(cabalBinDir, p))) {
+			return path.join(cabalBinDir, p);
 		}
 		return p;
 	}
