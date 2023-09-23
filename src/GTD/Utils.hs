@@ -24,10 +24,12 @@ import Data.Time.Clock.POSIX (getCurrentTime)
 import Data.Time.Format.ISO8601 (iso8601Show)
 import GHC.Stats (RTSStats (..), getRTSStats, getRTSStatsEnabled)
 import Numeric (showFFloat)
-import System.Directory (removeFile)
-import System.IO (BufferMode (LineBuffering), Handle, IOMode (..), hSetBuffering, withFile)
+import System.Directory (removeFile, renameFile)
+import System.IO (BufferMode (..), Handle, IOMode (..), hSetBuffering, withFile)
 import System.IO.Error (isDoesNotExistError)
 import Text.Printf (printf)
+import Data.Int (Int32)
+import System.Random (randomIO)
 
 maybeToMaybeT :: Monad m => Maybe a -> MaybeT m a
 maybeToMaybeT = MaybeT . return
@@ -198,7 +200,7 @@ statusS :: String
 statusS = "status.log"
 
 statusL :: FilePath -> LogF
-statusL p a b c d = BS.writeFile p $ BS.drop 3 $ fromLogStr $ defaultLogStr a b c d
+statusL p a b c d = encodeWithTmp BS.writeFile p $ BS.drop 3 $ fromLogStr $ defaultLogStr a b c d
 
 updateStatus :: String -> MonadLogger m => m ()
 updateStatus s = logOtherNS (T.pack statusS) (LevelOther $ T.pack "") (T.pack s)
@@ -210,8 +212,31 @@ logOutput hm loc src level msg =
 
 withLogging :: FilePath -> FilePath -> LogLevel -> LoggingT IO r -> IO r
 withLogging logP logS ll action = withFile logP AppendMode $ \h -> do
-  hSetBuffering h LineBuffering
+  hSetBuffering h NoBuffering
   hm <- newMVar h
   (`runLoggingT` combine (statusL logS) (logOutput hm)) $
     filterLogger (\_ l -> l >= ll) $ do
       action
+
+---
+
+encodeWithTmp :: (FilePath -> a -> IO ()) -> FilePath -> a -> IO ()
+encodeWithTmp f p a = do
+  y :: Int32 <- randomIO
+  let pT = p ++ ".tmp." ++ show (abs y)
+  f pT a
+  renameFile pT p
+
+encodeWithTmp1 :: (MonadIO m) => (FilePath -> a -> IO ()) -> FilePath -> a -> m ()
+encodeWithTmp1 f p a = do
+  y :: Int32 <- randomIO
+  let pT = p ++ ".tmp." ++ show (abs y)
+  liftIO $ f pT a
+  liftIO $ renameFile pT p
+
+encodeWithTmp2 :: (MonadIO m) => (FilePath -> a -> m ()) -> FilePath -> a -> m ()
+encodeWithTmp2 f p a = do
+  y :: Int32 <- randomIO
+  let pT = p ++ ".tmp." ++ show (abs y)
+  f pT a
+  liftIO $ renameFile pT p

@@ -26,7 +26,7 @@ import GTD.Resolution.Caching.Utils (binaryGet, pathAsFile)
 import GTD.Resolution.Types (Package (..))
 import qualified GTD.Resolution.Types as Package
 import GTD.State (Context, cExports)
-import GTD.Utils (logDebugNSS, removeIfExistsL)
+import GTD.Utils (logDebugNSS, removeIfExistsL, encodeWithTmp)
 import System.Directory (createDirectoryIfMissing, doesFileExist, removeDirectoryRecursive)
 import System.FilePath.Posix ((</>))
 import Text.Printf (printf)
@@ -73,11 +73,11 @@ pStore cPkg pkg = do
   ll <- asks $ _logLevel . _args
   modulesP <- path cPkg modulesN
   exportsP <- path cPkg exportsN
-  liftIO $ Binary.encodeFile modulesP $ Package._modules pkg
-  liftIO $ Binary.encodeFile exportsP $ Package._exports pkg
+  liftIO $ encodeWithTmp Binary.encodeFile modulesP (Package._modules pkg)
+  liftIO $ encodeWithTmp Binary.encodeFile exportsP (Package._exports pkg)
   liftIO $ when (ll == LevelDebug) $ do
-    JSON.encodeFile (modulesP ++ ".json") (Package._modules pkg)
-    JSON.encodeFile (exportsP ++ ".json") (Package._exports pkg)
+    encodeWithTmp JSON.encodeFile (modulesP ++ ".json") (Package._modules pkg)
+    encodeWithTmp JSON.encodeFile (exportsP ++ ".json") (Package._exports pkg)
   logDebugNSS "package cached put" $ printf "%s -> (%d, %d)" (show $ Cabal.key cPkg) (length $ Package._modules pkg) (length $ Package._exports pkg)
 
 pRemove ::
@@ -140,9 +140,9 @@ resolution'get'generic n m = do
 resolution'put'generic :: JSON.ToJSON a => String -> HsModule -> (Binary.Binary a, JSON.ToJSON a) => a -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m ()
 resolution'put'generic n m r = do
   p <- __resolution'path n m
-  liftIO $ Binary.encodeFile p r
+  liftIO $ encodeWithTmp Binary.encodeFile p r
   ll <- asks $ _logLevel . _args
-  liftIO $ when (ll == LevelDebug) $ JSON.encodeFile (p ++ ".json") r
+  liftIO $ when (ll == LevelDebug) $ encodeWithTmp JSON.encodeFile (p ++ ".json") r
 
 resolution'exists'generic :: String -> HsModule -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m Bool
 resolution'exists'generic n m = do

@@ -138,9 +138,9 @@ package'resolution'withDependencies'forked p = do
 
   let pArgs' memFree
         | memFree > 8 * 1024 = ["-N", "-A128M"]
-        | memFree > 4 * 1024 = ["-N", "-A32M"]
-        | memFree > 2 * 1024 = ["-N", "-A4M"]
-        | otherwise = []
+        | memFree > 4 * 1024 = ["-N", "-A64M"]
+        | memFree > 2 * 1024 = ["-N", "-A16M"]
+        | otherwise = ["-N", "-A4M"]
       pArgs = do
         memFree <- liftIO getUsableFreeMemory
         let a = pArgs' memFree

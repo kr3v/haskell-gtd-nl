@@ -17,7 +17,7 @@ import Control.Monad.Trans.Maybe (MaybeT (..))
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Cache.LRU as LRU
 import Data.Foldable (foldlM)
-import Data.List (isPrefixOf)
+import Data.List (isPrefixOf, isSuffixOf)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes, fromMaybe, isJust)
 import GHC.Generics (Generic)
@@ -74,14 +74,17 @@ findAtF wd = cabalPackage'unresolved'plusStoreInLocals wd >>= cabalPackage'resol
 cabalPackage :: FilePath -> FilePath -> (MS m, MonadError String m) => m [PackageWithUnresolvedDependencies]
 cabalPackage wd rf = do
   cPkgsU <- cabalPackage'unresolved'plusStoreInLocals wd
-  let srcDirs p = (\d -> normalise $ Cabal._root p </> d) <$> (Cabal._srcDirs . Cabal._modules $ p)
-      cPkgs = filter (any (`isPrefixOf` rf) . srcDirs) cPkgsU
-  when (null cPkgs) $ throwError $ "cannot find a cabal 'item' with source directory that owns file " ++ rf
-  forM_ cPkgs $ \cPkg -> do
-    e <- PackageCache.pExists cPkg
-    unless e $ void $ package_ cPkg
-  logDebugNSS "cabalPackage" $ printf "cPkgs = %s" (show $ Cabal.key <$> cPkgs)
-  return cPkgs
+  if not (".hs" `isSuffixOf` rf) && not (".lhs" `isSuffixOf` rf) && not (".hs-boot" `isSuffixOf` rf) && not (".hsc" `isSuffixOf` rf)
+    then return cPkgsU
+    else do
+      let srcDirs p = (\d -> normalise $ Cabal._root p </> d) <$> (Cabal._srcDirs . Cabal._modules $ p)
+          cPkgs = filter (any (`isPrefixOf` rf) . srcDirs) cPkgsU
+      when (null cPkgs) $ throwError $ "cannot find a cabal 'item' with source directory that owns file " ++ rf
+      forM_ cPkgs $ \cPkg -> do
+        e <- PackageCache.pExists cPkg
+        unless e $ void $ package_ cPkg
+      logDebugNSS "cabalPackage" $ printf "cPkgs = %s" (show $ Cabal.key <$> cPkgs)
+      return cPkgs
 
 ---
 

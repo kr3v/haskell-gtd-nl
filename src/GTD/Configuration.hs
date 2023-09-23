@@ -8,8 +8,8 @@ import Control.Exception (IOException, catch)
 import Control.Lens (makeLenses, (^.))
 import Control.Monad (when)
 import Control.Monad.Logger (LogLevel (..))
-import Data.Aeson (decode)
-import qualified Data.ByteString.Lazy.Char8 as BS
+import Data.Aeson (decode, eitherDecodeStrict)
+import qualified Data.ByteString.Char8 as BS
 import Data.Time.Clock.POSIX (getPOSIXTime)
 import Data.Version (showVersion)
 import Options.Applicative (Parser, auto, eitherReader, help, long, option, showDefault, strOption, switch, value)
@@ -28,9 +28,7 @@ data Args = Args
   deriving (Show)
 
 parseJson :: String -> Either String [String]
-parseJson str = case decode (BS.pack str) of
-  Just v -> Right v
-  Nothing -> Left "invalid value"
+parseJson = eitherDecodeStrict . BS.pack
 
 argsP :: IO (Parser Args)
 argsP = do

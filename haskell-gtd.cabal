@@ -1,7 +1,7 @@
 cabal-version:      2.4
 name:               haskell-gtd
-version:            0.0.3.1
-author:             kr3v
+version:            0.0.3.2
+author:             dbaynak
 extra-source-files: CHANGELOG.md
 
 -- add the following line to `ghc-options` to enable profiling

@@ -1,5 +1,8 @@
 # Revision history for haskell-gtd
 
+## 0.0.3.2 -- 2023-09-23
+* Bug fixes.
+
 ## 0.0.3.1 -- 2023-09-21
 * Bug fixes.
 

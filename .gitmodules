@@ -1,3 +1,0 @@
-[submodule "test/integrationTestRepo/sc-ea-hs"]
-	path = test/integrationTestRepo/sc-ea-hs
-	url = https://github.com/kr3v/sc-ea-hs
