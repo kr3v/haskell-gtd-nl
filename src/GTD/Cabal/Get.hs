@@ -15,7 +15,7 @@
 module GTD.Cabal.Get where
 
 import Control.Lens (makeLenses, use, view, (%~), (.=), (.~))
-import Control.Monad.Logger (MonadLoggerIO)
+import Control.Monad.Logger (MonadLoggerIO, logDebug)
 import Control.Monad.RWS (MonadReader (..), MonadState)
 import Control.Monad.Trans (MonadIO (liftIO))
 import Control.Monad.Trans.Maybe (MaybeT (..))
@@ -24,7 +24,7 @@ import Data.List (find)
 import qualified Data.Map as Map
 import Distribution.Compat.Prelude (ExitCode (ExitFailure), Generic, fromMaybe)
 import GTD.Configuration (GTDConfiguration (..), repos)
-import GTD.Utils (logDebugNSS')
+import GTD.Utils (logDebugNSS, logDebugNSS')
 import System.IO (hGetContents)
 import System.Process (CreateProcess (..), StdStream (CreatePipe), createProcess, proc, waitForProcess)
 import Text.Printf (printf)
@@ -73,12 +73,13 @@ getS pkg pkgVerPredicate = do
 -- returns version that matches given predicate
 get :: GetCache -> String -> String -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m (Maybe String, GetCache -> GetCache)
 get c pkg pkgVerPredicate = do
+  let logTag = printf "cabal get %s %s" pkg pkgVerPredicate
+  logDebugNSS logTag ""
   let k = pkg ++ pkgVerPredicate
   case k `Map.lookup` _vs c of
-    Just p -> return (p, id)
+    Just p -> logDebugNSS "cabal get" (printf "cache hit for %s %s: %s" pkg pkgVerPredicate (show p)) >> return (p, id)
     Nothing -> do
       reposR <- view repos
-      gM <- runMaybeT $ get'direct pkg pkgVerPredicate reposR
-      let (ec, r) = fromMaybe (ExitFailure 1, Nothing) gM
-      logDebugNSS' "cabal get" $ printf "cabal get %s %s: exit code %s" pkg pkgVerPredicate (show ec)
+      (ec, r) <- fromMaybe (ExitFailure 1, Nothing) <$> runMaybeT (get'direct pkg pkgVerPredicate reposR)
+      logDebugNSS logTag $ printf "cabal get: exit code %s (r = %s)" pkg pkgVerPredicate (show ec) (show r)
       return (r, (vs %~ Map.insert k r) . (changed .~ True))

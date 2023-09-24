@@ -57,7 +57,7 @@ cabalPackage'unresolved'plusStoreInLocals f = peekM cabalPackage'contextWithLoca
 
 cabalPackage'contextWithLocals :: (MS m) => [Cabal.PackageWithUnresolvedDependencies] -> m ()
 cabalPackage'contextWithLocals cPkgsU = do
-  logDebugNSS "cabalPackage'contextWithLocals" $ printf "cPkgsU = %s" (show $ Cabal.key <$> cPkgsU)
+  logDebugNSS "cabalPackage'contextWithLocals" $ printf "cPkgsU = %s" (show $ Cabal.pKey . Cabal.key <$> cPkgsU)
   let libs = filter (\p -> (Cabal._desType . Cabal._designation $ p) == Cabal.Library) cPkgsU
   cLocalPackages .= mempty
   forM_ libs $ \cPkg -> do

@@ -54,7 +54,7 @@ pExists :: Cabal.Package a -> (MonadLoggerIO m, MonadReader GTDConfiguration m) 
 pExists cPkg = do
   p <- path cPkg exportsN
   r <- liftIO $ doesFileExist p
-  logDebugNSS "package cached exists" $ printf "%s, %s -> %s" (show $ Cabal.key cPkg) p (show r)
+  logDebugNSS "package cached exists" $ printf "%s, %s -> %s" (show $ Cabal.pKey . Cabal.key $ cPkg) p (show r)
   return r
 
 pGet :: Cabal.PackageWithResolvedDependencies -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m (Maybe Package)
@@ -62,7 +62,7 @@ pGet cPkg = do
   modulesJ <- __pGet cPkg modulesN
   exportsJ <- __pGet cPkg exportsN
   let p = Package cPkg <$> modulesJ <*> exportsJ
-  logDebugNSS "package cached get" $ printf "%s -> %s (%s, %s)" (show $ Cabal.key cPkg) (show $ isJust p) (show $ isJust modulesJ) (show $ isJust exportsJ)
+  logDebugNSS "package cached get" $ printf "%s -> %s (%s, %s)" (show $ Cabal.pKey . Cabal.key $ cPkg) (show $ isJust p) (show $ isJust modulesJ) (show $ isJust exportsJ)
   return p
 
 pStore ::
@@ -78,7 +78,7 @@ pStore cPkg pkg = do
   liftIO $ when (ll == LevelDebug) $ do
     encodeWithTmp JSON.encodeFile (modulesP ++ ".json") (Package._modules pkg)
     encodeWithTmp JSON.encodeFile (exportsP ++ ".json") (Package._exports pkg)
-  logDebugNSS "package cached put" $ printf "%s -> (%d, %d)" (show $ Cabal.key cPkg) (length $ Package._modules pkg) (length $ Package._exports pkg)
+  logDebugNSS "package cached put" $ printf "%s -> (%d, %d)" (show $ Cabal.pKey . Cabal.key $ cPkg) (length $ Package._modules pkg) (length $ Package._exports pkg)
 
 pRemove ::
   Cabal.Package a ->
@@ -96,7 +96,7 @@ get c cPkg = do
   let k = Cabal.key cPkg
       (_, r) = LRU.lookup k (view cExports c)
       defM = over cExports (fst . LRU.lookup k)
-  logDebugNSS "package cached get'" $ printf "%s -> %s" (show $ Cabal.key cPkg) (show $ isJust r)
+  logDebugNSS "package cached get'" $ printf "%s -> %s" (show $ Cabal.pKey . Cabal.key $ cPkg) (show $ isJust r)
   case r of
     Just es -> return (Just Package {_cabalPackage = cPkg, _modules = Map.empty, Package._exports = es}, defM)
     Nothing -> do
@@ -164,7 +164,7 @@ resolution'put'lines = resolution'put'generic "lines.binary"
 resolution'remove :: Cabal.Package a -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m ()
 resolution'remove cPkg = do
   d <- __resolution'dir $ Cabal.key cPkg
-  logDebugNSS "resolution cached remove" $ printf "%s @ %s" (show $ Cabal.key cPkg) d
+  logDebugNSS "resolution cached remove" $ printf "%s @ %s" (show $ Cabal.pKey . Cabal.key $ cPkg) d
   liftIO $ removeDirectoryRecursive d
 
 resolution'exists :: HsModule -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m Bool

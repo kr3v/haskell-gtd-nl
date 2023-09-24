@@ -26,7 +26,7 @@ import GTD.Cabal.Parse (parse)
 import GTD.Cabal.Types (Dependency (..), Package (..), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, isMainLib)
 import qualified GTD.Cabal.Types as Cabal
 import GTD.Configuration (GTDConfiguration (..))
-import GTD.State (Context (..), ccFull, ccGet)
+import GTD.State (Context (..), ccFull, ccGet, MS)
 import GTD.Utils (deduplicate, logDebugNSS, mapFrom)
 import System.FilePath ((</>))
 import Text.Printf (printf)
@@ -36,7 +36,7 @@ __full ::
   PackageWithUnresolvedDependencies ->
   (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m) => m (PackageWithResolvedDependencies, Context -> Context)
 __full ctx pkg = do
-  let logTag = printf "cabal full %s" $ show $ Cabal.key pkg
+  let logTag = printf "cabal full %s" $ show $ Cabal.pKey . Cabal.key $ pkg
 
   let deps = deduplicate $ _dependencies pkg
   logDebugNSS logTag $ "all dependencies: " ++ show deps
@@ -52,12 +52,10 @@ __full ctx pkg = do
   let unresolvedDeps = Map.elems $ Map.difference (mapFrom _dName deps) (mapFrom _name locallyResolvedDeps)
 
   -- execute `cabal get` on all dependencies concurrently
-
   let st = _ccGet ctx
       dep d@Dependency {..} = do
         (v, m) <- get st _dName (prettyShow _dVersion)
         return ((d,) <$> v, m)
-
   (nameToPathMs, cacheM) <- unzip <$> forConcurrently unresolvedDeps dep
   let pkgs = catMaybes nameToPathMs
 
@@ -73,7 +71,7 @@ __full ctx pkg = do
 
 fullS ::
   PackageWithUnresolvedDependencies ->
-  (MonadBaseControl IO m, MonadLoggerIO m, MonadState Context m, MonadReader GTDConfiguration m) => m PackageWithResolvedDependencies
+  (MS m) => m PackageWithResolvedDependencies
 fullS pkg = do
   ctx <- use id
   (r, m) <- full ctx pkg
@@ -83,11 +81,14 @@ fullS pkg = do
 full ::
   Context ->
   Cabal.PackageWithUnresolvedDependencies ->
-  (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m) => m (Cabal.PackageWithResolvedDependencies, Context -> Context)
+  (MS m) => m (Cabal.PackageWithResolvedDependencies, Context -> Context)
 full ctx pkg = do
+  let logTag = printf "cabal full %s" $ show $ Cabal.pKey . Cabal.key $ pkg
+  logDebugNSS logTag ""
+
   let k = Cabal.key pkg
   case k `Map.lookup` _ccFull ctx of
-    Just d -> return (d, id)
+    Just d -> logDebugNSS logTag "cache hit" >> return (d, id)
     Nothing -> do
       (r, m) <- __full ctx pkg
       return (r, (ccFull %~ Map.insert k r) . m)

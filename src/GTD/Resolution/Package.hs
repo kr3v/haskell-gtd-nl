@@ -39,7 +39,7 @@ package'resolution'withMutator'direct ::
   Cabal.PackageWithResolvedDependencies ->
   (MS m) => m (Maybe Package, Context -> Context)
 package'resolution'withMutator'direct c cPkg = do
-  let logTag = "package'resolution'withMutator'direct " ++ show (Cabal.key cPkg)
+  let logTag = "package'resolution'withMutator'direct " ++ show (Cabal.pKey . Cabal.key $ cPkg)
 
   (depsC, m) <- bimap catMaybes (foldr (.) id) <$> mapAndUnzipM (PackageCache.get c <==< CabalCache.full c) (Cabal._dependencies cPkg)
   let deps = foldr (<>) Map.empty $ Package._exports <$> depsC
