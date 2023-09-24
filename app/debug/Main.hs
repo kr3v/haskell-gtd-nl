@@ -10,7 +10,7 @@
 module Main where
 
 import Control.Exception (try)
-import Control.Lens ((^.))
+import Control.Lens ((^.), use)
 import Control.Monad (forM_)
 import Control.Monad.Except (MonadError (..), MonadIO (..), runExceptT)
 import Control.Monad.Logger (runStderrLoggingT, runStdoutLoggingT)
@@ -56,27 +56,27 @@ import qualified GHC.Types.SrcLoc as GHC
 import qualified GTD.Cabal.Cache as Cabal (load)
 import GTD.Cabal.FindAt (findAt)
 import qualified GTD.Cabal.FindAt as Cabal (findAt)
-import GTD.Cabal.Get (getS)
-import qualified GTD.Cabal.Get as Cabal (getS)
 import qualified GTD.Cabal.Parse as Cabal (__read'packageDescription)
 import GTD.Cabal.Types (isMainLib)
+import GTD.Cabal.Get as Cabal (get)
 import qualified GTD.Cabal.Types as Cabal (Package (..), key, resolve)
 import GTD.Configuration (defaultArgs, prepareConstants, repos)
 import GTD.Haskell.Module (emptyHsModule, emptyMetadata)
 import qualified GTD.Haskell.Module as HsModule
 import GTD.Haskell.Parser.GhcLibParser (fakeSettings, parsePragmasIntoDynFlags, showO)
 import qualified GTD.Resolution.Cache as PackageCache
-import GTD.State (ccGet, emptyContext)
-import GTD.Server (cabalPackage, findAtF)
-import GTD.Resolution.Package
 import GTD.Resolution.Module hiding (resolution)
+import GTD.Resolution.Package
+import GTD.Server (cabalPackage, findAtF)
 import qualified GTD.Server as Server (resolution)
+import GTD.State (ccGet, emptyContext)
 import GTD.Utils (fromMaybeM, maybeM, ultraZoom)
 import Options.Applicative (Parser, ParserInfo, auto, command, execParser, fullDesc, help, helper, info, long, metavar, option, progDesc, strOption, subparser, (<**>))
 import System.Directory (getCurrentDirectory, makeAbsolute, setCurrentDirectory)
 import System.FilePath (isRelative, (</>))
 import System.IO (BufferMode (LineBuffering), hPrint, hSetBuffering, stderr, stdout)
 import Text.Printf (printf)
+import Control.Concurrent (newQSem)
 
 showT2 :: (String, String) -> String
 showT2 (a, b) = "(" ++ a ++ "," ++ b ++ ")"
@@ -167,7 +167,8 @@ order pkgN pkgV t = do
 
   x <- runStderrLoggingT $ flip runReaderT constants $ flip evalStateT emptyContext $ runExceptT $ do
     Cabal.load
-    cPkgM <- ultraZoom ccGet $ Cabal.getS pkgN pkgV
+    ccGetM <- use ccGet
+    cPkgM <- fst <$> Cabal.get ccGetM pkgN pkgV
     cPkgP <- case cPkgM of
       Nothing -> throwError "Cabal.get: no package found"
       Just cPkgP -> return cPkgP
@@ -280,10 +281,10 @@ resolution pkg ident = do
 
   r <- runStderrLoggingT $ flip runReaderT constants $ flip evalStateT emptyContext $ runExceptT $ do
     Cabal.load
-
     (cPkg, f) <- case pkg of
       PCabal {_cpkg = CabalPackage {..}, _module = m} -> do
-        pkgP <- ultraZoom ccGet $ getS _name _version
+        ccGetM <- use ccGet
+        pkgP <- fst <$> Cabal.get ccGetM _name _version
         cPkgs <- maybeM (throwError "`cabal get` could not find a package by given name and version") findAt (return pkgP)
         cPkg <- fromMaybeM (throwError "the package was found, but there's no 'main library' in it") $ return $ find isMainLib cPkgs
         f <- fromMaybeM (throwError "the package was found, but the utility cannot find an appropriate `*.hs` file for given module name in any source directory") $ liftIO $ Cabal.resolve cPkg m

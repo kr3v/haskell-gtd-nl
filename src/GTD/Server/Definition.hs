@@ -83,7 +83,7 @@ cabalPackage wd rf = do
       forM_ cPkgs $ \cPkg -> do
         e <- PackageCache.pExists cPkg
         unless e $ void $ package_ cPkg
-      logDebugNSS "cabalPackage" $ printf "cPkgs = %s" (show $ Cabal.key <$> cPkgs)
+      logDebugNSS "cabalPackage" $ printf "cPkgs = %s" (show $ Cabal.pKey . Cabal.key <$> cPkgs)
       return cPkgs
 
 ---

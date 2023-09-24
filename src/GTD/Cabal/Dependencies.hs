@@ -13,20 +13,18 @@ module GTD.Cabal.Dependencies where
 import Control.Concurrent.Async.Lifted (forConcurrently)
 import Control.Lens (use, (%~), (.=))
 import Control.Monad (forM)
-import Control.Monad.Logger (MonadLoggerIO (..))
-import Control.Monad.RWS (MonadReader (..), MonadState, asks)
-import Control.Monad.Trans.Control (MonadBaseControl)
+import Control.Monad.RWS (asks)
 import Data.Foldable (find)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes)
 import Distribution.Pretty (prettyShow)
 import Distribution.Types.VersionRange (withinRange)
-import GTD.Cabal.Get (get)
+import GTD.Cabal.Get as Cabal (get)
 import GTD.Cabal.Parse (parse)
 import GTD.Cabal.Types (Dependency (..), Package (..), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, isMainLib)
 import qualified GTD.Cabal.Types as Cabal
 import GTD.Configuration (GTDConfiguration (..))
-import GTD.State (Context (..), ccFull, ccGet, MS)
+import GTD.State (Context (..), MS, MS0, ccFull, ccGet)
 import GTD.Utils (deduplicate, logDebugNSS, mapFrom)
 import System.FilePath ((</>))
 import Text.Printf (printf)
@@ -34,9 +32,9 @@ import Text.Printf (printf)
 __full ::
   Context ->
   PackageWithUnresolvedDependencies ->
-  (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m) => m (PackageWithResolvedDependencies, Context -> Context)
+  (MS0 m) => m (PackageWithResolvedDependencies, Context -> Context)
 __full ctx pkg = do
-  let logTag = printf "cabal full %s" $ show $ Cabal.pKey . Cabal.key $ pkg
+  let logTag = printf "cabal full %s" (show $ Cabal.pKey . Cabal.key $ pkg)
 
   let deps = deduplicate $ _dependencies pkg
   logDebugNSS logTag $ "all dependencies: " ++ show deps
@@ -54,7 +52,7 @@ __full ctx pkg = do
   -- execute `cabal get` on all dependencies concurrently
   let st = _ccGet ctx
       dep d@Dependency {..} = do
-        (v, m) <- get st _dName (prettyShow _dVersion)
+        (v, m) <- Cabal.get st _dName (prettyShow _dVersion)
         return ((d,) <$> v, m)
   (nameToPathMs, cacheM) <- unzip <$> forConcurrently unresolvedDeps dep
   let pkgs = catMaybes nameToPathMs
@@ -81,9 +79,9 @@ fullS pkg = do
 full ::
   Context ->
   Cabal.PackageWithUnresolvedDependencies ->
-  (MS m) => m (Cabal.PackageWithResolvedDependencies, Context -> Context)
+  (MS0 m) => m (Cabal.PackageWithResolvedDependencies, Context -> Context)
 full ctx pkg = do
-  let logTag = printf "cabal full %s" $ show $ Cabal.pKey . Cabal.key $ pkg
+  let logTag = printf "cabal full %s" (show $ Cabal.pKey . Cabal.key $ pkg)
   logDebugNSS logTag ""
 
   let k = Cabal.key pkg

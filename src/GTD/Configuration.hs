@@ -1,21 +1,24 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module GTD.Configuration where
 
+import Control.Concurrent (QSem, newQSem)
 import Control.Exception (IOException, catch)
 import Control.Lens (makeLenses, (^.))
 import Control.Monad (when)
 import Control.Monad.Logger (LogLevel (..))
-import Data.Aeson (decode, eitherDecodeStrict)
+import Data.Aeson (eitherDecodeStrict)
 import qualified Data.ByteString.Char8 as BS
-import Data.Time.Clock.POSIX (getPOSIXTime)
 import Data.Version (showVersion)
+import GTD.Utils (getTotalMemory, getUsableFreeMemory)
 import Options.Applicative (Parser, auto, eitherReader, help, long, option, showDefault, strOption, switch, value)
 import qualified Paths_haskell_gtd
 import System.Directory (createDirectoryIfMissing, getHomeDirectory, removeDirectoryRecursive)
 import System.FilePath ((</>))
+import Text.Printf (printf)
 
 data Args = Args
   { _ttl :: Int,
@@ -52,34 +55,44 @@ defaultArgs = do
   return $ Args {_ttl = 60, _dynamicMemoryUsage = True, _logLevel = LevelInfo, _parserExe = cabalBin, _parserArgs = [], _root = root}
 
 data GTDConfiguration = GTDConfiguration
-  { _logs :: FilePath,
-    _repos :: FilePath,
+  { _repos :: FilePath,
     _cache :: FilePath,
     _ccGetPath :: FilePath,
     _status :: FilePath,
     _cversion :: String,
+    _cabalGetSemaphore :: QSem,
     _args :: Args
   }
-  deriving (Show)
+
+instance Show GTDConfiguration where
+  show :: GTDConfiguration -> String
+  show c = "GTDConfiguration { _repos = " ++ _repos c ++ ", _cache = " ++ _cache c ++ ", _ccGetPath = " ++ _ccGetPath c ++ ", _status = " ++ _status c ++ ", _cversion = " ++ _cversion c ++ " }"
 
 $(makeLenses ''GTDConfiguration)
 
 prepareConstants :: Args -> IO GTDConfiguration
 prepareConstants a = do
-  now <- getPOSIXTime
+  -- `cabal get` uses ~150 MiB of memory; using `200` as a safety margin
+  let cabalGetMemoryUsage = 200
+  total <- (`div` 8) . (`div` cabalGetMemoryUsage) <$> getTotalMemory
+  usable <- (`div` 4) . (`div` cabalGetMemoryUsage) <$> getUsableFreeMemory
+  let cgKeys = max (1024 `div` cabalGetMemoryUsage) (min total usable)
+  -- allow at least some concurrency for `cabal get`, but limited by total/free memory
+  cgSemaphore <- newQSem cgKeys
+  printf "max through totals = %s, max through usable = %s, result = %s\n" (show total) (show usable) (show cgKeys)
+
   let dir = _root a
   let constants =
         GTDConfiguration
-          { _logs = dir </> "logs" </> show now,
-            _repos = dir </> "repos",
+          { _repos = dir </> "repos",
             _cache = dir </> "cache",
             _cversion = dir </> "version",
             _status = dir </> "status",
             _ccGetPath = dir </> "cc-get.json",
+            _cabalGetSemaphore = cgSemaphore,
             _args = a
           }
   createDirectoryIfMissing True dir
-  createDirectoryIfMissing True (constants ^. logs)
   createDirectoryIfMissing True (constants ^. repos)
   createDirectoryIfMissing True (constants ^. cache)
   createDirectoryIfMissing True (constants ^. status)

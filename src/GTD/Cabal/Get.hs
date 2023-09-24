@@ -1,57 +1,34 @@
 {-# LANGUAGE BlockArguments #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# HLINT ignore "Avoid lambda" #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
-module GTD.Cabal.Get where
+module GTD.Cabal.Get (GetCache (..), get, vs, changed) where
 
-import Control.Lens (makeLenses, use, view, (%~), (.=), (.~))
-import Control.Monad.Logger (MonadLoggerIO, logDebug)
-import Control.Monad.RWS (MonadReader (..), MonadState)
+import Control.Concurrent (QSem, signalQSem, waitQSem)
+import Control.Exception.Lifted (bracket_)
+import Control.Lens (view, (%~), (.~))
 import Control.Monad.Trans (MonadIO (liftIO))
 import Control.Monad.Trans.Maybe (MaybeT (..))
-import Data.Aeson (FromJSON, ToJSON)
 import Data.List (find)
 import qualified Data.Map as Map
-import Distribution.Compat.Prelude (ExitCode (ExitFailure), Generic, fromMaybe)
-import GTD.Configuration (GTDConfiguration (..), repos)
-import GTD.Utils (logDebugNSS, logDebugNSS')
+import Distribution.Compat.Prelude (ExitCode (ExitFailure), fromMaybe)
+import GTD.Cabal.Types (GetCache (..), changed, vs)
+import GTD.Configuration (cabalGetSemaphore, repos)
+import GTD.State (MS0)
+import GTD.Utils (logDebugNSS)
 import System.IO (hGetContents)
 import System.Process (CreateProcess (..), StdStream (CreatePipe), createProcess, proc, waitForProcess)
 import Text.Printf (printf)
 import Text.Regex.Posix ((=~))
+import Control.Monad.Trans.Control (MonadBaseControl)
 
-data GetCache = GetCache
-  { _vs :: Map.Map String (Maybe FilePath),
-    _changed :: Bool
-  }
-  deriving (Show, Generic)
-
-$(makeLenses ''GetCache)
-
-instance FromJSON GetCache
-
-instance ToJSON GetCache
-
-instance Semigroup GetCache where
-  (<>) :: GetCache -> GetCache -> GetCache
-  (GetCache vs1 c1) <> (GetCache vs2 c2) = GetCache (vs1 <> vs2) (c1 || c2)
-
-instance Monoid GetCache where
-  mempty :: GetCache
-  mempty = GetCache mempty False
-
-get'direct :: String -> String -> String -> (MonadIO m, MonadFail m) => m (ExitCode, Maybe String)
-get'direct pkg pkgVerPredicate reposR = do
+get'direct :: QSem -> String -> String -> String -> (MonadBaseControl IO m, MonadIO m, MonadFail m) => m (ExitCode, Maybe String)
+get'direct s pkg pkgVerPredicate reposR = bracket_ (liftIO $ waitQSem s) (liftIO $ signalQSem s) $ do
   (_, Just hout, Just herr, h) <- liftIO $ createProcess (proc "cabal" ["get", pkg ++ pkgVerPredicate, "--destdir", reposR]) {std_out = CreatePipe, std_err = CreatePipe}
   stdout <- liftIO $ hGetContents hout
   stderr <- liftIO $ hGetContents herr
@@ -62,24 +39,22 @@ get'direct pkg pkgVerPredicate reposR = do
   ec <- liftIO $ waitForProcess h
   return (ec, r)
 
-getS :: (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState GetCache m) => String -> String -> m (Maybe String)
-getS pkg pkgVerPredicate = do
-  s <- use id
-  (r, c) <- get s pkg pkgVerPredicate
-  id .= c s
-  return r
-
 -- executes `cabal get` on given `pkg + pkgVerPredicate`
 -- returns version that matches given predicate
-get :: GetCache -> String -> String -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m (Maybe String, GetCache -> GetCache)
+get ::
+  GetCache ->
+  String ->
+  String ->
+  (MS0 m) => m (Maybe String, GetCache -> GetCache)
 get c pkg pkgVerPredicate = do
   let logTag = printf "cabal get %s %s" pkg pkgVerPredicate
   logDebugNSS logTag ""
   let k = pkg ++ pkgVerPredicate
+  s <- view cabalGetSemaphore
   case k `Map.lookup` _vs c of
     Just p -> logDebugNSS "cabal get" (printf "cache hit for %s %s: %s" pkg pkgVerPredicate (show p)) >> return (p, id)
     Nothing -> do
       reposR <- view repos
-      (ec, r) <- fromMaybe (ExitFailure 1, Nothing) <$> runMaybeT (get'direct pkg pkgVerPredicate reposR)
-      logDebugNSS logTag $ printf "cabal get: exit code %s (r = %s)" pkg pkgVerPredicate (show ec) (show r)
+      (ec, r) <- fromMaybe (ExitFailure 1, Nothing) <$> runMaybeT (get'direct s pkg pkgVerPredicate reposR)
+      logDebugNSS logTag $ printf "cabal get: exit code %s (r = %s)" (show ec) (show r)
       return (r, (vs %~ Map.insert k r) . (changed .~ True))

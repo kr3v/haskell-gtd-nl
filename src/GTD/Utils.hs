@@ -144,6 +144,17 @@ stats = do
     liftIO $ putStrLn $ printf "Wall: i:%s m:%s g:%s r:%s" (showF2 $ fromIntegral ie / eI) (showF2 $ fromIntegral me / eI) (showF2 $ fromIntegral ge / eI) (showF2 $ fromIntegral (e - ie - me - ge) / eI)
     liftIO $ putStrLn $ "GCs: " ++ show s
 
+getTotalMemory :: IO Int
+getTotalMemory = do
+  content <- readFile "/proc/meminfo"
+  let line [name, val, _] = Just (name, read val :: Int)
+      line [name, val] = Just (name, read val :: Int)
+      line _ = Nothing
+      memInfo = mapMaybe (line . words) $ lines content
+      lookupVal name = fromMaybe 0 (lookup name memInfo)
+      total = lookupVal "MemTotal:"
+  return (total `div` 1024)
+
 getUsableFreeMemory :: IO Int
 getUsableFreeMemory = do
   content <- readFile "/proc/meminfo"

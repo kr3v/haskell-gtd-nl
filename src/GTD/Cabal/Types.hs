@@ -22,6 +22,7 @@ import Control.Monad (forM)
 import Data.Aeson (FromJSON, ToJSON, Value)
 import Data.Aeson.Types (ToJSON (..), Value (..))
 import Data.List (find)
+import qualified Data.Map.Strict as Map
 import Data.Maybe (isNothing)
 import qualified Data.Set as Set
 import Data.Text (pack)
@@ -173,3 +174,17 @@ resolve p m = do
   let ds = fmap (\d -> _root p </> d </> (mp ++ ".hs")) $ _srcDirs . _modules $ p
   xs <- forM ds $ \d -> (d,) <$> doesFileExist d
   return $ fst <$> find snd xs
+
+---
+
+data GetCache = GetCache
+  { _vs :: Map.Map String (Maybe FilePath),
+    _changed :: Bool
+  }
+  deriving (Show, Generic)
+
+$(makeLenses ''GetCache)
+
+instance FromJSON GetCache
+
+instance ToJSON GetCache
