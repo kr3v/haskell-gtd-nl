@@ -24,7 +24,7 @@ import Distribution.Types.CondTree (CondTree (CondNode, condTreeData))
 import GTD.Cabal.Parse (parse)
 import GTD.Cabal.Types (PackageWithUnresolvedDependencies)
 import GTD.Configuration (GTDConfiguration (..))
-import GTD.State (Context, ccFindAt)
+import GTD.State (Context, ccFindAt, MS)
 import GTD.Utils (concatMapM, logDebugNSS)
 import System.Directory (listDirectory)
 import System.FilePath (takeExtension, (</>))
@@ -50,7 +50,7 @@ __location _ = Nothing
 
 findAt'regular ::
   FilePath ->
-  (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadError String m) => m [PackageWithUnresolvedDependencies]
+  (MS m, MonadError String m) => m [PackageWithUnresolvedDependencies]
 findAt'regular wd = do
   cabalFiles <- liftIO $ filter (\x -> takeExtension x == ".cabal") <$> listDirectory wd
   cabalFile <- case cabalFiles of
@@ -62,7 +62,7 @@ findAt'regular wd = do
 
 findAt'cabalProject ::
   FilePath ->
-  (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadState Context m, MonadError String m) => m [PackageWithUnresolvedDependencies]
+  (MS m, MonadError String m) => m [PackageWithUnresolvedDependencies]
 findAt'cabalProject wd = do
   let logTag = "findAt"
       handleError e = do

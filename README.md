@@ -20,7 +20,7 @@ cabal install
 ```
 3. The extension should activate when a Haskell file gets opened.
 
-Note: on Ubuntu22, I had to install `libgmp3-dev`, `zlib1g-dev` and `build-essential` packages for `cabal install` to succeed.
+Note: on Ubuntu22, I had to install `libgmp3-dev zlib1g-dev` and `build-essential` packages for `cabal install` to succeed.
 
 ## Performance
 The first attempt to perform a `go to definition` action will take time (to fetch all the dependencies, to parse & cache them), yet consequent attempts should take much less time.

@@ -5,17 +5,20 @@
 module GTD.Utils where
 
 import Control.Concurrent (MVar, myThreadId, newMVar, withMVar)
-import Control.Exception (IOException, catch, throwIO, try)
+import Control.Exception (IOException, throwIO, try)
+import Control.Exception.Lifted (catch)
 import Control.Lens (Lens', use, (.=))
 import Control.Monad.Except (ExceptT, MonadError (throwError), MonadIO (..), forM, when)
 import Control.Monad.Logger (Loc, LogLevel (..), LogSource, LogStr, LoggingT (..), MonadLogger, MonadLoggerIO, defaultLogStr, filterLogger, fromLogStr, logDebugNS, logErrorNS, logOtherNS)
 import qualified Control.Monad.Logger as Logger
 import Control.Monad.RWS (MonadState (..))
 import Control.Monad.State (StateT (..))
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Except (catchE, mapExceptT)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as S8
+import Data.Int (Int32)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Text (unpack)
@@ -27,9 +30,8 @@ import Numeric (showFFloat)
 import System.Directory (removeFile, renameFile)
 import System.IO (BufferMode (..), Handle, IOMode (..), hSetBuffering, withFile)
 import System.IO.Error (isDoesNotExistError)
-import Text.Printf (printf)
-import Data.Int (Int32)
 import System.Random (randomIO)
+import Text.Printf (printf)
 
 maybeToMaybeT :: Monad m => Maybe a -> MaybeT m a
 maybeToMaybeT = MaybeT . return
@@ -221,22 +223,16 @@ withLogging logP logS ll action = withFile logP AppendMode $ \h -> do
 ---
 
 encodeWithTmp :: (FilePath -> a -> IO ()) -> FilePath -> a -> IO ()
-encodeWithTmp f p a = do
-  y :: Int32 <- randomIO
-  let pT = p ++ ".tmp." ++ show (abs y)
-  f pT a
-  renameFile pT p
+encodeWithTmp = encodeWithTmp2
 
-encodeWithTmp1 :: (MonadIO m) => (FilePath -> a -> IO ()) -> FilePath -> a -> m ()
-encodeWithTmp1 f p a = do
-  y :: Int32 <- randomIO
-  let pT = p ++ ".tmp." ++ show (abs y)
-  liftIO $ f pT a
-  liftIO $ renameFile pT p
+encodeWithTmp1 :: (MonadIO m, MonadBaseControl IO m) => (FilePath -> a -> IO ()) -> FilePath -> a -> m ()
+encodeWithTmp1 f = encodeWithTmp2 (\a b -> liftIO $ f a b)
 
-encodeWithTmp2 :: (MonadIO m) => (FilePath -> a -> m ()) -> FilePath -> a -> m ()
-encodeWithTmp2 f p a = do
-  y :: Int32 <- randomIO
-  let pT = p ++ ".tmp." ++ show (abs y)
-  f pT a
-  liftIO $ renameFile pT p
+encodeWithTmp2 :: (MonadIO m, MonadBaseControl IO m) => (FilePath -> a -> m ()) -> FilePath -> a -> m ()
+encodeWithTmp2 f p a = x `catch` (\(e :: IOError) -> liftIO (putStrLn $ printf "encodeWithTmp(n): %s" (show e)) >> error (show e))
+  where
+    x = do
+      y :: Int32 <- randomIO
+      let pT = p ++ ".tmp." ++ show (abs y)
+      f pT a
+      liftIO $ renameFile pT p

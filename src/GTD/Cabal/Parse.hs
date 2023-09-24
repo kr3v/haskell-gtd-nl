@@ -12,9 +12,10 @@ import Control.Monad (forM_, when)
 import Control.Monad.Logger (LogLevel (LevelDebug), MonadLoggerIO (..))
 import Control.Monad.RWS (MonadReader (..), MonadWriter (..), asks)
 import Control.Monad.Trans (MonadIO (liftIO))
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Control.Monad.Trans.Writer (execWriter, execWriterT)
-import Data.Aeson.Encode.Pretty (encodePretty)
-import Data.Binary (encodeFile)
+import qualified Data.Aeson.Encode.Pretty as JSON (encodePretty)
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Set as Set
 import Distribution.Package (PackageIdentifier (..), packageName, unPackageName)
@@ -26,30 +27,23 @@ import Distribution.Pretty (prettyShow)
 import Distribution.Utils.Path (getSymbolicPath)
 import GTD.Cabal.Types (Dependency (..), Designation (Designation, _desName, _desType), DesignationType (..), Package (..), PackageModules (..), PackageWithUnresolvedDependencies, emptyPackageModules)
 import GTD.Configuration (Args (_logLevel), GTDConfiguration (..))
-import GTD.Resolution.Caching.Utils (binaryGet, pathAsFile)
-import GTD.Utils (logDebugNSS, removeIfExistsL, encodeWithTmp1, encodeWithTmp)
+import GTD.Resolution.Caching.Utils (binaryGet, binaryPut, pathAsFile)
+import GTD.Utils (encodeWithTmp, logDebugNSS, removeIfExistsL)
 import System.FilePath (dropExtension, normalise, takeDirectory, (</>))
-import qualified Data.ByteString as BS
 
 ---
 
-__read'cache'get :: FilePath -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m (Maybe [PackageWithUnresolvedDependencies])
-__read'cache'get = binaryGet
-
-__read'cache'put :: FilePath -> [PackageWithUnresolvedDependencies] -> (MonadIO m) => m ()
-__read'cache'put = encodeWithTmp1 encodeFile
-
-parse :: FilePath -> FilePath -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m [PackageWithUnresolvedDependencies]
+parse :: FilePath -> FilePath -> (MonadLoggerIO m, MonadReader GTDConfiguration m, MonadBaseControl IO m) => m [PackageWithUnresolvedDependencies]
 parse root p = do
   c <- asks _cache
   ll <- asks $ _logLevel . _args
   let pc = c </> pathAsFile p
-  __read'cache'get pc >>= \case
+  binaryGet pc >>= \case
     Just r -> return r
     Nothing -> do
       r <- __read'direct root p
-      __read'cache'put pc r
-      liftIO $ when (ll == LevelDebug) $ encodeWithTmp BSL.writeFile pc (encodePretty r)
+      binaryPut pc r
+      liftIO $ when (ll == LevelDebug) $ encodeWithTmp BSL.writeFile (pc ++ ".json") (JSON.encodePretty r)
       return r
 
 remove :: FilePath -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m ()
