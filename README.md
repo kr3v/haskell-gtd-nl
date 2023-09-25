@@ -10,7 +10,7 @@ The extension:
 - is likely to work only on Linux (it was not tested on other platforms).
 
 ## How to install
-1. Install the VS Code extension (through the `*.vsix` or the marketplace (`dbaynak.haskell-gtd-nl`)).
+1. Install the VS Code extension (through the `*.vsix` or the [marketplace](https://marketplace.visualstudio.com/items?itemName=dbaynak.haskell-gtd-nl)).
 2. Clone this repository. Execute `cabal install` in its root directory.
 ```shell
 git clone https://github.com/kr3v/haskell-gtd-nl
@@ -18,7 +18,7 @@ cd haskell-gtd-nl
 cabal update
 cabal install
 ```
-3. The extension should activate when a Haskell file gets opened.
+3. The extension should activate when a Haskell file gets opened in VS Code.
 
 Notes:
 - on Ubuntu22, I had to install `zlib1g-dev` package for `cabal install` to succeed;
