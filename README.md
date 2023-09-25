@@ -24,6 +24,8 @@ Notes:
 - on Ubuntu22, I had to install `zlib1g-dev` package for `cabal install` to succeed;
 - on Fedora 34, `zlib-devel` should be installed.
 
+If HLS does not work in your project, enable `haskell-gtd-nl.extension.disable-local-definitions-when-hls-is-active` setting in VS Code extension for 'local' definitions.
+
 ## Performance
 The first attempt to perform a `go to definition` action will take time (to fetch all the dependencies, to parse & cache them), yet consequent attempts should take much less time.
 
