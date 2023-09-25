@@ -1,9 +1,13 @@
 {
   "name": "haskell-gtd-nl",
-  "displayName": "Haskell 'go to non-local definitions' extension",
+  "displayName": "Haskell 'go to non-local definition' extension",
   "publisher": "dbaynak",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kr3v/haskell-gtd-nl"
+  },
   "description": "",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "engines": {
     "vscode": "^1.79.0"
   },

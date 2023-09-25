@@ -1,6 +1,6 @@
 cabal-version:      2.4
 name:               haskell-gtd
-version:            0.0.3.2
+version:            0.0.3.3
 author:             dbaynak
 extra-source-files: CHANGELOG.md
 

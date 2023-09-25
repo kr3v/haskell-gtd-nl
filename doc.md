@@ -42,6 +42,8 @@ Add a 'initialize everything' command.
 Add an 'immutable' mode, where no cache gets reset.
 Add support for Cabal-provided `version` and `getDataFileName` (at least to a virtual file)
 
+`cabal get` - 1 process per many packages, unless ExitFailure (fallback to 1-1)
+
 ###
 ```haskell
 module Text.Pretty

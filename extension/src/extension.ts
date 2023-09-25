@@ -387,6 +387,9 @@ class XDefinitionProvider implements vscode.DefinitionProvider {
 				outputChannel.appendLine(util.format("%s -> %s", body, error));
 				return { "data": {} };
 			});
+		statusServerS = "";
+		statusPackageS = "";
+
 		let data = res.data;
 		if (data.err != undefined && data.err != "") {
 			outputChannel.appendLine(util.format("%s -> err=%s (data=%s)", word, data.err, JSON.stringify(data)));
@@ -506,6 +509,10 @@ async function initConfig() {
 					statusPackageS = (await fs.promises.readFile(path.join(serverRoot, "status", filename), "utf8")).trim();
 					break;
 				default:
+					if (filename.startsWith("server.tmp.") || filename.startsWith("parser.tmp.")) {
+						// ignore temporary files
+						break;
+					}
 					outputChannel.appendLine(util.format("unknown status file: %s", filename));
 			}
 			statusBar.text = statusPackageS == "" ? statusServerS : statusPackageS;

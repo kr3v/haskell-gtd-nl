@@ -10,7 +10,7 @@ The extension:
 - is likely to work only on Linux (it was not tested on other platforms).
 
 ## How to install
-1. Install the VS Code extension (through the `*.vsix`).
+1. Install the VS Code extension (through the `*.vsix` or the marketplace (`dbaynak.haskell-gtd-nl`)).
 2. Clone this repository. Execute `cabal install` in its root directory.
 ```shell
 git clone https://github.com/kr3v/haskell-gtd-nl
@@ -20,7 +20,9 @@ cabal install
 ```
 3. The extension should activate when a Haskell file gets opened.
 
-Note: on Ubuntu22, I had to install `libgmp3-dev zlib1g-dev` and `build-essential` packages for `cabal install` to succeed.
+Notes:
+- on Ubuntu22, I had to install `zlib1g-dev` package for `cabal install` to succeed;
+- on Fedora 34, `zlib-devel` should be installed.
 
 ## Performance
 The first attempt to perform a `go to definition` action will take time (to fetch all the dependencies, to parse & cache them), yet consequent attempts should take much less time.
