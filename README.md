@@ -20,6 +20,8 @@ cabal install
 ```
 3. The extension should activate when a Haskell file gets opened in VS Code.
 
+It would take some time for the extension to fetch and parse all the dependencies on the first start (it takes minutes). There would be no long pauses like the first initialization after it.
+
 Notes:
 - on Ubuntu22, I had to install `zlib1g-dev` package for `cabal install` to succeed;
 - on Fedora 34, `zlib-devel` should be installed.
@@ -36,8 +38,12 @@ Overall, the memory usage should be low:
 - ~100-150 MiB when serving after initialization,
 - ~4 GiB during initialization / after a cache drop, but tunable.
 
+`max_live_bytes` is ~470 MiB for this repo (including parsing _all_ the dependencies).
+
 By default, the `--dynamic-memory-usage` parameter is enabled for the server.
-If there are less than 8/4/2 GiB of RAM available, the parsing process `-A` parameters takes values of 64/16/4 `M` instead of the default `-A128M`. The intention here is to reduce memory usage when there are not much memory available by sacrificing performance (which is heavily dependent on the GC and RAM performance).
+If there are less than 8/4/2 GiB of RAM available, the parsing process `-A` parameters takes values of 64/16/4 `M` instead of the default `-A128M`. The intention here is to reduce memory usage when there is not much memory available by sacrificing performance (which is heavily dependent on the GC and RAM performance).
+
+My advice would be to let the parser do its work during the first initialization and only then tighten, if required, its memory usage by having a custom `-A` setting with `--dynamic-memory-usage` disabled.
 
 ## HLS
 ### VS Code extension `haskell-gtd-nl.extension.disable-local-definitions-when-hls-is-active` setting
