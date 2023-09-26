@@ -15,6 +15,7 @@ The extension:
 ```shell
 git clone https://github.com/kr3v/haskell-gtd-nl
 cd haskell-gtd-nl
+git checkout 0.0.3.3
 cabal update
 cabal install
 ```
