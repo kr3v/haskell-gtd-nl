@@ -10,7 +10,7 @@ The extension:
 - is likely to work only on Linux (it was not tested on other platforms).
 
 ## How to install
-1. Install the VS Code extension (`through the `*.vsix` or the [dbaynak.haskell-gtd-nl](https://marketplace.visualstudio.com/items?itemName=dbaynak.haskell-gtd-nl)).
+1. Install the VS Code extension (`through the `*.vsix` or directly [dbaynak.haskell-gtd-nl](https://marketplace.visualstudio.com/items?itemName=dbaynak.haskell-gtd-nl) from either VS Code "extensions" or the marketplace).
 2. Clone this repository. Execute `cabal install` in its root directory.
 ```shell
 git clone https://github.com/kr3v/haskell-gtd-nl
