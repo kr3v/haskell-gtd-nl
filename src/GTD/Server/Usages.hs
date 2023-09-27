@@ -20,6 +20,7 @@ import GTD.State (MS)
 import GTD.Utils (concatForM, deduplicate, logDebugNSS, stats, updateStatus)
 import System.FilePath (normalise)
 import Text.Printf (printf)
+import qualified Data.ByteString.Char8 as BSC8
 
 data Request = Request
   { workDir :: FilePath,
@@ -57,9 +58,10 @@ usages (Request {workDir = wd, file = rf0, word = w}) = do
 
   ss <- fmap concat $ concatForM (Definition.srcSpan r) $ \loc -> do
     logDebugNSS logTag $ printf "loc: %s" (show loc)
+    let f = BSC8.unpack $ sourceSpanFileName loc
     concatForM (listToMaybe cPkgs) $ \cPkg -> do
       logDebugNSS logTag $ printf "pkg: %s" (show $ Cabal.pKey . Cabal.key $ cPkg)
-      mapMaybe (HMap.lookup loc) <$> pGetU cPkg rf
+      mapMaybe (HMap.lookup loc) <$> pGetU cPkg f
   liftIO stats
   updateStatus ""
   return Response {srcSpan = deduplicate $ take 64 $ ss, err = Nothing}

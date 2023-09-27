@@ -225,15 +225,15 @@ allImportedModules = fmap _mName
 
 ---
 
-data IdentifierUsage = IdentifierUsage
+data IdentifierWithUsageLocation = IdentifierUsage
   { _iuModule :: String,
     _iuName :: String,
     _iuSourceSpan :: SourceSpan
   }
   deriving (NFData, Show, Eq, Generic)
 
-instance FromJSON IdentifierUsage
+instance FromJSON IdentifierWithUsageLocation
 
-instance ToJSON IdentifierUsage
+instance ToJSON IdentifierWithUsageLocation
 
-instance Binary IdentifierUsage
+instance Binary IdentifierWithUsageLocation

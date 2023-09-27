@@ -16,7 +16,7 @@ import qualified Data.Map.Strict as Map
 import Data.Maybe (mapMaybe)
 import GTD.Cabal.Types (ModuleNameS)
 import GTD.Configuration (GTDConfiguration)
-import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), IdentifierUsage (..), Module (..), ModuleImportType (..), SourceSpan (..), SourceSpanFileName, asDeclsMap, emptySourceSpan)
+import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), IdentifierWithUsageLocation (..), Module (..), ModuleImportType (..), SourceSpan (..), SourceSpanFileName, asDeclsMap, emptySourceSpan)
 import GTD.Haskell.Module (HsModule (..), HsModuleData (..), HsModuleP (..), HsModuleParams (..), _name)
 import qualified GTD.Haskell.Module as HsModule
 import qualified GTD.Resolution.Cache as PackageCache

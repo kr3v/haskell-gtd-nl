@@ -20,7 +20,7 @@ import qualified Data.Map.Strict as Map
 import GHC.Generics (Generic)
 import qualified GTD.Cabal.Types as Cabal
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
-import GTD.Haskell.Declaration (ClassOrData (_cdtName), Declaration (..), Declarations (..), Exports, IdentifierUsage, Imports, SourceSpan (..), declarationsT)
+import GTD.Haskell.Declaration (ClassOrData (_cdtName), Declaration (..), Declarations (..), Exports, IdentifierWithUsageLocation, Imports, SourceSpan (..), declarationsT)
 import qualified GTD.Haskell.Declaration as Declaration
 import qualified GTD.Haskell.Lines as Lines
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
@@ -46,7 +46,7 @@ data HsModuleData = HsModuleData
   { _exports0 :: Exports,
     _imports :: Imports,
     _locals :: Declarations,
-    _identifierUsages :: [IdentifierUsage]
+    _identifierUsages :: [IdentifierWithUsageLocation]
   }
   deriving (Show, Eq, Generic)
 

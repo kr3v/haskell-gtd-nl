@@ -143,8 +143,8 @@ pathU cPkg f = do
   return $ (,) (c </> d) (pathAsFile fr)
 
 pGetU :: Cabal.Package a -> FilePath -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m [UsagesInFileMap]
-pGetU cPkg f = do
-  (d, f) <- pathU cPkg f
+pGetU cPkg f0 = do
+  (d, f) <- pathU cPkg f0
   fs :: [FilePath] <- filter (f `isPrefixOf`) <$> liftIO (listDirectory d)
   flip mapMaybeM fs $ \f1 -> do
     let p = d </> f1

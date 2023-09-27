@@ -37,7 +37,7 @@ import GHC.Types.SrcLoc (GenLocated (..), RealSrcSpan (srcSpanFile), SrcSpan (..
 import qualified GHC.Unit.Types as GenModule
 import GHC.Utils.Outputable (Outputable (..), SDocContext (..), defaultSDocContext, renderWithContext)
 import GTD.Cabal.Types (ModuleNameS)
-import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Exports, IdentifierUsage (..), Imports, Module (..), SourceSpan (..), asDeclsMap, emptySourceSpan)
+import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Exports, IdentifierWithUsageLocation (..), Imports, Module (..), SourceSpan (..), asDeclsMap, emptySourceSpan)
 import qualified GTD.Haskell.Declaration as Declarations
 import GTD.Utils (logDebugNSS)
 import Text.Printf (printf)
@@ -231,7 +231,7 @@ imports (HsModuleX HsModule {hsmodImports = is} ps) = do
   unless ("-XNoImplicitPrelude" `elem` ps) $ do
     tell [mempty {_mName = "Prelude", _mQualifier = "Prelude"}]
 
-identifierUsages :: HsModuleX -> [IdentifierUsage]
+identifierUsages :: HsModuleX -> [IdentifierWithUsageLocation]
 identifierUsages (HsModuleX m@HsModule {} _) = do
   let c :: HsModule GhcPs -> [GenLocated SrcSpanAnnN RdrName]
       c = listify $ \(_ :: GenLocated l RdrName) -> True
