@@ -10,7 +10,7 @@
 module Main where
 
 import Control.Exception (try)
-import Control.Lens ((^.), use)
+import Control.Lens (use, (^.))
 import Control.Monad (forM_)
 import Control.Monad.Except (MonadError (..), MonadIO (..), runExceptT)
 import Control.Monad.Logger (runStderrLoggingT, runStdoutLoggingT)
@@ -19,6 +19,7 @@ import Control.Monad.State (evalStateT)
 import Data.Data (Data (..), showConstr)
 import Data.Either (fromRight)
 import Data.Foldable (foldrM)
+import Data.Generics (listify)
 import Data.GraphViz (GraphID (Str), GraphvizOutput (..), X11Color (..), runGraphviz)
 import qualified Data.GraphViz.Attributes.Colors as Color
 import Data.GraphViz.Attributes.Complete (Attribute (..), RankDir (FromLeft), toColorList)
@@ -45,38 +46,40 @@ import Distribution.Verbosity (Verbosity)
 import qualified GHC.Data.FastString as GHC
 import qualified GHC.Data.StringBuffer as GHC
 import qualified GHC.Driver.Config.Parser as GHC
-import GHC.Driver.Session (DynFlags)
+import GHC.Driver.Session as GHC (DynFlags)
 import qualified GHC.Driver.Session as GHC
+import GHC.Hs as GHC (GhcPs, HsModule, SrcSpanAnnN)
 import qualified GHC.Parser as GHC
-import GHC.Parser.Lexer (PState (errors), ParseResult (PFailed, POk))
+import GHC.Parser.Lexer as GHC (PState (errors), ParseResult (PFailed, POk))
 import qualified GHC.Parser.Lexer as GHC
-import GHC.Types.SourceError (SourceError)
-import GHC.Types.SrcLoc (GenLocated (..))
+import GHC.Types.Name.Reader as GHC (RdrName)
+import GHC.Types.SourceError as GHC (SourceError)
+import GHC.Types.SrcLoc as GHC (GenLocated (..))
 import qualified GHC.Types.SrcLoc as GHC
 import qualified GTD.Cabal.Cache as Cabal (load)
 import GTD.Cabal.FindAt (findAt)
 import qualified GTD.Cabal.FindAt as Cabal (findAt)
+import GTD.Cabal.Get as Cabal (get)
 import qualified GTD.Cabal.Parse as Cabal (__read'packageDescription)
 import GTD.Cabal.Types (isMainLib)
-import GTD.Cabal.Get as Cabal (get)
 import qualified GTD.Cabal.Types as Cabal (Package (..), key, resolve)
 import GTD.Configuration (defaultArgs, prepareConstants, repos)
-import GTD.Haskell.Module (emptyHsModule, emptyMetadata)
+import GTD.Haskell.Module (HsModule (..), emptyHsModule, emptyMetadata)
 import qualified GTD.Haskell.Module as HsModule
 import GTD.Haskell.Parser.GhcLibParser (fakeSettings, parsePragmasIntoDynFlags, showO)
 import qualified GTD.Resolution.Cache as PackageCache
-import GTD.Resolution.Module hiding (resolution)
-import GTD.Resolution.Package
-import GTD.Server (cabalPackage, findAtF)
-import qualified GTD.Server as Server (resolution)
+import GTD.Resolution.Package (package'dependencies'ordered, package'order'default)
+import GTD.Server.Definition (cabalPackage, findAtF)
+import qualified GTD.Server.Definition as Server (resolution)
 import GTD.State (ccGet, emptyContext)
-import GTD.Utils (fromMaybeM, maybeM, ultraZoom)
+import GTD.Utils (deduplicate, deduplicateBy, fromMaybeM, maybeM)
 import Options.Applicative (Parser, ParserInfo, auto, command, execParser, fullDesc, help, helper, info, long, metavar, option, progDesc, strOption, subparser, (<**>))
 import System.Directory (getCurrentDirectory, makeAbsolute, setCurrentDirectory)
 import System.FilePath (isRelative, (</>))
 import System.IO (BufferMode (LineBuffering), hPrint, hSetBuffering, stderr, stdout)
 import Text.Printf (printf)
-import Control.Concurrent (newQSem)
+import GTD.Resolution.Module.Single (module'Dependencies)
+import GTD.Resolution.Module (orderedByDependencies)
 
 showT2 :: (String, String) -> String
 showT2 (a, b) = "(" ++ a ++ "," ++ b ++ ")"
@@ -101,6 +104,7 @@ data Args
   | ParseHeader {_file :: String}
   | Cabal {_fileC :: String, _fileP :: String, _root :: String}
   | Resolution {_rpkg :: ResolutionPackage, _identifier :: String}
+  | Playground {_file :: FilePath}
   deriving (Show)
 
 data ResolutionPackage
@@ -144,7 +148,8 @@ args = do
           command "identifier" (info idP (fullDesc <> progDesc "ghc-lib-parser: try parsing given identifier")),
           command "header" (info ph (fullDesc <> progDesc "ghc-lib-parser: try parsing a file's header")),
           command "cabal" (info ca (fullDesc <> progDesc "cabal: just testing API, nothing useful")),
-          command "resolution" (info res (fullDesc <> progDesc "gtd-nl-hs: check if a given identifier is resolvable in a given package and module"))
+          command "resolution" (info res (fullDesc <> progDesc "gtd-nl-hs: check if a given identifier is resolvable in a given package and module")),
+          command "playground" (info (Playground <$> strOption (long "file" <> help "kekw")) (fullDesc <> progDesc "ghc-lib-parser: try parsing a file"))
         ]
   subparser (mconcat commands)
 
@@ -203,7 +208,7 @@ order pkgN pkgV t = do
           return ()
 
     case t of
-      Module -> h HsModule._name module'Dependencies modulesOrdered findAtF
+      Module -> h HsModule._name module'Dependencies orderedByDependencies findAtF
       Package -> h (show . Cabal.key) (fmap show . Cabal._dependencies) (flip package'dependencies'ordered package'order'default) Cabal.findAt
 
   case x of
@@ -306,6 +311,36 @@ resolution pkg ident = do
     Left e -> print e
     Right _ -> return ()
 
+playground :: FilePath -> IO ()
+playground file = do
+  content <- readFile file
+
+  let dynFlags0 = GHC.defaultDynFlags fakeSettings
+  fM <- try (parsePragmasIntoDynFlags dynFlags0 "." content) :: IO (Either SourceError (Maybe (DynFlags, [String])))
+  let (dynFlags, languagePragmas) = fromMaybe (dynFlags0, []) $ fromRight Nothing fM
+
+  print languagePragmas
+
+  let o = GHC.initParserOpts dynFlags
+      l = GHC.mkRealSrcLoc (GHC.mkFastString file) 1 1
+      b = GHC.stringToStringBuffer content
+      s = GHC.initParserState o b l
+      r = GHC.unP GHC.parseModule s
+
+  case r of
+    PFailed e -> print $ showO $ errors e
+    POk _ (L _ e) -> do
+      let collectIds :: GHC.HsModule GhcPs -> [GenLocated SrcSpanAnnN RdrName]
+          collectIds = listify isRdrName
+
+          isRdrName :: GenLocated l RdrName -> Bool
+          isRdrName _ = True
+
+      printf ":t %s\n" (showConstr . toConstr $ e)
+      let identifiers = collectIds e
+      forM_ identifiers $ \(L l i) -> do
+        printf "l=%s, i=%s\n" (showO l) (showO i)
+
 main :: IO ()
 main = do
   hSetBuffering stdout LineBuffering
@@ -320,3 +355,4 @@ main = do
     ParseHeader {_file = file} -> parseHeader file
     Cabal {_fileP = fileP, _fileC = fileC, _root = root} -> cabal fileP fileC root
     Resolution {_rpkg = pkg, _identifier = ident} -> resolution pkg ident
+    Playground {_file = file} -> playground file

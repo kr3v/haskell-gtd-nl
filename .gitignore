@@ -1,0 +1,3 @@
+test/integrationTestRepo/fake/*.txt
+dist-newstyle
+.vscode

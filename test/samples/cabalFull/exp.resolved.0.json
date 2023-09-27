@@ -1974,7 +1974,7 @@
           {
             "_dName": "text",
             "_dSubname": null,
-            "_dVersion": "IntersectVersionRanges (OrLaterVersion (mkVersion [1,2,3,0])) (EarlierVersion (mkVersion [2,1]))"
+            "_dVersion": "IntersectVersionRanges (OrLaterVersion (mkVersion [1,2,3,0])) (EarlierVersion (mkVersion [2,2]))"
           },
           {
             "_dName": "th-abstraction",

@@ -344,99 +344,120 @@ export function identifier(s: string, pos0: number): [string, string[][]] {
 	return [a1.join("."), [lA, [e], rA, a, a1]];
 }
 
+async function genericDefProvider(
+	document: vscode.TextDocument,
+	position: vscode.Position,
+	endpoint: string
+) {
+	// figure out 'working directory' in multi-root workspace
+	let doc = vscode.window.activeTextEditor?.document;
+	if (!doc) return Promise.resolve([]);
+	let docF = vscode.workspace.getWorkspaceFolder(doc.uri);
+	if (!docF) return Promise.resolve([]);
+	let wd = docF.uri.fsPath;
+	let repos = path.join(wd, "./.repos");
+	let file = document.uri.fsPath;
+	if (isParentOf(repos, file)) {
+		wd = path.join(repos, path.relative(repos, file).split(path.sep)[0]);
+		outputChannel.appendLine(util.format("%s is in %s, so wd=%s", file, repos, wd));
+	}
+
+	// figure out the word under the cursor
+	let [word,] = identifier(document.lineAt(position.line).text, position.character);
+	if (word == "") {
+		[word,] = identifier(document.lineAt(position.line).text, position.character - 1);
+	}
+	if (word == "") {
+		return Promise.resolve([]);
+	}
+	outputChannel.appendLine(util.format("getting a definition for %s @ %s...", word, wd));
+
+	// send a request to the server
+	await startServerIfRequired();
+	let body = {
+		workDir: wd,
+		file: file,
+		word: word
+	};
+	let res = await axios.
+		post(`http://localhost:${port}/` + endpoint, body).
+		catch(function (error) {
+			outputChannel.appendLine(util.format("%s -> %s", body, error));
+			return { "data": {} };
+		});
+	statusServerS = "";
+	statusPackageS = "";
+
+	let data = res.data;
+	if (data.err != undefined && data.err != "") {
+		outputChannel.appendLine(util.format("%s -> err=%s (data=%s)", word, data.err, JSON.stringify(data)));
+		return Promise.resolve([]);
+	}
+	if (data.srcSpan == undefined) {
+		outputChannel.appendLine(util.format("%s -> no srcSpan (data=%s)", word, JSON.stringify(data)));
+		return Promise.resolve([]);
+	}
+	outputChannel.appendLine(util.format("response = %s", data));
+
+	let locs = [];
+	for (const span of data.srcSpan) {
+		// HLS BUG #1: in case definition is located at `repos` directory, rewrite the path to local symlink to `repos` (named `./{wd}/.repos`) to prevent Haskell VS Code extension from spawning a new instance of the HLS
+		// HLS interoperability: if HLS is provided via `haskell.haskell` extension, then this extension should not provide local resolutions until they become the same as the ones provided by `haskell.haskell` extension
+		let wordSourcePathO = span.sourceSpanFileName;
+		let wordSourcePath;
+		if (isParentOf(wd, wordSourcePathO) && !isParentOf(repos, wd)) {
+			wordSourcePath = wordSourcePathO;
+			if (isMainHaskellExtensionActive()) {
+				let conf = vscode.workspace.getConfiguration('haskell-gtd-nl');
+				let disableLocDefs = conf.get<boolean>("extension.disable-local-definitions-when-hls-is-active") ?? true;
+				if (disableLocDefs) {
+					outputChannel.appendLine(util.format("HLS is active, disabling local definitions; got %s", wordSourcePathO));
+					return Promise.resolve([]);
+				}
+			}
+		} else if (wordSourcePathO == file || isParentOf(repos, wordSourcePathO)) {
+			wordSourcePath = wordSourcePathO;
+		} else if (isParentOf(serverRepos, wordSourcePathO)) {
+			wordSourcePath = path.resolve(repos, path.relative(serverRepos, wordSourcePathO))
+		} else {
+			outputChannel.appendLine(util.format("BUG: wordSourcePathO (%s) is neither original file (%s) nor is present in neither serverRepos (%s) nor current work directory (%s)", wordSourcePathO, file, serverRepos, wd));
+			return Promise.resolve([]);
+		}
+		wordSourcePath = path.normalize(wordSourcePath);
+		outputChannel.appendLine(util.format("path rewritten: %s -> %s", wordSourcePathO, wordSourcePath));
+		let wordSourceURI = vscode.Uri.file(path.normalize(wordSourcePath));
+
+		// return the actual definition location
+		let definitionLocation = new vscode.Location(
+			wordSourceURI,
+			new vscode.Range(
+				new vscode.Position(span.sourceSpanStartLine - 1, span.sourceSpanStartColumn - 1),
+				new vscode.Position(span.sourceSpanEndLine - 1, span.sourceSpanEndColumn - 1)
+			)
+		);
+		locs.push(definitionLocation);
+	}
+	return Promise.resolve(locs);
+}
+
 class XDefinitionProvider implements vscode.DefinitionProvider {
 	async provideDefinition(
 		document: vscode.TextDocument,
 		position: vscode.Position,
 		token: vscode.CancellationToken
 	): Promise<vscode.Definition> {
+		return Promise.resolve(await genericDefProvider(document, position, "definition"));
+	}
+}
 
-		// figure out 'working directory' in multi-root workspace
-		let doc = vscode.window.activeTextEditor?.document;
-		if (!doc) return Promise.resolve([]);
-		let docF = vscode.workspace.getWorkspaceFolder(doc.uri);
-		if (!docF) return Promise.resolve([]);
-		let wd = docF.uri.fsPath;
-		let repos = path.join(wd, "./.repos");
-		let file = document.uri.fsPath;
-		if (isParentOf(repos, file)) {
-			wd = path.join(repos, path.relative(repos, file).split(path.sep)[0]);
-			outputChannel.appendLine(util.format("%s is in %s, so wd=%s", file, repos, wd));
-		}
-
-		// figure out the word under the cursor
-		let [word,] = identifier(document.lineAt(position.line).text, position.character);
-		if (word == "") {
-			[word,] = identifier(document.lineAt(position.line).text, position.character - 1);
-		}
-		if (word == "") {
-			return Promise.resolve([]);
-		}
-		outputChannel.appendLine(util.format("getting a definition for %s @ %s...", word, wd));
-
-		// send a request to the server
-		await startServerIfRequired();
-		let body = {
-			workDir: wd,
-			file: file,
-			word: word
-		};
-		let res = await axios.
-			post(`http://localhost:${port}/definition`, body).
-			catch(function (error) {
-				outputChannel.appendLine(util.format("%s -> %s", body, error));
-				return { "data": {} };
-			});
-		statusServerS = "";
-		statusPackageS = "";
-
-		let data = res.data;
-		if (data.err != undefined && data.err != "") {
-			outputChannel.appendLine(util.format("%s -> err=%s (data=%s)", word, data.err, JSON.stringify(data)));
-			return Promise.resolve([]);
-		}
-		if (data.srcSpan == undefined) {
-			outputChannel.appendLine(util.format("%s -> no srcSpan (data=%s)", word, JSON.stringify(data)));
-			return Promise.resolve([]);
-		}
-		outputChannel.appendLine(util.format("response = %s", data));
-
-		let locs = [];
-		for (const span of data.srcSpan) {
-			// HLS BUG #1: in case definition is located at `repos` directory, rewrite the path to local symlink to `repos` (named `./{wd}/.repos`) to prevent Haskell VS Code extension from spawning a new instance of the HLS
-			// HLS interoperability: if HLS is provided via `haskell.haskell` extension, then this extension should not provide local resolutions until they become the same as the ones provided by `haskell.haskell` extension
-			let wordSourcePathO = span.sourceSpanFileName;
-			let wordSourcePath;
-			if (isParentOf(wd, wordSourcePathO) && !isParentOf(repos, wd)) {
-				wordSourcePath = wordSourcePathO;
-				if (isMainHaskellExtensionActive()) {
-					let conf = vscode.workspace.getConfiguration('haskell-gtd-nl');
-					let disableLocDefs = conf.get<boolean>("extension.disable-local-definitions-when-hls-is-active") ?? true;
-					if (disableLocDefs) {
-						outputChannel.appendLine(util.format("HLS is active, disabling local definitions; got %s", wordSourcePathO));
-						return Promise.resolve([]);
-					}
-				}
-			} else if (wordSourcePathO == file || isParentOf(repos, wordSourcePathO)) {
-				wordSourcePath = wordSourcePathO;
-			} else if (isParentOf(serverRepos, wordSourcePathO)) {
-				wordSourcePath = path.resolve(repos, path.relative(serverRepos, wordSourcePathO))
-			} else {
-				outputChannel.appendLine(util.format("BUG: wordSourcePathO (%s) is neither original file (%s) nor is present in neither serverRepos (%s) nor current work directory (%s)", wordSourcePathO, file, serverRepos, wd));
-				return Promise.resolve([]);
-			}
-			wordSourcePath = path.normalize(wordSourcePath);
-			outputChannel.appendLine(util.format("path rewritten: %s -> %s", wordSourcePathO, wordSourcePath));
-			let wordSourceURI = vscode.Uri.file(path.normalize(wordSourcePath));
-
-			// return the actual definition location
-			let line = span.sourceSpanStartLine - 1; // 0-based line number
-			let character = span.sourceSpanStartColumn - 1; // 0-based character position
-			let definitionPosition = new vscode.Position(line, character);
-			let definitionLocation = new vscode.Location(wordSourceURI, definitionPosition);
-			locs.push(definitionLocation);
-		}
-		return Promise.resolve(locs);
+class XReferenceProvider implements vscode.ReferenceProvider {
+	async provideReferences(
+		document: vscode.TextDocument,
+		position: vscode.Position,
+		context: vscode.ReferenceContext,
+		token: vscode.CancellationToken
+	): Promise<vscode.Location[]> {
+		return Promise.resolve(await genericDefProvider(document, position, "usages"));
 	}
 }
 
@@ -567,6 +588,19 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.languages.registerDefinitionProvider(
 			{ scheme: 'file', language: 'Hsc2Hs' },
 			new XDefinitionProvider()
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.languages.registerReferenceProvider(
+			{ scheme: 'file', language: 'haskell' },
+			new XReferenceProvider()
+		)
+	);
+	context.subscriptions.push(
+		vscode.languages.registerReferenceProvider(
+			{ scheme: 'file', language: 'Hsc2Hs' },
+			new XReferenceProvider()
 		)
 	);
 

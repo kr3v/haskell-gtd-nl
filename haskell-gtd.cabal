@@ -16,7 +16,7 @@ common common-deps
         , cabal-install ^>= 3.10.1.0
         , cpphs ^>= 1.20.9.1
         , ghc-lib-parser ^>= 9.6.2.20230523
-        , haskell-src-exts ^>= 1.23.1
+        , syb
 
         , lens ^>= 5.2.2
         , lrucache ^>= 1.2.0.1
@@ -29,7 +29,6 @@ common common-deps
         , unix ^>= 2.8.1.1
 
         , async ^>= 2.2.4
-        , containers ^>= 0.6.7
         , either ^>= 5.0.2
         , lifted-async ^>= 0.10.2.4
         , lifted-base ^>= 0.2.3.12
@@ -40,6 +39,11 @@ common common-deps
         , time ^>= 1.12.2
         , transformers ^>= 0.5.6.2
         , unliftio ^>= 0.2.24.0
+        , deepseq
+
+        , containers ^>= 0.6.7
+        , unordered-containers
+        , hashable
 
         , aeson ^>= 2.1.2.1
         , aeson-pretty
@@ -51,18 +55,13 @@ common common-deps
         , text ^>= 2.0.2
         , utf8-string ^>= 1.0.2
 
-        , network ^>= 3.1.4.0
-        , servant ^>= 0.19.1
-        , servant-server ^>= 0.19.2
-        , warp ^>= 3.3.27
-
-        , graphviz ^>= 2999.20.1.0
-
 executable haskell-gtd-nl-debug
     import:           common-deps
     main-is:          Main.hs
     build-depends:
         haskell-gtd
+
+        , graphviz ^>= 2999.20.1.0
 
     hs-source-dirs:   app/debug
 
@@ -73,6 +72,11 @@ executable haskell-gtd-nl-server
     main-is:          Main.hs
     build-depends:
         haskell-gtd
+
+        , network ^>= 3.1.4.0
+        , servant ^>= 0.19.1
+        , servant-server ^>= 0.19.2
+        , warp ^>= 3.3.27
 
     hs-source-dirs:   app/server
 
@@ -109,6 +113,9 @@ library
         GTD.Resolution.Cache
         GTD.Resolution.Caching.Utils
         GTD.Resolution.Module
+        GTD.Resolution.Module.Single
+        GTD.Resolution.Module.Multi
+        GTD.Resolution.Module.Utils
         GTD.Resolution.Package
         GTD.Resolution.Types
         GTD.Resolution.Utils
@@ -116,6 +123,7 @@ library
         GTD.Server.Cpphs
         GTD.Server.Definition
         GTD.Server.DropPackageCache
+        GTD.Server.Usages
         GTD.State
         GTD.Utils
         Paths_haskell_gtd

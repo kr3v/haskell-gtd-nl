@@ -9,7 +9,7 @@
 module GTD.Server.Definition where
 
 import Control.Lens (use, (%=), (.=))
-import Control.Monad (forM, forM_, join, unless, void, when)
+import Control.Monad (forM, forM_, unless, void, when)
 import Control.Monad.Except (MonadError (..), MonadIO (..))
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (gets)
@@ -19,22 +19,24 @@ import qualified Data.Cache.LRU as LRU
 import Data.Foldable (foldlM)
 import Data.List (isPrefixOf, isSuffixOf)
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes, fromMaybe, isJust)
+import Data.Maybe (catMaybes, isJust)
 import GHC.Generics (Generic)
+import GHC.Utils.Monad (mapMaybeM)
 import qualified GTD.Cabal.Dependencies as Cabal (fullS)
 import qualified GTD.Cabal.FindAt as CabalCache (findAt)
 import GTD.Cabal.Types (PackageWithResolvedDependencies, PackageWithUnresolvedDependencies)
 import qualified GTD.Cabal.Types as Cabal (Dependency, Designation (..), DesignationType (..), Package (..), PackageModules (..), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, key, pKey)
-import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Identifier, SourceSpan (..), asDeclsMap, emptySourceSpan)
+import GTD.Haskell.Declaration (Declarations (..), SourceSpan (..))
 import GTD.Haskell.Module (HsModule (..), HsModuleMetadata (..), emptyHsModule, emptyMetadata)
-import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import qualified GTD.Resolution.Cache as PackageCache
+import GTD.Resolution.Module.Utils (resolution'qualified, resolution'word)
 import GTD.Resolution.Package (package'resolution'withDependencies'forked)
 import GTD.Resolution.Types (Package (..))
 import GTD.State (Context (..), MS, cLocalPackages, cResolution)
-import GTD.Utils (logDebugNSS, maybeToMaybeT, peekM, stats, updateStatus)
+import GTD.Utils (logDebugNSS, peekM, stats, updateStatus, deduplicate)
 import System.FilePath (normalise, (</>))
 import Text.Printf (printf)
+import qualified Data.HashMap.Strict as HMap
 
 package ::
   Cabal.PackageWithResolvedDependencies ->
@@ -109,49 +111,13 @@ instance ToJSON DefinitionResponse
 
 instance FromJSON DefinitionResponse
 
-resolution'simplify :: Declarations -> Map.Map Identifier Declaration
-resolution'simplify Declarations {_decls = ds, _dataTypes = dts} =
-  let ds' = Map.elems ds
-      dts' = concatMap (\cd -> [_cdtName cd] <> Map.elems (_cdtFields cd)) (Map.elems dts)
-   in asDeclsMap $ ds' <> dts'
-
-resolution'qualified ::
-  Map.Map String Declarations ->
-  String ->
-  (MonadLoggerIO m, MonadError String m) => MaybeT m SourceSpan
-resolution'qualified rm w = do
-  y <- maybeToMaybeT $ w `Map.lookup` rm
-  case Map.elems $ resolution'simplify y of
-    (d : _) -> return $ emptySourceSpan {sourceSpanFileName = sourceSpanFileName . _declSrcOrig $ d, sourceSpanStartColumn = 1, sourceSpanStartLine = 1}
-    _ -> throwError "given word is a known module, but it has no declarations"
-
-resolution'word ::
-  Map.Map String Declarations ->
-  String ->
-  (MonadLoggerIO m, MonadError String m) => MaybeT m SourceSpan
-resolution'word rm w = do
-  let (q, w') = fromMaybe ("", w) $ GHC.identifier w
-  let look q1 w1 = join $ do
-        mQ <- Map.lookup q1 rm
-        d <- Map.lookup w1 $ resolution'simplify mQ
-        return $ Just $ _declSrcOrig d
-  let cases = if w == w' then [("", w)] else [(q, w'), ("", w)]
-  casesM <- forM cases $ \(q1, w1) -> do
-    let r = look q1 w1
-    logDebugNSS "definition" $ printf "%s -> `%s`.`%s` -> %s" w q1 w1 (show r)
-    return r
-  case catMaybes casesM of
-    (x : _) -> return x
-    _ -> MaybeT $ return Nothing
-
-resolution :: (MonadLoggerIO m, MonadError String m) => Map.Map String Declarations -> String -> m (Maybe SourceSpan)
-resolution rm w = do
-  let opts =
-        [ resolution'qualified rm (w ++ "*"),
-          resolution'qualified rm w,
-          resolution'word rm w
-        ]
-  foldlM (\a b -> case a of Just _ -> return a; Nothing -> b) Nothing $ runMaybeT <$> opts
+resolution :: (MonadLoggerIO m, MonadError String m) => HMap.HashMap String Declarations -> String -> m [SourceSpan]
+resolution rm w =
+  mapMaybeM runMaybeT
+    [ resolution'qualified rm (w ++ "*"),
+      resolution'qualified rm w,
+      resolution'word rm w
+    ]
 
 definition ::
   DefinitionRequest ->
@@ -177,7 +143,7 @@ definition (DefinitionRequest {workDir = wd, file = rf0, word = w}) = do
         return r
 
     r <- case resM of
-      Nothing -> return Nothing
+      Nothing -> return []
       Just rm -> do
         updateStatus $ printf "figuring out what `%s` is in %s" w pn
         resolution rm w
@@ -185,4 +151,4 @@ definition (DefinitionRequest {workDir = wd, file = rf0, word = w}) = do
     return r
   liftIO stats
   updateStatus ""
-  return DefinitionResponse {srcSpan = catMaybes ss, err = Nothing}
+  return DefinitionResponse {srcSpan = deduplicate $ concat ss, err = Nothing}

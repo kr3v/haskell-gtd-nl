@@ -32,6 +32,8 @@ import System.IO (BufferMode (..), Handle, IOMode (..), hSetBuffering, withFile)
 import System.IO.Error (isDoesNotExistError)
 import System.Random (randomIO)
 import Text.Printf (printf)
+import qualified Data.HashMap.Strict as HMap
+import qualified Data.Set as Set
 
 maybeToMaybeT :: Monad m => Maybe a -> MaybeT m a
 maybeToMaybeT = MaybeT . return
@@ -78,6 +80,9 @@ tryE m = catchE (fmap Right m) (return . Left)
 
 mapFrom :: Ord k => (a -> k) -> [a] -> Map.Map k a
 mapFrom f xs = Map.fromList $ (\x -> (f x, x)) <$> xs
+
+mapDFrom :: Ord k => (a -> k) -> [a] -> Map.Map k [a]
+mapDFrom f xs = foldr (Map.unionWith (<>)) Map.empty $ uncurry Map.singleton . (\x -> (f x, [x])) <$> xs
 
 deduplicateBy :: Ord k => (a -> k) -> [a] -> [a]
 deduplicateBy f xs = Map.elems $ Map.fromList $ (\x -> (f x, x)) <$> xs
@@ -230,6 +235,9 @@ withLogging logP logS ll action = withFile logP AppendMode $ \h -> do
   (`runLoggingT` combine (statusL logS) (logOutput hm)) $
     filterLogger (\_ l -> l >= ll) $ do
       action
+
+restrictKeys :: Ord k => HMap.HashMap k v -> Set.Set k -> HMap.HashMap k v
+restrictKeys s m = HMap.filterWithKey (\k _ -> k `Set.member` m) s
 
 ---
 

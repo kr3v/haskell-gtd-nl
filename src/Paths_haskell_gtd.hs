@@ -1,3 +1,4 @@
+-- fake file for HLS
 module Paths_haskell_gtd (version) where
 
 import Data.Version (Version (..))

@@ -8,6 +8,7 @@
 module GTD.Resolution.Utils (scheme, parallelized, reverseDependencies, ParallelizedState (..)) where
 
 import Control.Concurrent.Async.Lifted (Async, async, wait)
+import Control.Concurrent.MVar.Lifted
 import Control.Lens (makeLenses, use, (%=), (.=))
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (MonadState (get), mapAndUnzipM)
@@ -19,7 +20,6 @@ import Data.Maybe (catMaybes, fromJust, mapMaybe)
 import qualified Data.Set as Set
 import GTD.Utils (flipTuple, logDebugNSS, mapFrom, updateStatus)
 import Text.Printf (printf)
-import Control.Concurrent.MVar.Lifted
 
 data SchemeState k a b = SchemeState
   { _schemeStateA :: Map.Map k a,
@@ -121,10 +121,10 @@ scheme f ka kb p ks = evalStateT (schemeS f ka kb p ks) (SchemeState Map.empty M
 -- `_asyncs` is a map of tasks that are currently executing
 -- `_state` is a state that is passed to `f` and `ps`
 -- `_shouldUpdateStatus` is a flag that indicates whether status file should be updated
-data ParallelizedState s k a b m = ParallelizedState
+data ParallelizedState s k b m = ParallelizedState
   { _queue :: [b],
-    _processed :: Map.Map k a,
-    _asyncs :: Map.Map k (Async (StM m (a, s -> s))),
+    _processed :: Set.Set k,
+    _asyncs :: Map.Map k (Async (StM m (s -> s))),
     _state :: s,
     _shouldUpdateStatus :: Bool
   }
@@ -142,11 +142,11 @@ $(makeLenses ''ParallelizedState)
 --      this function is used to figure out whether a given task (`b`) depends on a task that is currently executing;
 --      in such a case, we have to await on the required tasks
 parallelized ::
-  (Show a, Show b, Show n, Show k, Ord k) =>
+  (Show b, Show n, Show k, Ord k) =>
   (MonadIO m, MonadLoggerIO m, MonadBaseControl IO m) =>
-  ParallelizedState s k a b m ->
+  ParallelizedState s k b m ->
   n ->
-  (s -> b -> m (a, s -> s)) ->
+  (s -> b -> m (s -> s)) ->
   (s -> String) ->
   (b -> k) ->
   (b -> m [k]) ->
@@ -154,14 +154,14 @@ parallelized ::
 parallelized s n f ps kb ds = _state <$> execStateT (parallelized0 n f ps kb ds) s
 
 parallelized0 ::
-  (Show a, Show b, Show n, Show k, Ord k) =>
+  (Show b, Show n, Show k, Ord k) =>
   (MonadIO m, MonadLoggerIO m, MonadBaseControl IO m) =>
   n ->
-  (s -> b -> m (a, s -> s)) ->
+  (s -> b -> m (s -> s)) ->
   (s -> String) ->
   (b -> k) ->
   (b -> m [k]) ->
-  StateT (ParallelizedState s k a b m) m ()
+  StateT (ParallelizedState s k b m) m ()
 parallelized0 n f ps kb ds = do
   ParallelizedState {_queue = q, _asyncs = a, _shouldUpdateStatus = us} <- get
   let logTag = printf "parallelized %s" (show n)
@@ -169,10 +169,10 @@ parallelized0 n f ps kb ds = do
 
   case q of
     [] -> do
-      let aK = Map.keys a
-      (rs, ss) <- lift $ mapAndUnzipM wait (Map.elems a)
+      let aK = Map.keysSet a
+      ss <- lift $ mapM wait (Map.elems a)
       state %= flip (foldr ($)) ss
-      processed %= Map.union (Map.fromList $ zip aK rs)
+      processed %= Set.union aK
     (x : xs) -> do
       xD <- lift $ ds x
       let is = Set.intersection (Set.fromList xD) (Map.keysSet a)
@@ -190,10 +190,10 @@ parallelized0 n f ps kb ds = do
           queue .= xs
         else do
           let (aK, xDA) = unzip $ mapMaybe (\y -> (y,) <$> (y `Map.lookup` a)) (Set.toList is)
-          (rs, ss) <- lift $ mapAndUnzipM wait xDA
+          ss <- lift $ mapM wait xDA
           modifyMVar_ finishedButNotConsumed $ return . (`subtract` length xDA)
 
-          processed %= Map.union (Map.fromList $ zip aK rs)
+          processed %= Set.union (Set.fromList aK)
           asyncs %= flip (foldr Map.delete) is
 
           s0 <- use state

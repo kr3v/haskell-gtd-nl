@@ -57,6 +57,7 @@ defaultArgs = do
 data GTDConfiguration = GTDConfiguration
   { _repos :: FilePath,
     _cache :: FilePath,
+    _cacheUsages :: FilePath,
     _ccGetPath :: FilePath,
     _status :: FilePath,
     _cversion :: String,
@@ -85,7 +86,8 @@ prepareConstants a = do
   let constants =
         GTDConfiguration
           { _repos = dir </> "repos",
-            _cache = dir </> "cache",
+            _cache = dir </> "cache" </> "packages",
+            _cacheUsages = dir </> "cache" </> "usages",
             _cversion = dir </> "version",
             _status = dir </> "status",
             _ccGetPath = dir </> "cc-get.json",
@@ -95,6 +97,7 @@ prepareConstants a = do
   createDirectoryIfMissing True dir
   createDirectoryIfMissing True (constants ^. repos)
   createDirectoryIfMissing True (constants ^. cache)
+  createDirectoryIfMissing True (constants ^. cacheUsages)
   createDirectoryIfMissing True (constants ^. status)
 
   let versionCurrent = showVersion Paths_haskell_gtd.version

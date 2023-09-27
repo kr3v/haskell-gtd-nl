@@ -1,5 +1,5 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -7,15 +7,19 @@
 module GTD.Resolution.Cache where
 
 import Control.Lens (over, view)
-import Control.Monad (when)
+import Control.Monad (forM, forM_, when)
 import Control.Monad.Except (MonadIO (..))
 import Control.Monad.Logger (LogLevel (LevelDebug), MonadLoggerIO)
 import Control.Monad.RWS (MonadReader (..), MonadState (..), asks, gets, modify)
 import qualified Data.Aeson as JSON
-import qualified Data.Binary as Binary (Binary, encodeFile)
+import qualified Data.Binary as Binary (Binary, decodeFileOrFail, encodeFile)
+import qualified Data.ByteString.Char8 as BSW8
 import qualified Data.Cache.LRU as LRU
+import qualified Data.HashMap.Strict as HMap
+import Data.List (isPrefixOf, stripPrefix)
 import qualified Data.Map as Map
-import Data.Maybe (isJust)
+import Data.Maybe (fromMaybe, isJust)
+import GHC.Utils.Monad (mapMaybeM)
 import qualified GTD.Cabal.Types as Cabal (ModuleNameS, Package (..), PackageKey, PackageWithResolvedDependencies, dKey, key, pKey)
 import GTD.Configuration (Args (..), GTDConfiguration (..))
 import GTD.Haskell.Declaration (Declarations)
@@ -23,12 +27,12 @@ import GTD.Haskell.Lines (Lines)
 import GTD.Haskell.Module (HsModule (..), metadataPrettyShow)
 import qualified GTD.Haskell.Module as HsModule
 import GTD.Resolution.Caching.Utils (binaryGet, pathAsFile)
-import GTD.Resolution.Types (Package (..))
+import GTD.Resolution.Types (Package (..), UsagesMap, UsagesInFileMap)
 import qualified GTD.Resolution.Types as Package
 import GTD.State (Context, cExports)
-import GTD.Utils (logDebugNSS, removeIfExistsL, encodeWithTmp)
-import System.Directory (createDirectoryIfMissing, doesFileExist, removeDirectoryRecursive)
-import System.FilePath.Posix ((</>))
+import GTD.Utils (encodeWithTmp, logDebugNSS, removeIfExistsL)
+import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removeDirectoryRecursive)
+import System.FilePath (addTrailingPathSeparator, joinPath, splitPath, takeDirectory, (</>))
 import Text.Printf (printf)
 
 exportsN :: String
@@ -61,7 +65,7 @@ pGet :: Cabal.PackageWithResolvedDependencies -> (MonadLoggerIO m, MonadReader G
 pGet cPkg = do
   modulesJ <- __pGet cPkg modulesN
   exportsJ <- __pGet cPkg exportsN
-  let p = Package cPkg <$> modulesJ <*> exportsJ
+  let p = Package cPkg <$> modulesJ <*> exportsJ <*> pure HMap.empty
   logDebugNSS "package cached get" $ printf "%s -> %s (%s, %s)" (show $ Cabal.pKey . Cabal.key $ cPkg) (show $ isJust p) (show $ isJust modulesJ) (show $ isJust exportsJ)
   return p
 
@@ -97,13 +101,14 @@ get c cPkg = do
       (_, r) = LRU.lookup k (view cExports c)
       defM = over cExports (fst . LRU.lookup k)
   logDebugNSS "package cached get'" $ printf "%s -> %s" (show $ Cabal.pKey . Cabal.key $ cPkg) (show $ isJust r)
+  let p = Package cPkg mempty mempty mempty
   case r of
-    Just es -> return (Just Package {_cabalPackage = cPkg, _modules = Map.empty, Package._exports = es}, defM)
+    Just es -> return (Just p {Package._exports = es}, defM)
     Nothing -> do
       eM <- __pGet cPkg exportsN
       return $ case eM of
         Nothing -> (Nothing, defM)
-        Just e -> (Just Package {_cabalPackage = cPkg, _modules = Map.empty, Package._exports = e}, over cExports (LRU.insert k e))
+        Just e -> (Just p {Package._exports = e}, over cExports (LRU.insert k e))
 
 setCacheMaxSize :: (MonadLoggerIO m, MonadState (LRU.LRU k v) m, Ord k) => Integer -> m ()
 setCacheMaxSize n = do
@@ -113,6 +118,51 @@ setCacheMaxSize n = do
     _ -> do
       logDebugNSS "package cache" $ printf "setting size to %d" n
       modify $ \lru -> LRU.fromList (Just n) $ LRU.toList lru
+
+---
+
+pathU'h :: Cabal.Package a -> FilePath -> (MonadReader GTDConfiguration m) => m (String, String)
+pathU'h cPkg f = do
+  let pr = addTrailingPathSeparator $ Cabal._projectRoot cPkg
+  rr <- addTrailingPathSeparator <$> asks _repos
+
+  return $
+    if rr `isPrefixOf` f
+      then case splitPath $ fromMaybe "" $ rr `stripPrefix` f of
+        [] -> (rr, "")
+        (x : xs) -> (x, joinPath xs)
+      else
+        if pr `isPrefixOf` f
+          then (pathAsFile pr, fromMaybe "" (pr `stripPrefix` f))
+          else ("", "")
+
+pathU :: Cabal.Package a -> FilePath -> (MonadIO m, MonadReader GTDConfiguration m) => m (FilePath, FilePath)
+pathU cPkg f = do
+  c <- asks _cacheUsages
+  (d, fr) <- pathU'h cPkg f
+  return $ (,) (c </> d) (pathAsFile fr)
+
+pGetU :: Cabal.Package a -> FilePath -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m [UsagesInFileMap]
+pGetU cPkg f = do
+  (d, f) <- pathU cPkg f
+  fs :: [FilePath] <- filter (f `isPrefixOf`) <$> liftIO (listDirectory d)
+  flip mapMaybeM fs $ \f1 -> do
+    let p = d </> f1
+    liftIO (Binary.decodeFileOrFail p) >>= \case
+      Left (_, e) -> logDebugNSS "pGetU" e >> return Nothing
+      Right x -> return $ Just x
+
+pStoreU ::
+  Cabal.Package a ->
+  Package ->
+  (MonadLoggerIO m, MonadReader GTDConfiguration m) => m ()
+pStoreU cPkg pkg = do
+  logDebugNSS "pStoreU" $ printf "starting - %s (%d)" (show $ Cabal.pKey . Cabal.key $ cPkg) (HMap.size $ _usages pkg)
+  forM_ (HMap.toList $ _usages pkg) $ \(p, v) -> do
+    (d, p) <- pathU cPkg $ BSW8.unpack p
+    liftIO $ createDirectoryIfMissing False d
+    liftIO $ encodeWithTmp Binary.encodeFile (d </> (p ++ "." ++ (Cabal.pKey . Cabal.key $ cPkg) ++ "." ++ "usages.binary")) v
+  logDebugNSS "pStoreU" $ printf "done     - %s" (show $ Cabal.pKey . Cabal.key $ cPkg)
 
 ---
 
@@ -149,13 +199,13 @@ resolution'exists'generic n m = do
   p <- __resolution'path n m
   liftIO $ doesFileExist p
 
-resolution'get :: HsModule -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m (Maybe (Map.Map Cabal.ModuleNameS Declarations))
+resolution'get :: HsModule -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m (Maybe (HMap.HashMap Cabal.ModuleNameS Declarations))
 resolution'get = resolution'get'generic "resolution.binary"
 
 resolution'get'lines :: HsModule -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m (Maybe Lines)
 resolution'get'lines = resolution'get'generic "lines.binary"
 
-resolution'put :: HsModule -> Map.Map Cabal.ModuleNameS Declarations -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m ()
+resolution'put :: HsModule -> HMap.HashMap Cabal.ModuleNameS Declarations -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m ()
 resolution'put = resolution'put'generic "resolution.binary"
 
 resolution'put'lines :: HsModule -> Lines -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m ()

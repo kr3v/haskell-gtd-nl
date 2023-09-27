@@ -17,6 +17,7 @@ import qualified GTD.Cabal.Types as Cabal
 import GTD.Configuration (GTDConfiguration)
 import GTD.Haskell.Declaration (Declarations)
 import GTD.Haskell.Module (HsModuleP)
+import qualified Data.HashMap.Strict as HMap
 
 type LocalPackagesKey = (PackageNameS, Maybe String, Cabal.Version)
 
@@ -26,8 +27,8 @@ data Context = Context
   { _ccFindAt :: Map.Map FilePath [Cabal.PackageWithUnresolvedDependencies],
     _ccFull :: Map.Map Cabal.PackageKey Cabal.PackageWithResolvedDependencies,
     _ccGet :: Cabal.GetCache,
-    _cExports :: LRU.LRU Cabal.PackageKey (Map.Map ModuleNameS HsModuleP),
-    _cResolution :: LRU.LRU (Cabal.PackageKey, FilePath) (Maybe (Map.Map ModuleNameS Declarations)),
+    _cExports :: LRU.LRU Cabal.PackageKey (HMap.HashMap ModuleNameS HsModuleP),
+    _cResolution :: LRU.LRU (Cabal.PackageKey, FilePath) (Maybe (HMap.HashMap ModuleNameS Declarations)),
     _cLocalPackages :: LocalPackagesMap
   }
   deriving (Show, Generic)

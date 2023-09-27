@@ -85,22 +85,6 @@ pattern Logger {unLogger} <- (newToOrig -> unLogger)
     Logger f = LoggerTracing f
 ```
 
----
-
-### HLS
----
-
-```shell
-npm install
-npm install webpack webpack-cli
-# npm install -g webpack webpack-cli
-```
-
-```shell @ ubuntu
-apt install libgmp3-dev zlib1g-dev
-```
-
-
 ###
 The extension starts working when a definition is requested from the VS Code.
 
@@ -116,9 +100,3 @@ The forked process parses all the entities and libraries (both local and forked)
 The results are cached.
 
 Once the forked process finishes its computation, the server fetches the 'resolution' cache from disk and returns the requested definition, if any.
-
---
-
-1. Pet project.
-2. Implements `go to (non-local) definition` command in VS Code.
-3. Works (there are bugs, but I believe it should work in many cases). Fast enough, does not use much resources (even if it does, only for a short period of time after a file is saved).

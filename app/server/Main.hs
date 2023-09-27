@@ -21,16 +21,17 @@ import Control.Monad.State.Lazy (evalStateT)
 import Data.Proxy (Proxy (..))
 import GHC.TypeLits (KnownSymbol)
 import qualified GTD.Cabal.Cache as CabalCache
-import GTD.Configuration (Args (..), GTDConfiguration (..),  argsP, prepareConstants)
-import GTD.Server.Cpphs ( CpphsRequest, CpphsResponse(..), cpphs )
-import GTD.Server.Definition    ( DefinitionRequest(..), DefinitionResponse(..), definition )
-import GTD.Server.DropPackageCache    ( DropPackageCacheRequest, dropPackageCache )
+import GTD.Configuration (Args (..), GTDConfiguration (..), argsP, prepareConstants)
+import GTD.Server.Cpphs (CpphsRequest, CpphsResponse (..), cpphs)
+import GTD.Server.Definition (DefinitionRequest (..), DefinitionResponse (..), definition)
+import GTD.Server.DropPackageCache (DropPackageCacheRequest, dropPackageCache)
+import qualified GTD.Server.Usages as Usages
 import GTD.State (Context, emptyContext)
 import GTD.Utils (ultraZoom, updateStatus, withLogging)
 import Network.Socket (Family (AF_INET), SockAddr (SockAddrInet), SocketType (Stream), bind, defaultProtocol, listen, socket, socketPort, tupleToHostAddress, withSocketsDo)
 import Network.Wai.Handler.Warp (defaultSettings, runSettingsSocket)
 import Options.Applicative (ParserInfo, execParser, fullDesc, helper, info, (<**>))
-import Servant ( Header, Headers, JSON, Post, ReqBody, addHeader, (:<|>) (..), (:>))
+import Servant (Header, Headers, JSON, Post, ReqBody, addHeader, (:<|>) (..), (:>))
 import Servant.Server (Handler, serve)
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.Exit (ExitCode (..))
@@ -64,6 +65,9 @@ type API =
     :<|> "cpphs"
       :> ReqBody '[JSON] CpphsRequest
       :> Post '[JSON] CpphsResponse
+    :<|> "usages"
+      :> ReqBody '[JSON] Usages.Request
+      :> Post '[JSON] Usages.Response
 
 api :: Proxy API
 api = Proxy
@@ -129,6 +133,15 @@ runCpphsH c m req = do
   let defH = either (\e -> CpphsResponse {crErr = Just e, crContent = Nothing}) id
   liftIO $ h "runCpphs" c m cpphs (\_ e -> defH e) req
 
+usagesH ::
+  GTDConfiguration ->
+  MVar ServerState ->
+  Usages.Request ->
+  Handler Usages.Response
+usagesH c m req = do
+  let defH = either (\e -> Usages.Response {Usages.err = Just e, Usages.srcSpan = []}) id
+  liftIO $ h "usages" c m Usages.usages (\_ e -> defH e) req
+
 ---
 
 selfKiller :: MVar ServerState -> Int -> IO ()
@@ -179,4 +192,6 @@ main = withSocketsDo $ do
   s0 <- flip runReaderT constants $ runStdoutLoggingT $ flip execStateT emptyServerState $ ultraZoom context CabalCache.load
   s <- newMVar s0
   _ <- forkIO $ selfKiller s (_ttl as)
-  runSettingsSocket defaultSettings sock $ serve api (definitionH constants s :<|> pingH s :<|> dropCacheH constants s :<|> runCpphsH constants s)
+  runSettingsSocket defaultSettings sock $
+    serve api $
+      definitionH constants s :<|> pingH s :<|> dropCacheH constants s :<|> runCpphsH constants s :<|> usagesH constants s

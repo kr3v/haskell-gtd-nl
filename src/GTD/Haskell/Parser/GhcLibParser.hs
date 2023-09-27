@@ -1,6 +1,8 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wno-missing-fields #-}
 
 module GTD.Haskell.Parser.GhcLibParser where
@@ -8,10 +10,12 @@ module GTD.Haskell.Parser.GhcLibParser where
 import Control.Exception (try)
 import Control.Monad (forM_, unless, (>=>))
 import Control.Monad.Logger (MonadLoggerIO)
-import Control.Monad.State (MonadIO (liftIO), MonadState (..), execStateT, modify)
+import Control.Monad.State (MonadIO (liftIO), MonadState (..), execState, execStateT, modify)
 import Control.Monad.Writer (MonadWriter (..))
+import qualified Data.ByteString.Char8 as BSW8
 import Data.Either (fromRight)
 import Data.Foldable (Foldable (..))
+import Data.Generics (listify)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe, mapMaybe)
 import GHC.Data.FastString (mkFastString, unpackFS)
@@ -19,7 +23,7 @@ import GHC.Data.StringBuffer (stringToStringBuffer)
 import GHC.Driver.Config.Parser (initParserOpts)
 import GHC.Driver.Session (DynFlags (..), PlatformMisc (..), Settings (..), defaultDynFlags, parseDynamicFilePragma)
 import GHC.Fingerprint (fingerprint0)
-import GHC.Hs (ConDecl (..), ConDeclField (..), DataDefnCons (..), FamilyDecl (..), FieldOcc (..), GhcPs, HsConDetails (..), HsDataDefn (..), HsDecl (..), HsModule (..), IE (..), IEWrappedName (..), ImportDecl (..), ImportDeclQualifiedStyle (..), ImportListInterpretation (..), IsBootInterface (..), ModuleName (ModuleName), Sig (..), SrcSpanAnn' (..), TyClDecl (..), moduleNameString)
+import GHC.Hs (ConDecl (..), ConDeclField (..), DataDefnCons (..), FamilyDecl (..), FieldOcc (..), GhcPs, HsConDetails (..), HsDataDefn (..), HsDecl (..), HsModule (..), IE (..), IEWrappedName (..), ImportDecl (..), ImportDeclQualifiedStyle (..), ImportListInterpretation (..), IsBootInterface (..), ModuleName (ModuleName), Sig (..), SrcSpanAnn' (..), SrcSpanAnnN, TyClDecl (..), moduleNameString)
 import GHC.Parser (parseHeader, parseIdentifier, parseModule)
 import GHC.Parser.Header (getOptions)
 import GHC.Parser.Lexer (P (unP), PState (..), ParseResult (..), initParserState)
@@ -33,7 +37,7 @@ import GHC.Types.SrcLoc (GenLocated (..), RealSrcSpan (srcSpanFile), SrcSpan (..
 import qualified GHC.Unit.Types as GenModule
 import GHC.Utils.Outputable (Outputable (..), SDocContext (..), defaultSDocContext, renderWithContext)
 import GTD.Cabal.Types (ModuleNameS)
-import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Exports, Imports, Module (..), SourceSpan (..), asDeclsMap, emptySourceSpan)
+import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Exports, IdentifierUsage (..), Imports, Module (..), SourceSpan (..), asDeclsMap, emptySourceSpan)
 import qualified GTD.Haskell.Declaration as Declarations
 import GTD.Utils (logDebugNSS)
 import Text.Printf (printf)
@@ -97,7 +101,7 @@ parse p content = do
 asSourceSpan :: SrcSpan -> SourceSpan
 asSourceSpan (RealSrcSpan r _) =
   SourceSpan
-    { sourceSpanFileName = unpackFS $ srcSpanFile r,
+    { sourceSpanFileName = BSW8.pack $ unpackFS $ srcSpanFile r,
       sourceSpanStartLine = srcSpanStartLine r,
       sourceSpanStartColumn = srcSpanStartCol r,
       sourceSpanEndLine = srcSpanEndLine r,
@@ -191,11 +195,18 @@ ie mN e = do
         _ -> return mempty
       modify $ Map.insertWith (<>) m z {_mType = Declarations.Exactly}
 
-exports :: HsModuleX -> (MonadState Exports m) => m Bool
-exports (HsModuleX HsModule {hsmodExports = Just (L _ es), hsmodName = Just (L _ (ModuleName nF))} _) = do
+exportsM :: HsModuleX -> (MonadState Exports m) => m ()
+exportsM (HsModuleX HsModule {hsmodExports = Just (L _ es), hsmodName = Just (L _ (ModuleName nF))} _) =
   forM_ (unLoc <$> es) $ ie $ unpackFS nF
-  return False
-exports (HsModuleX HsModule {hsmodExports = Nothing} _) = return True
+exportsM _ = return ()
+
+exports :: HsModuleX -> Exports
+exports m = execState (exportsM m) mempty
+
+isImplicitExportAll :: HsModuleX -> Bool
+isImplicitExportAll (HsModuleX HsModule {hsmodExports = Just (L _ es), hsmodName = Just (L _ (ModuleName nF))} _) = False
+isImplicitExportAll (HsModuleX HsModule {hsmodExports = Nothing} _) = True
+isImplicitExportAll _ = False
 
 imports :: HsModuleX -> (MonadWriter Imports m) => m ()
 imports (HsModuleX HsModule {hsmodImports = is} ps) = do
@@ -220,9 +231,19 @@ imports (HsModuleX HsModule {hsmodImports = is} ps) = do
   unless ("-XNoImplicitPrelude" `elem` ps) $ do
     tell [mempty {_mName = "Prelude", _mQualifier = "Prelude"}]
 
+identifierUsages :: HsModuleX -> [IdentifierUsage]
+identifierUsages (HsModuleX m@HsModule {} _) = do
+  let c :: HsModule GhcPs -> [GenLocated SrcSpanAnnN RdrName]
+      c = listify $ \(_ :: GenLocated l RdrName) -> True
+
+  let ids = c m
+  flip mapMaybe ids $ \(L (SrcSpanAnn _ l) n) -> do
+    (mN, nN) <- rdr n
+    return $ IdentifierUsage {_iuName = nN, _iuModule = mN, _iuSourceSpan = asSourceSpan l}
+
 ---
 
-identifier :: String -> Maybe (String, String)
+identifier :: String -> Maybe (SourceSpan, (String, String))
 identifier c = do
   let dynFlags0 = defaultDynFlags fakeSettings
 
@@ -233,5 +254,5 @@ identifier c = do
       r = unP parseIdentifier parseState
 
   case r of
-    POk _ (L _ e) -> rdr e
+    POk _ (L (SrcSpanAnn _ l) e) -> (asSourceSpan l,) <$> rdr e
     PFailed _ -> Nothing

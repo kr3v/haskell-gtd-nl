@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -5,47 +6,63 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module GTD.Haskell.Declaration where
 
+import Control.DeepSeq (NFData)
 import Control.Lens (Each (..), makeLenses, (%=))
 import Control.Monad.RWS (MonadState, MonadTrans (lift))
 import Control.Monad.State (execStateT)
-import Data.Aeson (FromJSON, ToJSON)
+import Data.Aeson (FromJSON (..), ToJSON (..), Value)
+import Data.Aeson.Types (Parser, Value (..))
 import Data.Binary (Binary)
+import qualified Data.Binary as Binary
+import Data.ByteString (ByteString)
+import qualified Data.ByteString.Char8 as BSW8
+import qualified Data.HashMap.Strict as HMap
+import Data.Hashable (Hashable)
 import qualified Data.Map.Strict as Map
+import Data.Text (unpack)
 import GHC.Generics (Generic)
 import GTD.Cabal.Types (ModuleNameS)
 import GTD.Utils (modifyEachM, overM)
-import Language.Haskell.Exts (ModuleName (..), Name (..), SrcSpan (..), SrcSpanInfo (srcInfoSpan))
+
+instance (Hashable k, Eq k, Binary k, Binary v) => Binary (HMap.HashMap k v) where
+  get :: (Hashable k, Eq k, Binary k, Binary v) => Binary.Get (HMap.HashMap k v)
+  get = fmap HMap.fromList Binary.get
+  put :: (Hashable k, Eq k, Binary k, Binary v) => HMap.HashMap k v -> Binary.Put
+  put = Binary.put . HMap.toList
+
+type SourceSpanFileName = ByteString
 
 data SourceSpan = SourceSpan
-  { sourceSpanFileName :: FilePath,
+  { sourceSpanFileName :: SourceSpanFileName,
     sourceSpanStartLine :: Int,
     sourceSpanStartColumn :: Int,
     sourceSpanEndLine :: Int,
     sourceSpanEndColumn :: Int
   }
-  deriving (Show, Generic, Eq, Ord)
-
-sourceSpan :: SrcSpan -> SourceSpan
-sourceSpan (SrcSpan {srcSpanFilename = fileName, srcSpanStartLine = startLine, srcSpanStartColumn = startColumn, srcSpanEndLine = endLine, srcSpanEndColumn = endColumn}) =
-  SourceSpan
-    { sourceSpanFileName = fileName,
-      sourceSpanStartLine = startLine,
-      sourceSpanStartColumn = startColumn,
-      sourceSpanEndLine = endLine,
-      sourceSpanEndColumn = endColumn
-    }
+  deriving (NFData, Show, Generic, Eq, Ord, Hashable)
 
 emptySourceSpan :: SourceSpan
-emptySourceSpan = SourceSpan "" 0 0 0 0
+emptySourceSpan = SourceSpan mempty 0 0 0 0
 
-instance FromJSON SourceSpan
+instance FromJSON SourceSpanFileName where
+  parseJSON :: Value -> Parser SourceSpanFileName
+  parseJSON (String t) = pure $ BSW8.pack $ unpack t
+
+instance ToJSON SourceSpanFileName where
+  toJSON :: SourceSpanFileName -> Value
+  toJSON = toJSON . BSW8.unpack
 
 instance ToJSON SourceSpan
+
+instance FromJSON SourceSpan
 
 instance Binary SourceSpan
 
@@ -56,7 +73,7 @@ data Declaration = Declaration
     _declModule :: ModuleNameS,
     _declName :: String
   }
-  deriving (Show, Eq, Generic, Ord)
+  deriving (NFData, Show, Eq, Generic, Ord)
 
 $(makeLenses ''Declaration)
 
@@ -73,29 +90,6 @@ hasNonEmptyOrig = (/= emptySourceSpan) . _declSrcOrig
 
 type Identifier = String
 
-name :: Name a -> String
-name (Ident _ n) = n
-name (Symbol _ n) = n
-
-identToDecl :: ModuleName SrcSpanInfo -> Name SrcSpanInfo -> Bool -> Declaration
-identToDecl m (Symbol l n) = identToDecl' m l n
-identToDecl m (Ident l n) = identToDecl' m l n
-
-identToDecl' ::
-  ModuleName SrcSpanInfo ->
-  SrcSpanInfo ->
-  String ->
-  Bool ->
-  Declaration
-identToDecl' (ModuleName _ mn) l n isDeclaration =
-  Declaration
-    { _declSrcOrig = if isDeclaration then l' else emptySourceSpan,
-      _declName = n,
-      _declModule = mn
-    }
-  where
-    l' = sourceSpan . srcInfoSpan $ l
-
 ---
 
 data ClassOrData = ClassOrData
@@ -103,7 +97,7 @@ data ClassOrData = ClassOrData
     _cdtFields :: Map.Map String Declaration,
     _eWildcard :: Bool
   }
-  deriving (Show, Generic, Eq)
+  deriving (NFData, Show, Generic, Eq)
 
 $(makeLenses ''ClassOrData)
 
@@ -119,7 +113,7 @@ data Declarations = Declarations
   { _decls :: Map.Map String Declaration,
     _dataTypes :: Map.Map String ClassOrData
   }
-  deriving (Show, Generic, Eq)
+  deriving (NFData, Show, Generic, Eq)
 
 $(makeLenses ''Declarations)
 
@@ -146,6 +140,9 @@ asResolutionMap Declarations {_decls = ds, _dataTypes = dts} =
 asDeclsMap :: [Declaration] -> Map.Map Identifier Declaration
 asDeclsMap ds = Map.fromList $ (\d -> (_declName d, d)) <$> ds
 
+asDeclsHMap :: [Declaration] -> HMap.HashMap Identifier Declaration
+asDeclsHMap ds = HMap.fromList $ (\d -> (_declName d, d)) <$> ds
+
 declarationsT :: Monad m => (Declaration -> Declaration) -> Declarations -> m Declarations
 declarationsT d = execStateT (declarationsTS d)
 
@@ -163,11 +160,13 @@ declarationsMT d = execStateT $ do
     modifyEachM cdtFields $ lift . lift . d
     overM cdtName $ lift . lift . d
 
-data ModuleImportType = All | Exactly | EverythingBut deriving (Show, Generic, Eq)
+data ModuleImportType = All | Exactly | EverythingBut deriving (NFData, Show, Generic, Eq)
 
 instance ToJSON ModuleImportType
 
 instance FromJSON ModuleImportType
+
+instance Binary ModuleImportType
 
 data Module = Module
   { _mName :: ModuleNameS,
@@ -177,13 +176,15 @@ data Module = Module
     _mDecls :: [Declaration],
     _mCDs :: [ClassOrData]
   }
-  deriving (Show, Generic, Eq)
+  deriving (NFData, Show, Generic, Eq)
 
 $(makeLenses ''Module)
 
 instance FromJSON Module
 
 instance ToJSON Module
+
+instance Binary Module
 
 instance Semigroup Module where
   (<>) :: Module -> Module -> Module
@@ -201,7 +202,7 @@ data ExportsOrImports = ExportsOrImports
     _eoiModules :: [Module],
     _eoiCDs :: [ClassOrData]
   }
-  deriving (Show, Generic, Eq)
+  deriving (NFData, Show, Generic, Eq)
 
 $(makeLenses ''ExportsOrImports)
 
@@ -221,3 +222,18 @@ type Imports = [Module]
 
 allImportedModules :: Imports -> [ModuleNameS]
 allImportedModules = fmap _mName
+
+---
+
+data IdentifierUsage = IdentifierUsage
+  { _iuModule :: String,
+    _iuName :: String,
+    _iuSourceSpan :: SourceSpan
+  }
+  deriving (NFData, Show, Eq, Generic)
+
+instance FromJSON IdentifierUsage
+
+instance ToJSON IdentifierUsage
+
+instance Binary IdentifierUsage
