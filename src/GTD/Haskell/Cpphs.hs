@@ -3,7 +3,7 @@
 module GTD.Haskell.Cpphs where
 
 import Control.Exception.Safe (tryAny)
-import Control.Monad.Cont (MonadIO (..))
+import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Except (MonadError (throwError))
 import Language.Preprocessor.Cpphs (defaultCpphsOptions, runCpphs)
 import Text.Printf (printf)

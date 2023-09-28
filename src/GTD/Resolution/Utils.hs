@@ -11,8 +11,9 @@ import Control.Concurrent.Async.Lifted (Async, async, wait)
 import Control.Concurrent.MVar.Lifted
 import Control.Lens (makeLenses, use, (%=), (.=))
 import Control.Monad.Logger (MonadLoggerIO)
-import Control.Monad.RWS (MonadState (get), mapAndUnzipM)
-import Control.Monad.State (MonadIO (..), MonadTrans (..), StateT, evalStateT, execStateT, gets, when)
+import Control.Monad.RWS (MonadState (get))
+import Control.Monad (mapAndUnzipM, when)
+import Control.Monad.State (MonadIO (..), MonadTrans (..), StateT, evalStateT, execStateT, gets)
 import Control.Monad.Trans.Control (MonadBaseControl (..))
 import qualified Data.Graph as Graph
 import qualified Data.Map.Strict as Map

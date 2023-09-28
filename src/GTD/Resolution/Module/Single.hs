@@ -7,7 +7,7 @@
 module GTD.Resolution.Module.Single (resolve, module'Dependencies, moduleR) where
 
 import Control.Applicative (Applicative (liftA2))
-import Control.Monad.Cont (forM, forM_)
+import Control.Monad (forM, forM_)
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (MonadReader (ask))

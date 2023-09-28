@@ -11,7 +11,8 @@
 module GTD.Haskell.Module where
 
 import Control.Lens (makeLenses)
-import Control.Monad.Except (MonadError (..), MonadIO (..))
+import Control.Monad.Except (MonadError (..))
+import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.Trans.Writer (execWriterT)
 import Data.Aeson (FromJSON, ToJSON)

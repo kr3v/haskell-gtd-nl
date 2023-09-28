@@ -10,7 +10,8 @@ module GTD.Server.Definition where
 
 import Control.Lens (use, (%=), (.=))
 import Control.Monad (forM, forM_, unless, void, when)
-import Control.Monad.Except (MonadError (..), MonadIO (..))
+import Control.Monad.Except (MonadError (..))
+import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (gets)
 import Control.Monad.Trans.Maybe (MaybeT (..))

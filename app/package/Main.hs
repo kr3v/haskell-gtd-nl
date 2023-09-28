@@ -9,8 +9,8 @@ module Main where
 
 import Control.Exception.Lifted (bracket)
 import Control.Lens (use)
-import Control.Monad (forM_, void)
-import Control.Monad.Except (runExceptT, when)
+import Control.Monad (forM_, void, when)
+import Control.Monad.Except (runExceptT)
 import Control.Monad.Logger (LogLevel (LevelInfo))
 import Control.Monad.Reader (ReaderT (runReaderT))
 import Control.Monad.State (execStateT)

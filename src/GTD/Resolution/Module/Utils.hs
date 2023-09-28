@@ -6,7 +6,7 @@
 -- those are utility functions for using the 'resolution' map
 module GTD.Resolution.Module.Utils where
 
-import Control.Monad.Cont (forM)
+import Control.Monad (forM)
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.Trans.Maybe (MaybeT (..))

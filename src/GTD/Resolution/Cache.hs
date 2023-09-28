@@ -8,7 +8,7 @@ module GTD.Resolution.Cache where
 
 import Control.Lens (over, view)
 import Control.Monad (forM, forM_, when)
-import Control.Monad.Except (MonadIO (..))
+import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Logger (LogLevel (LevelDebug), MonadLoggerIO)
 import Control.Monad.RWS (MonadReader (..), MonadState (..), asks, gets, modify)
 import qualified Data.Aeson as JSON

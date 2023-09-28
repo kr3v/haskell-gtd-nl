@@ -9,7 +9,7 @@ module GTD.Cabal.Cache where
 import Control.Exception (try)
 import Control.Lens (use, (.=))
 import Control.Monad (forM_)
-import Control.Monad.Except (MonadIO (..))
+import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (MonadReader (..), MonadState (..), asks)
 import Data.Aeson (decodeFileStrict, encodeFile)

@@ -5,7 +5,7 @@
 
 module GTD.Resolution.Module.Multi (resolution, figureOutExports0, collectUsages) where
 
-import Control.Monad.Cont (forM_, when)
+import Control.Monad (forM_, when)
 import Control.Monad.Logger (MonadLoggerIO, NoLoggingT (runNoLoggingT))
 import Control.Monad.RWS (MonadReader (..), MonadWriter (..))
 import Control.Monad.State.Lazy (execStateT, modify)

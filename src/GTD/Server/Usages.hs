@@ -5,7 +5,9 @@
 
 module GTD.Server.Usages where
 
-import Control.Monad.Except (MonadError (..), MonadIO (..), forM_, when)
+import Control.Monad (forM_, when)
+import Control.Monad.Except (MonadError (..))
+import Control.Monad.IO.Class (MonadIO (..))
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.HashMap.Strict as HMap
 import Data.Maybe (listToMaybe, mapMaybe)
