@@ -343,12 +343,12 @@ definitionTests = do
       expectedQMap =
         let expFile = _repos consts </> "containers-0.6.7/src/Data/Map/Internal.hs"
             expLineNo = 1
-            expSrcSpan = SourceSpan {sourceSpanFileName = BSC8.pack expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 0, sourceSpanStartLine = expLineNo, sourceSpanEndLine = 0}
+            expSrcSpan = SourceSpan {sourceSpanFileName = BSC8.pack expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 1, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
          in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
       expectedDTClockPosix =
         let expFile = _repos consts </> "time-1.12.2/lib/Data/Time/Clock/POSIX.hs"
             expLineNo = 1
-            expSrcSpan = SourceSpan {sourceSpanFileName = BSC8.pack expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 0, sourceSpanStartLine = expLineNo, sourceSpanEndLine = 0}
+            expSrcSpan = SourceSpan {sourceSpanFileName = BSC8.pack expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 1, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
          in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
       expectedQMapKeys =
         let expFile = _repos consts </> "containers-0.6.7/src/Data/Map/Internal.hs"
@@ -368,7 +368,7 @@ definitionTests = do
       expectedDataMapStrict =
         let expFile = _repos consts </> "containers-0.6.7/src/Data/Map/Strict.hs"
             expLineNo = 1
-            expSrcSpan = SourceSpan {sourceSpanFileName = BSC8.pack expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 0, sourceSpanStartLine = expLineNo, sourceSpanEndLine = 0}
+            expSrcSpan = SourceSpan {sourceSpanFileName = BSC8.pack expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 1, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
          in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
       expectedGetter =
         let expFile = _repos consts </> "lens-5.2.3/src/Control/Lens/Type.hs"

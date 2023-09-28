@@ -116,7 +116,7 @@ defaultArgs = do
         _root = root,
         _powers =
           Powers
-            { _isGoToReferencesEnabled = True
+            { _isGoToReferencesEnabled = False
             }
       }
 
