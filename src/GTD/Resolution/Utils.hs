@@ -30,7 +30,7 @@ data SchemeState k a b = SchemeState
 $(makeLenses ''SchemeState)
 
 _scheme ::
-  (Ord k, MonadLoggerIO m) =>
+  (Ord k, Monad m) =>
   (b -> m (Maybe a)) ->
   (b -> k) ->
   (a -> m [b]) ->
@@ -51,7 +51,7 @@ _scheme f kb p ks = do
     else _scheme f kb p (Map.elems ds')
 
 graph ::
-  (Ord k, MonadLoggerIO m) =>
+  (Ord k, Monad m) =>
   (b -> m (Maybe a)) ->
   (a -> k) ->
   (b -> k) ->
@@ -84,7 +84,7 @@ graph f ka kb p ks = do
 -- `p` is a function that produces dependencies for a value
 -- `ks` is a set of keys to start with (root set)
 schemeS ::
-  (Ord k, MonadLoggerIO m) =>
+  (Ord k, Monad m) =>
   (b -> m (Maybe a)) ->
   (a -> k) ->
   (b -> k) ->
@@ -97,7 +97,7 @@ schemeS f ka kb p ks = do
   return $ fromJust . (`Map.lookup` vToA) <$> cs
 
 reverseDependenciesS ::
-  (Ord k, MonadLoggerIO m) =>
+  (Ord k, Monad m) =>
   (b -> m (Maybe a)) ->
   (a -> k) ->
   (b -> k) ->

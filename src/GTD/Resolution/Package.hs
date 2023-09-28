@@ -6,36 +6,37 @@
 
 module GTD.Resolution.Package where
 
-import Control.DeepSeq (deepseq)
 import Control.Exception.Safe (tryAny)
 import Control.Lens (over, view)
-import Control.Monad (mapAndUnzipM)
+import Control.Monad (mapAndUnzipM, when)
 import Control.Monad.IO.Class (MonadIO (..))
-import Control.Monad.RWS (MonadState (..))
+import Control.Monad.RWS (MonadState (..), asks)
 import Control.Monad.State (modify)
+import Data.Aeson (encode)
 import Data.Bifunctor (Bifunctor (..))
+import qualified Data.ByteString.Lazy.Char8 as BS
 import qualified Data.Cache.LRU as LRU
 import qualified Data.HashMap.Strict as HMap
+import qualified Data.HashSet as HSet
 import Data.List (singleton)
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes)
 import qualified Data.Set as Set
 import qualified GTD.Cabal.Dependencies as CabalCache (full, fullS)
 import qualified GTD.Cabal.Types as Cabal (Designation (..), GetCache (_vs), Package (..), PackageModules (..), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, key, pKey)
-import GTD.Configuration (Args (..), args)
+import GTD.Configuration (Args (..), GTDConfiguration (_args), Powers (..), args)
 import qualified GTD.Resolution.Cache as PackageCache
 import GTD.Resolution.Module (modules)
 import GTD.Resolution.Types (Package (..))
 import qualified GTD.Resolution.Types as Package
 import GTD.Resolution.Utils (ParallelizedState (..), parallelized, scheme)
 import GTD.State (Context (..), MS, MS0, cExports)
-import GTD.Utils (logDebugNSS, modifyMS, updateStatus, (<==<), restrictKeys)
+import GTD.Utils (logDebugNSS, modifyMS, restrictKeys, updateStatus, (<==<))
+import GTD.Utils.OS.Memory (availableMemory)
 import System.FilePath ((</>))
 import System.IO (IOMode (AppendMode), withFile)
 import System.Process (CreateProcess (..), StdStream (..), createProcess, proc, waitForProcess)
 import Text.Printf (printf)
-import qualified Data.HashSet as HSet
-import GTD.Utils.OS.Memory (availableMemory)
 
 package'resolution'withMutator'direct ::
   Context ->
@@ -51,7 +52,9 @@ package'resolution'withMutator'direct c cPkg = do
   let reexports = restrictKeys deps $ Cabal._reExports . Cabal._modules $ cPkg
   let pkg = pkgE {Package._exports = Package._exports pkgE <> reexports}
   PackageCache.pStore cPkg pkg
-  PackageCache.pStoreU cPkg pkg
+
+  e <- asks $ _isGoToReferencesEnabled . _powers . _args
+  when e $ PackageCache.pStoreU cPkg pkg
 
   logDebugNSS logTag $
     printf
@@ -135,7 +138,7 @@ package'resolution'withDependencies'concurrently cPkg0 = do
 package'resolution'withDependencies'forked :: Cabal.Package a -> (MS0 m) => m ()
 package'resolution'withDependencies'forked p = do
   let d = Cabal._projectRoot p
-  Args {_dynamicMemoryUsage = dm, _logLevel = ll, _parserExe = pe, _parserArgs = pa, _root = r} <- view args
+  as@Args {_dynamicMemoryUsage = dm, _parserExe = pe, _parserArgs = pa, _root = r} <- view args
 
   let pArgs' memFree
         | memFree > 8 * 1024 = ["-N", "-A128M"]
@@ -152,7 +155,8 @@ package'resolution'withDependencies'forked p = do
         concat
           [ pa,
             if null rts then [] else ["+RTS"] ++ rts ++ ["-RTS"],
-            ["--dir", d, "--log-level", show ll, "--designation-type", (show . Cabal._desType . Cabal._designation) p],
+            ["--dir", d, "--designation-type", (show . Cabal._desType . Cabal._designation) p],
+            ["--args", BS.unpack $ encode as],
             maybe [] ((["--designation-name"] ++) . singleton) (Cabal._desName . Cabal._designation $ p)
           ]
 

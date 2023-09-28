@@ -34,7 +34,7 @@ import qualified Data.Set as Set
 import GHC.Generics (Generic)
 import GTD.Cabal.Types (ModuleNameS)
 import qualified GTD.Cabal.Types as Cabal (Package (..), PackageWithResolvedDependencies, key, _exports)
-import GTD.Configuration (GTDConfiguration)
+import GTD.Configuration (GTDConfiguration, MS0)
 import GTD.Haskell.Declaration (SourceSpan (..), SourceSpanFileName)
 import GTD.Haskell.Module (HsModule (..), HsModuleP (..))
 import qualified GTD.Haskell.Module as HsModule
@@ -42,7 +42,6 @@ import GTD.Resolution.Module.Multi (collectUsages, figureOutExports0, resolution
 import GTD.Resolution.Module.Single (module'Dependencies, moduleR)
 import qualified GTD.Resolution.Types as Package (Package (..))
 import GTD.Resolution.Utils (ParallelizedState (ParallelizedState), parallelized, scheme)
-import GTD.State (MS0)
 import GTD.Utils (restrictKeys)
 
 data ModuleState = ModuleState
@@ -95,8 +94,7 @@ figureOutExports st m = do
 -- for a given Cabal package, it returns a list of modules in the order they should be processed
 orderedByDependencies :: Cabal.PackageWithResolvedDependencies -> (MS0 m) => m [HsModule]
 orderedByDependencies c =
-  flip runReaderT c $
-    scheme moduleR HsModule._name id (return . module'Dependencies) (Set.toList . Cabal._exports . Cabal._modules $ c)
+  scheme (moduleR c) HsModule._name id (return . module'Dependencies) (Set.toList . Cabal._exports . Cabal._modules $ c)
 
 -- for a given Cabal package and list of its modules in the 'right' order, concurrently parses all the modules
 modules ::

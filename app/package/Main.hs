@@ -11,25 +11,25 @@ import Control.Exception.Lifted (bracket)
 import Control.Lens (use)
 import Control.Monad (forM_, void, when)
 import Control.Monad.Except (runExceptT)
-import Control.Monad.Logger (LogLevel (LevelInfo))
 import Control.Monad.Reader (ReaderT (runReaderT))
 import Control.Monad.State (execStateT)
 import qualified GTD.Cabal.Cache as Cabal (load, store)
 import qualified GTD.Cabal.Get as Cabal (changed)
 import GTD.Cabal.Types (Designation (..), Package (..))
-import qualified GTD.Configuration as Conf (Args (..), GTDConfiguration (..), defaultArgs, prepareConstants)
+import qualified GTD.Configuration as Conf (Args (..), GTDConfiguration (..), prepareConstants)
+import qualified GTD.Configuration as Configuration
 import GTD.Resolution.Package (package'resolution'withDependencies'concurrently)
 import GTD.Server.Definition (cabalPackage'unresolved'plusStoreInLocals)
 import GTD.State (ccGet, emptyContext)
 import GTD.Utils (logErrorNSS, stats, updateStatus, withLogging)
-import Options.Applicative (Parser, ParserInfo, auto, execParser, fullDesc, help, helper, info, long, option, optional, showDefault, strOption, value, (<**>))
+import Options.Applicative (Parser, ParserInfo, auto, execParser, fullDesc, help, helper, info, long, option, optional, strOption, (<**>))
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.FilePath ((</>))
 import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
 
 data Args = Args
   { dir :: String,
-    logLevel :: LogLevel,
+    sargs :: Configuration.Args,
     designation :: Maybe Designation
   }
   deriving (Show)
@@ -44,7 +44,7 @@ args :: Parser Args
 args =
   Args
     <$> strOption (long "dir" <> help "")
-    <*> option auto (long "log-level" <> help "" <> showDefault <> value LevelInfo)
+    <*> Configuration.argsPJ
     <*> optional desP
 
 opts :: ParserInfo Args
@@ -55,11 +55,11 @@ main = do
   hSetBuffering stdout LineBuffering
   hSetBuffering stderr LineBuffering
 
-  a@Args {dir = d, logLevel = ll} <- execParser opts
+  a@Args {dir = d} <- execParser opts
   print a
 
-  serverArgs <- Conf.defaultArgs
-  constants <- Conf.prepareConstants $ serverArgs {Conf._logLevel = ll}
+  let serverArgs = sargs a
+  constants <- Conf.prepareConstants serverArgs
   let r = Conf._root . Conf._args $ constants
   setCurrentDirectory r
   getCurrentDirectory >>= print
@@ -67,7 +67,7 @@ main = do
 
   let logP = r </> "parser.log"
       logS = r </> "status" </> "parser"
-  _ <- withLogging logP logS ll $ do
+  _ <- withLogging logP logS (Configuration._logLevel . sargs $ a) $ do
     bracket (pure ()) (const $ updateStatus "") $ \_ -> do
       flip runReaderT constants $ flip execStateT emptyContext $ do
         Cabal.load

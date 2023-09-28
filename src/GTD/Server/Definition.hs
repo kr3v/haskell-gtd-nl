@@ -17,10 +17,9 @@ import Control.Monad.RWS (gets)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Cache.LRU as LRU
-import Data.Foldable (foldlM)
 import Data.List (isPrefixOf, isSuffixOf)
 import qualified Data.Map as Map
-import Data.Maybe (catMaybes, isJust)
+import Data.Maybe (isJust)
 import GHC.Generics (Generic)
 import GHC.Utils.Monad (mapMaybeM)
 import qualified GTD.Cabal.Dependencies as Cabal (fullS)

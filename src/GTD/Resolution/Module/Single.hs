@@ -17,6 +17,7 @@ import qualified Data.Set as Set
 import Distribution.ModuleName (fromString, toFilePath)
 import GTD.Cabal.Types (ModuleNameS)
 import qualified GTD.Cabal.Types as Cabal (Package (_modules, _name, _root), PackageModules (_allKnownModules, _srcDirs), PackageWithResolvedDependencies, key, _exports)
+import GTD.Configuration (MS0)
 import GTD.Haskell.Declaration (allImportedModules)
 import GTD.Haskell.Module (HsModule (..), HsModuleData (..), HsModuleMetadata (HsModuleMetadata), parseModule)
 import qualified GTD.Haskell.Module as HsModule
@@ -30,7 +31,7 @@ resolve repoRoot srcDir moduleName = normalise $ repoRoot </> srcDir </> ((toFil
 module'Dependencies :: HsModule -> [ModuleNameS]
 module'Dependencies m = filter (HsModule._name m /=) (allImportedModules . _imports . HsModule._info $ m)
 
-module'2 :: Cabal.PackageWithResolvedDependencies -> ModuleNameS -> (MonadLoggerIO m) => m [Either String HsModule]
+module'2 :: Cabal.PackageWithResolvedDependencies -> ModuleNameS -> (MS0 m) => m [Either String HsModule]
 module'2 p m = do
   let root = Cabal._root p
   let srcDirs = Cabal._srcDirs . Cabal._modules $ p
@@ -43,7 +44,7 @@ module'2 p m = do
         parseModule (cm {HsModule._mPath = path ++ "c"})
           `catchError` \e2 -> throwError $ printf "error parsing module %s/%s (hs,hsc): (%s, %s)" (show srcDir) (show m) (show e1) (show e2)
 
-module'1 :: Cabal.PackageWithResolvedDependencies -> ModuleNameS -> (MonadLoggerIO m) => m ([String], Maybe HsModule)
+module'1 :: Cabal.PackageWithResolvedDependencies -> ModuleNameS -> (MS0 m) => m ([String], Maybe HsModule)
 module'1 p mn = do
   (errs, ms) <- partitionEithers <$> module'2 p mn
   let shouldBePresent = Set.member mn (Cabal._allKnownModules . Cabal._modules $ p)
@@ -52,9 +53,8 @@ module'1 p mn = do
     [m] -> (errs, Just m)
     _ -> (errs ++ [printf "multiple modules found: %s" (show $ liftA2 (,) HsModule._name HsModule._path <$> ms)], Nothing)
 
-moduleR :: ModuleNameS -> (MonadLoggerIO m, MonadReader Cabal.PackageWithResolvedDependencies m) => m (Maybe HsModule)
-moduleR m = do
-  p <- ask
+moduleR :: Cabal.PackageWithResolvedDependencies -> ModuleNameS -> (MS0 m) => m (Maybe HsModule)
+moduleR p m = do
   (es, cm) <- module'1 p m
   forM_ es $ logErrorNSS "parse module in package"
   return cm

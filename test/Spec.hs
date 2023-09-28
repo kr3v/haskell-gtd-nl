@@ -213,11 +213,11 @@ figureOutExportsTest = do
 
         importsE <- runStdoutLoggingT $ forM importsP \f -> do
           let p = root </> test </> f
-          mapRight (p,) . mapLeft (printf "failed to parse %s: %s" p) <$> runExceptT (parseModule emptyMetadata {_mPath = p})
+          mapRight (p,) . mapLeft (printf "failed to parse %s: %s" p) <$> runExceptT (flip runReaderT consts $ parseModule emptyMetadata {_mPath = p})
         let (errors :: [String], importedModules :: [(String, HsModule)]) = partitionEithers importsE
         liftIO $ print errors
 
-        mainModuleE <- runStdoutLoggingT $ runExceptT $ parseModule emptyMetadata {_mPath = mainFileP}
+        mainModuleE <- runStdoutLoggingT $ flip runReaderT consts $ runExceptT $ parseModule emptyMetadata {_mPath = mainFileP}
         join $ case mainModuleE of
           Left e -> return $ expectationFailure $ printf "failed to parse %s: %s" mainFileP e
           Right mainModule -> do

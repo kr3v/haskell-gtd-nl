@@ -31,17 +31,14 @@
             "description": "If HLS is active, this extension's local definitions will be disabled, as they are often out of sync with HLS (meaning you would see two definitions for local symbols). Does not affect behavior for symbols resolved outside of current working directory."
           },
           "haskell-gtd-nl.server.root": {
-            "type": "string",
-            "default": "~/.local/share/haskell-gtd-nl"
+            "type": "string"
           },
           "haskell-gtd-nl.server.path": {
             "type": "string",
-            "default": "./haskell-gtd-nl-server",
             "description": "Path to the `haskell-gtd-nl-server` executable. The relative path is resolved relative to the extension's root directory. In case there's none, `$PATH`, `~/.local/bin` and `~/.cabal/bin` are searched."
           },
           "haskell-gtd-nl.parser.path": {
             "type": "string",
-            "default": "./haskell-gtd-nl-parser",
             "description": "Path to the `haskell-gtd-nl-parser` executable. Behaves in a similar way to `haskell-gtd-nl.server.path`."
           },
           "haskell-gtd-nl.server.args": {

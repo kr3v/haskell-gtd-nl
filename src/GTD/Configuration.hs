@@ -1,7 +1,14 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# HLINT ignore "Use newtype instead of data" #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 module GTD.Configuration where
 
@@ -9,10 +16,16 @@ import Control.Concurrent (QSem, newQSem)
 import Control.Exception (IOException, catch)
 import Control.Lens (makeLenses, (^.))
 import Control.Monad (when)
-import Control.Monad.Logger (LogLevel (..))
-import Data.Aeson (eitherDecodeStrict)
+import Control.Monad.Logger (LogLevel (..), MonadLoggerIO)
+import Control.Monad.RWS (MonadReader)
+import Control.Monad.Trans.Control (MonadBaseControl)
+import Data.Aeson (FromJSON, ToJSON, Value, eitherDecodeStrict)
+import Data.Aeson.Types (FromJSON (..), ToJSON (..), Value (..))
+import qualified Data.Aeson.Types as JSON
 import qualified Data.ByteString.Char8 as BS
+import qualified Data.Text as T
 import Data.Version (showVersion)
+import GHC.Generics (Generic)
 import GTD.Utils.OS.Memory (availableMemory, totalMemory)
 import Options.Applicative (Parser, auto, eitherReader, help, long, option, showDefault, strOption, switch, value)
 import qualified Paths_haskell_gtd
@@ -21,17 +34,41 @@ import System.FilePath ((</>))
 import System.Info (os)
 import Text.Printf (printf)
 
+type MS0 m = (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m)
+
+instance FromJSON LogLevel where
+  parseJSON :: Value -> JSON.Parser LogLevel
+  parseJSON (String t) = pure $ read $ T.unpack t
+
+instance ToJSON LogLevel where
+  toJSON :: LogLevel -> Value
+  toJSON = toJSON . show
+
+data Powers = Powers
+  { _isGoToReferencesEnabled :: Bool
+  }
+  deriving (Show, Generic)
+
+instance FromJSON Powers
+
+instance ToJSON Powers
+
 data Args = Args
   { _ttl :: Int,
     _dynamicMemoryUsage :: Bool,
     _logLevel :: LogLevel,
     _parserExe :: String,
     _parserArgs :: [String],
-    _root :: String
+    _root :: String,
+    _powers :: Powers
   }
-  deriving (Show)
+  deriving (Show, Generic)
 
-parseJson :: String -> Either String [String]
+instance FromJSON Args
+
+instance ToJSON Args
+
+parseJson :: FromJSON a => String -> Either String a
 parseJson = eitherDecodeStrict . BS.pack
 
 defaultRoot :: String -> String
@@ -39,6 +76,9 @@ defaultRoot home =
   if os == "darwin"
     then home </> "Library" </> "Application Support" </> "Code" </> "haskell-gtd-nl"
     else home </> ".local" </> "share" </> "haskell-gtd-nl"
+
+powersP :: Parser Powers
+powersP = Powers <$> switch (long "go-to-references" <> help "whether to support 'Go to References'" <> showDefault)
 
 argsP :: IO (Parser Args)
 argsP = do
@@ -53,13 +93,32 @@ argsP = do
       <*> strOption (long "parser-exe" <> help "" <> showDefault <> value cabalBin)
       <*> option (eitherReader parseJson) (long "parser-args" <> help "" <> showDefault <> value [])
       <*> strOption (long "root" <> help "" <> showDefault <> value root)
+      <*> powersP
+
+
+-- Args parser from JSON string
+argsPJ :: Parser Args
+argsPJ = option (eitherReader parseJson) (long "args" <> help "" <> showDefault)
+
 
 defaultArgs :: IO Args
 defaultArgs = do
   home <- getHomeDirectory
   let root = defaultRoot home
   let cabalBin = home </> ".cabal" </> "bin" </> "haskell-gtd-nl-parser"
-  return $ Args {_ttl = 60, _dynamicMemoryUsage = True, _logLevel = LevelInfo, _parserExe = cabalBin, _parserArgs = [], _root = root}
+  return $
+    Args
+      { _ttl = 60,
+        _dynamicMemoryUsage = True,
+        _logLevel = LevelInfo,
+        _parserExe = cabalBin,
+        _parserArgs = [],
+        _root = root,
+        _powers =
+          Powers
+            { _isGoToReferencesEnabled = True
+            }
+      }
 
 data GTDConfiguration = GTDConfiguration
   { _repos :: FilePath,

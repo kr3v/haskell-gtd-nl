@@ -10,24 +10,25 @@
 
 module GTD.Haskell.Module where
 
+import Control.DeepSeq (deepseq)
 import Control.Lens (makeLenses)
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.IO.Class (MonadIO (..))
-import Control.Monad.Logger (MonadLoggerIO)
+import Control.Monad.RWS (asks)
 import Control.Monad.Trans.Writer (execWriterT)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Binary (Binary)
+import qualified Data.ByteString.Char8 as BSC8
 import qualified Data.Map.Strict as Map
 import GHC.Generics (Generic)
 import qualified GTD.Cabal.Types as Cabal
+import GTD.Configuration (Args (..), GTDConfiguration (_args), MS0, Powers (..))
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (ClassOrData (_cdtName), Declaration (..), Declarations (..), Exports, IdentifierWithUsageLocation, Imports, SourceSpan (..), declarationsT)
 import qualified GTD.Haskell.Declaration as Declaration
 import qualified GTD.Haskell.Lines as Lines
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import GTD.Utils (logDebugNSS, storeIOExceptionToMonadError)
-import qualified Data.ByteString.Char8 as BSC8
-import Control.DeepSeq (deepseq)
 
 newtype HsModuleParams = HsModuleParams
   { _isImplicitExportAll :: Bool
@@ -121,7 +122,7 @@ emptyHsModule =
       _lines = mempty
     }
 
-parseModule :: HsModuleMetadata -> (MonadLoggerIO m, MonadError String m) => m HsModule
+parseModule :: HsModuleMetadata -> (MS0 m, MonadError String m) => m HsModule
 parseModule cm@HsModuleMetadata {_mPath = srcP} = do
   let logTag = "parsing module " ++ srcP
   logDebugNSS logTag ""
@@ -143,11 +144,16 @@ parseModule cm@HsModuleMetadata {_mPath = srcP} = do
     case Lines.resolve lines (sourceSpanStartLine . _declSrcOrig $ d) of
       Just Lines.Line {path = p, num = n} -> d {_declSrcOrig = (_declSrcOrig d) {sourceSpanFileName = BSC8.pack p, sourceSpanStartLine = n, sourceSpanEndLine = n}}
       Nothing -> d
-  let ids = flip fmap (GHC.identifierUsages a) $ \f -> do
-        let ss = Declaration._iuSourceSpan f
-        case Lines.resolve lines (sourceSpanStartLine ss) of
-          Just Lines.Line {path = p, num = n} -> f {Declaration._iuSourceSpan = ss {sourceSpanFileName = BSC8.pack p, sourceSpanStartLine = n, sourceSpanEndLine = n}}
-          Nothing -> f
+
+  e <- asks $ _isGoToReferencesEnabled . _powers . _args
+  let ids =
+        if not e
+          then []
+          else flip fmap (GHC.identifierUsages a) $ \f -> do
+            let ss = Declaration._iuSourceSpan f
+            case Lines.resolve lines (sourceSpanStartLine ss) of
+              Just Lines.Line {path = p, num = n} -> f {Declaration._iuSourceSpan = ss {sourceSpanFileName = BSC8.pack p, sourceSpanStartLine = n, sourceSpanEndLine = n}}
+              Nothing -> f
 
   _ <- liftIO $ deepseq ids $ deepseq locals $ deepseq es $ deepseq is $ deepseq iiea $ return ()
 

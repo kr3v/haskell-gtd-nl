@@ -5,16 +5,18 @@
 
 module GTD.Server.Usages where
 
-import Control.Monad (forM_, when)
+import Control.Monad (forM_, unless, when)
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.RWS (asks)
 import Data.Aeson (FromJSON, ToJSON)
+import qualified Data.ByteString.Char8 as BSC8
 import qualified Data.HashMap.Strict as HMap
 import Data.Maybe (listToMaybe, mapMaybe)
 import GHC.Generics (Generic)
-import qualified GTD.Cabal as Cabal
+import qualified GTD.Cabal.Types as Cabal (key, pKey)
+import GTD.Configuration (Args (_powers), GTDConfiguration (_args), Powers (_isGoToReferencesEnabled))
 import GTD.Haskell.Declaration (SourceSpan (..))
-import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import GTD.Resolution.Cache (pGetU)
 import GTD.Server.Definition (DefinitionRequest (DefinitionRequest), cabalPackage, definition)
 import qualified GTD.Server.Definition as Definition
@@ -22,7 +24,6 @@ import GTD.State (MS)
 import GTD.Utils (concatForM, deduplicate, logDebugNSS, stats, updateStatus)
 import System.FilePath (normalise)
 import Text.Printf (printf)
-import qualified Data.ByteString.Char8 as BSC8
 
 data Request = Request
   { workDir :: FilePath,
@@ -47,6 +48,9 @@ instance ToJSON Response
 
 usages :: Request -> (MS m, MonadError String m) => m Response
 usages (Request {workDir = wd, file = rf0, word = w}) = do
+  e <- asks $ _isGoToReferencesEnabled . _powers . _args
+  unless e $ throwError "Go to References is not enabled"
+
   let rf = normalise rf0
   let logTag = printf "usages: %s @ %s / %s" w rf wd
 

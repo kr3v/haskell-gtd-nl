@@ -1,6 +1,6 @@
 import axios from 'axios';
 import * as vscode from 'vscode';
-import path = require('path/posix');
+import path = require('path');
 import fs = require('node:fs');
 import { ChildProcess, exec, spawn } from 'child_process';
 import { homedir, platform } from 'os'
@@ -25,13 +25,14 @@ function isExecutableInPath(executable: string): Promise<boolean> {
 	);
 }
 
-async function exists(p: string): Promise<boolean> {
+async function exists(p: string | undefined): Promise<boolean> {
+	if (!p) return Promise.resolve(false);
 	try {
 		await fs.promises.access(p, fs.constants.X_OK);
-		return true;
+		return Promise.resolve(true);
 	}
 	catch (error) {
-		return false;
+		return Promise.resolve(false);
 	}
 }
 
@@ -52,9 +53,13 @@ async function createSymlink(src: string, dst: string) {
 	}
 }
 
-async function supernormalize(p: string, executable: boolean): Promise<string> {
-	if (path.isAbsolute(p)) return path.normalize(p);
+async function ultranormalize(p: string | undefined, def: string, executable: boolean) {
+	return await supernormalize(await exists(p ?? def) ? p ?? def : def, executable);
+}
 
+async function supernormalize(p: string, executable: boolean): Promise<string> {
+	outputChannel.appendLine(util.format("supernormalize(%s, %s)", p, executable));
+	if (path.isAbsolute(p)) return path.normalize(p);
 	if (executable) {
 		if (await isExecutableInPath(p)) {
 			return p;
@@ -513,9 +518,9 @@ async function initConfig() {
 	}
 
 	let conf = vscode.workspace.getConfiguration('haskell-gtd-nl', vscode.window.activeTextEditor?.document?.uri);
-	serverRoot = await supernormalize(conf.get<string>('server.root') ?? defaultHomeDir, false);
-	serverExe = await supernormalize(conf.get<string>('server.path') ?? "haskell-gtd-server", true);
-	packageExe = await supernormalize(conf.get<string>('parser.path') ?? "haskell-gtd-parser", true);
+	serverRoot = await ultranormalize(conf.get<string>('server.root'), defaultHomeDir, false);
+	serverExe = await ultranormalize(conf.get<string>('server.path'), "haskell-gtd-nl-server", true);
+	packageExe = await ultranormalize(conf.get<string>('parser.path'), "haskell-gtd-nl-parser", true);
 	serverRepos = path.join(serverRoot, "repos");
 	serverPidF = path.join(serverRoot, 'pid');
 	serverPortF = path.join(serverRoot, 'port');
