@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 module GTD.Utils where
 
@@ -8,7 +9,7 @@ import Control.Concurrent (MVar, myThreadId, newMVar, withMVar)
 import Control.Exception (IOException, throwIO, try)
 import Control.Exception.Lifted (catch)
 import Control.Lens (Lens', use, (.=))
-import Control.Monad (forM, forM_, when)
+import Control.Monad (forM, when)
 import Control.Monad.Except (ExceptT, MonadError (throwError))
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Logger (Loc, LogLevel (..), LogSource, LogStr, LoggingT (..), MonadLogger, MonadLoggerIO, defaultLogStr, filterLogger, fromLogStr, logDebugNS, logErrorNS, logOtherNS)
@@ -20,9 +21,10 @@ import Control.Monad.Trans.Except (catchE, mapExceptT)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as S8
+import qualified Data.HashMap.Strict as HMap
 import Data.Int (Int32)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (fromMaybe, mapMaybe)
+import qualified Data.Set as Set
 import Data.Text (unpack)
 import qualified Data.Text as T
 import Data.Time.Clock.POSIX (getCurrentTime)
@@ -34,8 +36,6 @@ import System.IO (BufferMode (..), Handle, IOMode (..), hSetBuffering, withFile)
 import System.IO.Error (isDoesNotExistError)
 import System.Random (randomIO)
 import Text.Printf (printf)
-import qualified Data.HashMap.Strict as HMap
-import qualified Data.Set as Set
 
 maybeToMaybeT :: Monad m => Maybe a -> MaybeT m a
 maybeToMaybeT = MaybeT . return
@@ -151,29 +151,6 @@ stats = do
     liftIO $ putStrLn $ printf "Wall: i:%s m:%s g:%s r:%s" (showF2 $ fromIntegral ie / eI) (showF2 $ fromIntegral me / eI) (showF2 $ fromIntegral ge / eI) (showF2 $ fromIntegral (e - ie - me - ge) / eI)
     liftIO $ putStrLn $ "GCs: " ++ show s
 
-getTotalMemory :: IO Int
-getTotalMemory = do
-  content <- readFile "/proc/meminfo"
-  let line [name, val, _] = Just (name, read val :: Int)
-      line [name, val] = Just (name, read val :: Int)
-      line _ = Nothing
-      memInfo = mapMaybe (line . words) $ lines content
-      lookupVal name = fromMaybe 0 (lookup name memInfo)
-      total = lookupVal "MemTotal:"
-  return (total `div` 1024)
-
-getUsableFreeMemory :: IO Int
-getUsableFreeMemory = do
-  content <- readFile "/proc/meminfo"
-  let line [name, val, _] = Just (name, read val :: Int)
-      line [name, val] = Just (name, read val :: Int)
-      line _ = Nothing
-      memInfo = mapMaybe (line . words) $ lines content
-      lookupVal name = fromMaybe 0 (lookup name memInfo)
-      freeMem = lookupVal "MemFree:"
-      buffers = lookupVal "Buffers:"
-      cached = lookupVal "Cached:"
-  return ((freeMem + buffers + cached) `div` 1024)
 
 concatMapM :: (Traversable t, Monad f) => (a -> f [b]) -> t a -> f [b]
 concatMapM a b = concat <$> mapM a b

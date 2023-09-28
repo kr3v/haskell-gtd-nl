@@ -13,11 +13,12 @@ import Control.Monad.Logger (LogLevel (..))
 import Data.Aeson (eitherDecodeStrict)
 import qualified Data.ByteString.Char8 as BS
 import Data.Version (showVersion)
-import GTD.Utils (getTotalMemory, getUsableFreeMemory)
+import GTD.Utils.OS.Memory (availableMemory, totalMemory)
 import Options.Applicative (Parser, auto, eitherReader, help, long, option, showDefault, strOption, switch, value)
 import qualified Paths_haskell_gtd
 import System.Directory (createDirectoryIfMissing, getHomeDirectory, removeDirectoryRecursive)
 import System.FilePath ((</>))
+import System.Info (os)
 import Text.Printf (printf)
 
 data Args = Args
@@ -50,7 +51,10 @@ argsP = do
 defaultArgs :: IO Args
 defaultArgs = do
   home <- getHomeDirectory
-  let root = home </> ".local" </> "share" </> "haskell-gtd-nl"
+  let root =
+        if os == "darwin"
+          then home </> "Library" </> "Application Support" </> "Code" </> "haskell-gtd-nl"
+          else home </> ".local" </> "share" </> "haskell-gtd-nl"
   let cabalBin = home </> ".cabal" </> "bin" </> "haskell-gtd-nl-parser"
   return $ Args {_ttl = 60, _dynamicMemoryUsage = True, _logLevel = LevelInfo, _parserExe = cabalBin, _parserArgs = [], _root = root}
 
@@ -75,8 +79,8 @@ prepareConstants :: Args -> IO GTDConfiguration
 prepareConstants a = do
   -- `cabal get` uses ~150 MiB of memory; using `200` as a safety margin
   let cabalGetMemoryUsage = 200
-  total <- (`div` 8) . (`div` cabalGetMemoryUsage) <$> getTotalMemory
-  usable <- (`div` 4) . (`div` cabalGetMemoryUsage) <$> getUsableFreeMemory
+  total <- (`div` 8) . (`div` cabalGetMemoryUsage) . (`div` (1024 * 1024)) <$> totalMemory
+  usable <- (`div` 4) . (`div` cabalGetMemoryUsage) . (`div` (1024 * 1024)) <$> availableMemory
   let cgKeys = max (1024 `div` cabalGetMemoryUsage) (min total usable)
   -- allow at least some concurrency for `cabal get`, but limited by total/free memory
   cgSemaphore <- newQSem cgKeys

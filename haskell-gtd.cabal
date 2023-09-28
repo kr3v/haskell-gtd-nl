@@ -126,6 +126,7 @@ library
         GTD.Server.Usages
         GTD.State
         GTD.Utils
+        GTD.Utils.OS.Memory
         Paths_haskell_gtd
 
     ghc-options: -O2 -g1 -Wall

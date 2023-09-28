@@ -3,10 +3,11 @@ import * as vscode from 'vscode';
 import path = require('path/posix');
 import fs = require('node:fs');
 import { ChildProcess, exec, spawn } from 'child_process';
-import { homedir } from 'os'
+import { homedir, platform } from 'os'
 import * as util from 'util';
 import { FileHandle } from 'node:fs/promises';
 
+const os = platform();
 const userHomeDir = homedir();
 const cabalBinDir = path.join(userHomeDir, ".cabal/bin");
 const localBinDir = path.join(userHomeDir, ".local/bin");
@@ -504,8 +505,15 @@ async function cpphs() {
 }
 
 async function initConfig() {
+	let defaultHomeDir;
+	if (os === 'darwin') {
+		defaultHomeDir = path.join(userHomeDir, "Library", "Application Support", "Code", "haskell-gtd-nl");
+	} else {
+		defaultHomeDir = path.join(userHomeDir, ".local", "share", "haskell-gtd-nl");
+	}
+
 	let conf = vscode.workspace.getConfiguration('haskell-gtd-nl', vscode.window.activeTextEditor?.document?.uri);
-	serverRoot = await supernormalize(conf.get<string>('server.root') ?? path.join(userHomeDir, ".local", "share", "haskell-gtd-nl"), false);
+	serverRoot = await supernormalize(conf.get<string>('server.root') ?? defaultHomeDir, false);
 	serverExe = await supernormalize(conf.get<string>('server.path') ?? "haskell-gtd-server", true);
 	packageExe = await supernormalize(conf.get<string>('parser.path') ?? "haskell-gtd-parser", true);
 	serverRepos = path.join(serverRoot, "repos");

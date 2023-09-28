@@ -29,12 +29,13 @@ import GTD.Resolution.Types (Package (..))
 import qualified GTD.Resolution.Types as Package
 import GTD.Resolution.Utils (ParallelizedState (..), parallelized, scheme)
 import GTD.State (Context (..), MS, MS0, cExports)
-import GTD.Utils (getUsableFreeMemory, logDebugNSS, modifyMS, updateStatus, (<==<), restrictKeys)
+import GTD.Utils (logDebugNSS, modifyMS, updateStatus, (<==<), restrictKeys)
 import System.FilePath ((</>))
 import System.IO (IOMode (AppendMode), withFile)
 import System.Process (CreateProcess (..), StdStream (..), createProcess, proc, waitForProcess)
 import Text.Printf (printf)
 import qualified Data.HashSet as HSet
+import GTD.Utils.OS.Memory (availableMemory)
 
 package'resolution'withMutator'direct ::
   Context ->
@@ -142,7 +143,7 @@ package'resolution'withDependencies'forked p = do
         | memFree > 2 * 1024 = ["-N", "-A16M"]
         | otherwise = ["-N", "-A4M"]
       pArgs = do
-        memFree <- liftIO getUsableFreeMemory
+        memFree <- liftIO availableMemory
         let a = pArgs' memFree
         logDebugNSS "haskell-gtd-nl-parser" $ printf "given getUsableFreeMemory=%s and memFree=%s, rts = %s" (show dm) (show memFree) (show a)
         return a
