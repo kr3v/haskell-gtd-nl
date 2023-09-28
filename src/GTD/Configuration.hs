@@ -34,10 +34,16 @@ data Args = Args
 parseJson :: String -> Either String [String]
 parseJson = eitherDecodeStrict . BS.pack
 
+defaultRoot :: String -> String
+defaultRoot home =
+  if os == "darwin"
+    then home </> "Library" </> "Application Support" </> "Code" </> "haskell-gtd-nl"
+    else home </> ".local" </> "share" </> "haskell-gtd-nl"
+
 argsP :: IO (Parser Args)
 argsP = do
   home <- getHomeDirectory
-  let root = home </> ".local" </> "share" </> "haskell-gtd-nl"
+  let root = defaultRoot home
   let cabalBin = home </> ".cabal" </> "bin" </> "haskell-gtd-nl-parser"
   return $
     Args
@@ -51,10 +57,7 @@ argsP = do
 defaultArgs :: IO Args
 defaultArgs = do
   home <- getHomeDirectory
-  let root =
-        if os == "darwin"
-          then home </> "Library" </> "Application Support" </> "Code" </> "haskell-gtd-nl"
-          else home </> ".local" </> "share" </> "haskell-gtd-nl"
+  let root = defaultRoot home
   let cabalBin = home </> ".cabal" </> "bin" </> "haskell-gtd-nl-parser"
   return $ Args {_ttl = 60, _dynamicMemoryUsage = True, _logLevel = LevelInfo, _parserExe = cabalBin, _parserArgs = [], _root = root}
 
