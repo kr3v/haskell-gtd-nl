@@ -53,7 +53,7 @@ package'resolution'withMutator'direct c cPkg = do
   let pkg = pkgE {Package._exports = Package._exports pkgE <> reexports}
   PackageCache.pStore cPkg pkg
 
-  e <- asks $ _isGoToReferencesEnabled . _powers . _args
+  e <- asks $ _goToReferences_isEnabled . _powers . _args
   when e $ PackageCache.pStoreU cPkg pkg
 
   logDebugNSS logTag $

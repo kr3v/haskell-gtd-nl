@@ -360,12 +360,17 @@ async function genericDefProvider(
 	if (!doc) return Promise.resolve([]);
 	let docF = vscode.workspace.getWorkspaceFolder(doc.uri);
 	if (!docF) return Promise.resolve([]);
-	let wd = docF.uri.fsPath;
-	let repos = path.join(wd, "./.repos");
+	let owd = docF.uri.fsPath;
+	let repos = path.join(owd, ".repos");
 	let file = document.uri.fsPath;
+
+	let rwd = owd;
+	let rfile = file;
 	if (isParentOf(repos, file)) {
-		wd = path.join(repos, path.relative(repos, file).split(path.sep)[0]);
-		outputChannel.appendLine(util.format("%s is in %s, so wd=%s", file, repos, wd));
+		let libDir = path.relative(repos, file).split(path.sep)[0];
+		rwd = path.join(serverRepos, libDir);
+		rfile = path.join(serverRepos, path.relative(repos, file));
+		outputChannel.appendLine(util.format("%s is in %s, so wd=%s", file, repos, rwd));
 	}
 
 	// figure out the word under the cursor
@@ -376,13 +381,14 @@ async function genericDefProvider(
 	if (word == "") {
 		return Promise.resolve([]);
 	}
-	outputChannel.appendLine(util.format("getting a definition for %s @ %s...", word, wd));
+	outputChannel.appendLine(util.format("getting a definition for %s @ %s/%s...", word, owd,rwd));
 
 	// send a request to the server
 	await startServerIfRequired();
 	let body = {
-		workDir: wd,
-		file: file,
+		origWorkDir: owd,
+		workDir: rwd,
+		file: rfile,
 		word: word
 	};
 	let res = await axios.
@@ -407,27 +413,27 @@ async function genericDefProvider(
 
 	let locs = [];
 	for (const span of data.srcSpan) {
-		// HLS BUG #1: in case definition is located at `repos` directory, rewrite the path to local symlink to `repos` (named `./{wd}/.repos`) to prevent Haskell VS Code extension from spawning a new instance of the HLS
+		// HLS BUG #1: in case definition is located at `repos` directory, rewrite the path to local symlink to `repos` (named `{wd}/.repos`) to prevent Haskell VS Code extension from spawning a new instance of the HLS
 		// HLS interoperability: if HLS is provided via `haskell.haskell` extension, then this extension should not provide local resolutions until they become the same as the ones provided by `haskell.haskell` extension
 		let wordSourcePathO = span.sourceSpanFileName;
 		let wordSourcePath;
-		if (isParentOf(wd, wordSourcePathO) && !isParentOf(repos, wd)) {
+		if (isParentOf(owd, wordSourcePathO) && !isParentOf(repos, wordSourcePathO)) {
 			wordSourcePath = wordSourcePathO;
 			if (isMainHaskellExtensionActive()) {
 				let conf = vscode.workspace.getConfiguration('haskell-gtd-nl');
 				let disableLocDefs = conf.get<boolean>("extension.disable-local-definitions-when-hls-is-active") ?? true;
 				if (disableLocDefs) {
-					outputChannel.appendLine(util.format("HLS is active, disabling local definitions; got %s", wordSourcePathO));
-					return Promise.resolve([]);
+					outputChannel.appendLine(util.format("HLS is active, disable-local-definitions-when-hls-is-active is enabled, got %s - skipping it", wordSourcePathO));
+					continue;
 				}
 			}
-		} else if (wordSourcePathO == file || isParentOf(repos, wordSourcePathO)) {
-			wordSourcePath = wordSourcePathO;
 		} else if (isParentOf(serverRepos, wordSourcePathO)) {
 			wordSourcePath = path.resolve(repos, path.relative(serverRepos, wordSourcePathO))
+		} else if (wordSourcePathO == file || isParentOf(repos, wordSourcePathO)) {
+			wordSourcePath = wordSourcePathO;
 		} else {
-			outputChannel.appendLine(util.format("BUG: wordSourcePathO (%s) is neither original file (%s) nor is present in neither serverRepos (%s) nor current work directory (%s)", wordSourcePathO, file, serverRepos, wd));
-			return Promise.resolve([]);
+			outputChannel.appendLine(util.format("BUG: wordSourcePathO (%s) is neither original file (%s) nor is present in neither serverRepos (%s) nor current work directory (%s)", wordSourcePathO, file, serverRepos, owd));
+			continue;
 		}
 		wordSourcePath = path.normalize(wordSourcePath);
 		outputChannel.appendLine(util.format("path rewritten: %s -> %s", wordSourcePathO, wordSourcePath));
@@ -474,10 +480,12 @@ async function cpphs() {
 	let docF = vscode.workspace.getWorkspaceFolder(doc.uri);
 	if (!docF) return Promise.resolve([]);
 	let wd = docF.uri.fsPath;
-	let repos = path.join(wd, "./.repos");
+	let repos = path.join(wd, ".repos");
 	let file = doc.uri.fsPath;
 	if (isParentOf(repos, file)) {
-		wd = path.join(repos, path.relative(repos, file).split(path.sep)[0]);
+		let libDir = path.relative(repos, file).split(path.sep)[0];
+		wd = path.join(serverRepos, libDir);
+		file = path.join(serverRepos, path.relative(repos, file));
 		outputChannel.appendLine(util.format("%s is in %s, so wd=%s", file, repos, wd));
 	}
 
@@ -575,7 +583,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			let docF = vscode.workspace.getWorkspaceFolder(doc.uri);
 			if (!docF) return Promise.resolve([]);
 			let wd = docF.uri.fsPath;
-			let repos = path.join(wd, "./.repos");
+			let repos = path.join(wd, ".repos");
 
 			if (isParentOf(repos, document.uri.fsPath) ||
 				!(document.languageId == "haskell" || document.languageId == "cabal") ||
@@ -625,7 +633,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			const excludedPath = "**/.repos";
 
 			let wd = wdV.uri.fsPath;
-			let repos = path.join(wd, "./.repos");
+			let repos = path.join(wd, ".repos");
 			outputChannel.appendLine(util.format("creating symlink %s -> %s", serverRepos, repos));
 			await createSymlink(serverRepos, repos);
 

@@ -34,8 +34,6 @@ import System.FilePath ((</>))
 import System.Info (os)
 import Text.Printf (printf)
 
-type MS0 m = (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m)
-
 instance FromJSON LogLevel where
   parseJSON :: Value -> JSON.Parser LogLevel
   parseJSON (String t) = pure $ read $ T.unpack t
@@ -45,7 +43,8 @@ instance ToJSON LogLevel where
   toJSON = toJSON . show
 
 data Powers = Powers
-  { _isGoToReferencesEnabled :: Bool
+  { _goToReferences_isEnabled :: Bool,
+    _goToReferences_limit :: Int
   }
   deriving (Show, Generic)
 
@@ -64,6 +63,8 @@ data Args = Args
   }
   deriving (Show, Generic)
 
+$(makeLenses ''Args)
+
 instance FromJSON Args
 
 instance ToJSON Args
@@ -78,7 +79,10 @@ defaultRoot home =
     else home </> ".local" </> "share" </> "haskell-gtd-nl"
 
 powersP :: Parser Powers
-powersP = Powers <$> switch (long "go-to-references" <> help "whether to support 'Go to References'" <> showDefault)
+powersP =
+  Powers
+    <$> switch (long "go-to-references" <> help "whether to support 'Go to References'" <> showDefault)
+    <*> option auto (long "usages-limit" <> help "" <> showDefault <> value 256)
 
 argsP :: IO (Parser Args)
 argsP = do
@@ -95,11 +99,9 @@ argsP = do
       <*> strOption (long "root" <> help "" <> showDefault <> value root)
       <*> powersP
 
-
 -- Args parser from JSON string
 argsPJ :: Parser Args
 argsPJ = option (eitherReader parseJson) (long "args" <> help "" <> showDefault)
-
 
 defaultArgs :: IO Args
 defaultArgs = do
@@ -116,7 +118,8 @@ defaultArgs = do
         _root = root,
         _powers =
           Powers
-            { _isGoToReferencesEnabled = False
+            { _goToReferences_isEnabled = False,
+              _goToReferences_limit = 256
             }
       }
 
@@ -175,3 +178,5 @@ prepareConstants a = do
   writeFile (constants ^. cversion) versionCurrent
 
   return constants
+
+type MS0 m = (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m)

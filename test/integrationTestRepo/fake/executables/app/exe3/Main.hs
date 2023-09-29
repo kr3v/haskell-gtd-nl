@@ -17,8 +17,8 @@ import qualified Control.Lens.Getter as Lens (Getter, Contravariant, Const, to)
 import qualified Control.Lens.Setter as Lens
 
 
-exe3 :: Int
-exe3 = 1
+exe3 :: IO Int
+exe3 = return 1
 
 main :: IO ()
 main = putStrLn "Hello, Haskell!"

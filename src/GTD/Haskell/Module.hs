@@ -145,7 +145,7 @@ parseModule cm@HsModuleMetadata {_mPath = srcP} = do
       Just Lines.Line {path = p, num = n} -> d {_declSrcOrig = (_declSrcOrig d) {sourceSpanFileName = BSC8.pack p, sourceSpanStartLine = n, sourceSpanEndLine = n}}
       Nothing -> d
 
-  e <- asks $ _isGoToReferencesEnabled . _powers . _args
+  e <- asks $ _goToReferences_isEnabled . _powers . _args
   let ids =
         if not e
           then []

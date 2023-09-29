@@ -85,17 +85,19 @@ h n c m respP1 respP2 req = do
   let logP = (_root . _args $ c) </> "server.log"
       statusP = (_root . _args $ c) </> "status" </> "server"
   modifyMVar m $ \s -> do
-    withLogging logP statusP (_logLevel . _args $ c) $ do
+    withLogging logP statusP (_logLevel . _args $ c) $ flip runReaderT c $ do
       (r, s') <- flip runStateT s $ do
         rq <- reqId <+= 1
         let reqId :: String = printf "%06d" rq
-        liftIO $ putStrLn $ "Got request with ID:" ++ show reqId
+        liftIO $ printf "request id = %d\nrequest = %s\n" rq (show req)
         r' <-
           ultraZoom context $
             bracket (pure ()) (const $ updateStatus "") $ \_ -> do
               updateStatus $ printf "preparing to execute `%s`" n
-              flip runReaderT c $ runExceptT $ respP1 req
-        return $ respP2 reqId r'
+              runExceptT $ respP1 req
+        liftIO $ printf "response = %s\n" (show r')
+        let r'' = respP2 reqId r'
+        return r''
       return (s', r)
 
 ---

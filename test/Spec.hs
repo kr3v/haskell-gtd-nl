@@ -11,13 +11,13 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 import Control.Exception (IOException, try)
-import Control.Lens (use)
+import Control.Lens (set, use)
+import Control.Monad (forM, forM_, join)
 import Control.Monad.Except (MonadError (..))
+import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Logger (LogLevel (LevelDebug), NoLoggingT (..), runStderrLoggingT, runStdoutLoggingT)
 import Control.Monad.Logger.CallStack (runFileLoggingT)
-import Control.Monad (forM, forM_, join)
 import Control.Monad.RWS (MonadState (get), MonadWriter (..))
-import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.State (StateT (..), evalStateT, execStateT)
 import Control.Monad.Trans.Except (runExceptT)
 import Control.Monad.Trans.Reader (ReaderT (..))
@@ -26,7 +26,7 @@ import Data.Aeson (FromJSON, ToJSON, decode, eitherDecode, encode)
 import Data.Aeson.Types (FromJSON (..), Parser, Value (..))
 import qualified Data.ByteString.Char8 as BSC8
 import qualified Data.ByteString.Lazy as BS
-import Data.Either (isLeft, isRight, partitionEithers)
+import Data.Either (partitionEithers)
 import Data.Either.Combinators (mapLeft, mapRight)
 import qualified Data.HashMap.Strict as HMap
 import Data.List (find, isPrefixOf, isSuffixOf)
@@ -38,7 +38,7 @@ import GHC.Generics (Generic)
 import GTD.Cabal.Cache as Cabal (load, store)
 import GTD.Cabal.Types (Dependency, PackageModules, PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, Version, transformPaths, transformPathsR)
 import qualified GTD.Cabal.Types as Cabal
-import GTD.Configuration (Args (_logLevel), GTDConfiguration (..), defaultArgs, prepareConstants)
+import GTD.Configuration (Args (..), GTDConfiguration (..), Powers (..), defaultArgs, logLevel, prepareConstants)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (Declarations (..), Exports, Imports, SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine), emptySourceSpan)
 import GTD.Haskell.Lines (Line (..), buildMap, resolve)
@@ -46,7 +46,6 @@ import GTD.Haskell.Module (HsModule (..), HsModuleMetadata (_mPath), HsModuleP (
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import qualified GTD.Resolution.Cache as PackageCache
 import GTD.Resolution.Module (ModuleState (..), figureOutExports, figureOutExports'old)
-import GTD.Resolution.Module.Multi (figureOutExports0)
 import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), DropPackageCacheRequest (..), cabalPackage, cabalPackage'contextWithLocals, cabalPackage'resolve, cabalPackage'unresolved'plusStoreInLocals, definition, dropPackageCache)
 import GTD.Server.Usages (usages)
 import qualified GTD.Server.Usages as Usages
@@ -55,12 +54,12 @@ import GTD.Utils (removeIfExists, storeIOExceptionToMonadError)
 import System.Directory (getCurrentDirectory, listDirectory, removeDirectoryRecursive)
 import System.FilePath (makeRelative, (</>))
 import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
-import Test.Hspec (Expectation, Spec, describe, expectationFailure, it, runIO, shouldBe, shouldSatisfy)
+import Test.Hspec (Expectation, Spec, describe, expectationFailure, it, runIO, shouldBe)
 import Test.Hspec.Runner (Config (configPrintCpuTime), defaultConfig, hspecWith)
 import Text.Printf (printf)
 
-haskellApplyCppHsTest :: Spec
-haskellApplyCppHsTest = do
+haskellApplyCppHsTest :: GTDConfiguration -> Spec
+haskellApplyCppHsTest consts = do
   describe "haskellApplyCppHs" $ do
     it "applies #if-related C preprocessor directives" $ do
       let srcPath = "./test/samples/haskellApplyCppHs/in.0.hs"
@@ -91,8 +90,8 @@ haskellApplyCppHsTest = do
           writeFile dstPath r
           r `shouldBe` expected
 
-haskellGetIdentifiersTest :: Spec
-haskellGetIdentifiersTest = do
+haskellGetIdentifiersTest :: GTDConfiguration -> Spec
+haskellGetIdentifiersTest consts = do
   let descr = "haskellGetIdentifiers"
   let test n p i = do
         let iS = show i
@@ -129,8 +128,8 @@ haskellGetIdentifiersTest = do
         it "parses classes declarations" $
           test n p 2
 
-haskellGetExportsTest :: Spec
-haskellGetExportsTest = do
+haskellGetExportsTest :: GTDConfiguration -> Spec
+haskellGetExportsTest consts = do
   let descr = "haskellGetExportedIdentifiers"
   let test n p i = do
         let iS = show i
@@ -158,8 +157,8 @@ haskellGetExportsTest = do
         it "parses a file with an explicit list of exported functions" $
           test n p 0
 
-haskellGetImportsTest :: Spec
-haskellGetImportsTest = do
+haskellGetImportsTest :: GTDConfiguration -> Spec
+haskellGetImportsTest consts = do
   let descr = "haskellGetImportedIdentifiers"
   let test n p i = do
         let iS = show i
@@ -189,10 +188,8 @@ haskellGetImportsTest = do
         it "extracts only function imports" $
           test n p 0
 
-figureOutExportsTest :: Spec
-figureOutExportsTest = do
-  consts <- runIO $ prepareConstants =<< defaultArgs
-
+figureOutExportsTest :: GTDConfiguration -> Spec
+figureOutExportsTest consts = do
   let descr = "figureOutExports"
       root = "./test/samples/" </> descr
   tests <- runIO $ listDirectory root
@@ -232,10 +229,8 @@ figureOutExportsTest = do
               liftIO $ BS.writeFile outRP $ encode result
               return $ result `shouldBe` expectedR
 
-definitionTests :: Spec
-definitionTests = do
-  da <- runIO defaultArgs
-  consts <- runIO $ prepareConstants da {_logLevel = LevelDebug}
+definitionTests :: GTDConfiguration -> Spec
+definitionTests consts = do
   pwd <- runIO getCurrentDirectory
 
   let descr = "definitions"
@@ -456,8 +451,8 @@ instance FromJSON LinesSpecTestCase
 
 instance ToJSON LinesSpecTestCase
 
-linesTest :: Spec
-linesTest = do
+linesTest :: GTDConfiguration -> Spec
+linesTest consts = do
   let descr = "lines"
   let test i = runExceptT $ do
         let iS = show i
@@ -513,10 +508,8 @@ instance FromJSON PackageWithUnresolvedDependencies
 
 instance FromJSON PackageWithResolvedDependencies
 
-cabalFullTest :: Spec
-cabalFullTest = do
-  da <- runIO defaultArgs
-  consts <- runIO $ prepareConstants da {_logLevel = LevelDebug}
+cabalFullTest :: GTDConfiguration -> Spec
+cabalFullTest consts = do
   wd <- runIO getCurrentDirectory
 
   let descr = "cabalFull"
@@ -582,10 +575,8 @@ cabalFullTest = do
     it "test repo" $ do
       test 0
 
-dropCacheTest :: Spec
-dropCacheTest = do
-  da <- runIO defaultArgs
-  consts <- runIO $ prepareConstants da {_logLevel = LevelDebug}
+dropCacheTest :: GTDConfiguration -> Spec
+dropCacheTest consts = do
   wd <- runIO getCurrentDirectory
 
   let descr = "dropCache"
@@ -641,10 +632,16 @@ dropCacheTest = do
 
       either (expectationFailure . show) id x
 
-usagesTest :: Spec
-usagesTest = do
-  da <- runIO defaultArgs
-  consts <- runIO $ prepareConstants da {_logLevel = LevelDebug}
+usagesTest :: GTDConfiguration -> Spec
+usagesTest consts0 = do
+  let consts =
+        consts0
+          { _args =
+              (_args consts0)
+                { _logLevel = LevelDebug,
+                  _powers = (_powers . _args $ consts0) {_goToReferences_limit = 3, _goToReferences_isEnabled = True}
+                }
+          }
   pwd <- runIO getCurrentDirectory
 
   let descr = "usages"
@@ -657,8 +654,8 @@ usagesTest = do
   runIO $ removeIfExists logF
 
   let evalD f w = runExceptT $ definition req {workDir = wd, file = wd </> f, word = w}
-      eval f w exp = do
-        let rq = Usages.Request {Usages.workDir = wd, Usages.file = wd </> f, Usages.word = w}
+      eval f wd owd w exp = do
+        let rq = Usages.Request {Usages.origWorkDir = owd, Usages.workDir = wd, Usages.file = wd </> f, Usages.word = w}
         got <- runExceptT $ usages rq
         liftIO $ printf "%s -> %s ?= %s\n" (show rq) (show got) (show exp)
         return $ got `shouldBe` exp
@@ -672,6 +669,8 @@ usagesTest = do
       ents = [lib1, lib2, exe1, exe2, exe3]
   serverState <- runIO $ mstack (`execStateT` emptyContext) $ Cabal.load >> (evalD exe3 "return" >>= (liftIO . printf "%s %s %s -> %s\n" descr exe3 "return" . show)) >> Cabal.store
 
+  let baseWd = _repos consts </> "base-4.16.4.0"
+
   let expectedExe3 =
         let expFile = wd </> "executables/app/exe3/Main.hs"
             expLineNo1 = 20
@@ -679,32 +678,41 @@ usagesTest = do
             expSrcSpan1 = emptySourceSpan {sourceSpanFileName = BSC8.pack expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo1, sourceSpanEndLine = expLineNo1}
             expSrcSpan2 = expSrcSpan1 {sourceSpanStartLine = expLineNo2, sourceSpanEndLine = expLineNo2}
          in Right $ Usages.Response {Usages.srcSpan = [expSrcSpan1, expSrcSpan2], Usages.err = Nothing}
+  let expectedReturn =
+        let expSrcSpan1 = emptySourceSpan {sourceSpanFileName = BSC8.pack $ wd </> "executables/app/exe3/Main.hs", sourceSpanStartColumn = 8, sourceSpanEndColumn = 14, sourceSpanStartLine = 21, sourceSpanEndLine = 21}
+            expSrcSpan2 = emptySourceSpan {sourceSpanFileName = BSC8.pack $ wd </> "lib2/src/Lib2.hs", sourceSpanStartColumn = 8, sourceSpanEndColumn = 14, sourceSpanStartLine = 4, sourceSpanEndLine = 4}
+            expSrcSpan3 = emptySourceSpan {sourceSpanFileName = BSC8.pack $ _repos consts </> "base-4.16.4.0/Data/Fixed.hs", sourceSpanStartColumn = 5, sourceSpanEndColumn = 11, sourceSpanStartLine = 237, sourceSpanEndLine = 237}
+         in Right $ Usages.Response {Usages.srcSpan = [expSrcSpan1, expSrcSpan2, expSrcSpan3], Usages.err = Nothing}
 
-  let tests = [(exe3, "local function", "exe3", expectedExe3)]
+  let tests =
+        [ (exe3, wd, wd, "local function", "exe3", expectedExe3),
+          (exe3, wd, wd, "Prelude function", "return", expectedReturn),
+          ("Prelude.hs", baseWd, wd, "Prelude function", "return", expectedReturn)
+        ]
 
   describe descr $ do
-    forM_ tests $ \(f, n, q, r) -> do
+    forM_ tests $ \(f, wd, owd, n, q, r) -> do
       it (printf "n=%s, f=%s, q=`%s`" n f q) $ do
         join $ mstack (`evalStateT` serverState) $ do
-          eval f q r
+          eval f wd owd q r
 
 main :: IO ()
 main = do
   hSetBuffering stdout LineBuffering
   hSetBuffering stderr LineBuffering
 
-  c <- prepareConstants =<< defaultArgs
+  c <- prepareConstants . set logLevel LevelDebug =<< defaultArgs
   removeDirectoryRecursive $ _cache c
   removeDirectoryRecursive $ _cacheUsages c
 
   hspecWith defaultConfig {configPrintCpuTime = False} $ do
-    haskellApplyCppHsTest
-    haskellGetIdentifiersTest
-    haskellGetExportsTest
-    haskellGetImportsTest
-    linesTest
-    figureOutExportsTest
-    cabalFullTest
-    dropCacheTest
-    definitionTests
-    usagesTest
+    haskellApplyCppHsTest c
+    haskellGetIdentifiersTest c
+    haskellGetExportsTest c
+    haskellGetImportsTest c
+    linesTest c
+    figureOutExportsTest c
+    cabalFullTest c
+    dropCacheTest c
+    definitionTests c
+    usagesTest c

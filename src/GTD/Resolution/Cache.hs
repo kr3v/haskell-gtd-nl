@@ -6,9 +6,10 @@
 
 module GTD.Resolution.Cache where
 
+import Control.Applicative (Applicative (..))
 import Control.Lens (over, view)
-import Control.Monad (forM, forM_, when)
-import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad (forM_, when)
+import Control.Monad.Except (MonadIO (..))
 import Control.Monad.Logger (LogLevel (LevelDebug), MonadLoggerIO)
 import Control.Monad.RWS (MonadReader (..), MonadState (..), asks, gets, modify)
 import qualified Data.Aeson as JSON
@@ -16,8 +17,7 @@ import qualified Data.Binary as Binary (Binary, decodeFileOrFail, encodeFile)
 import qualified Data.ByteString.Char8 as BSW8
 import qualified Data.Cache.LRU as LRU
 import qualified Data.HashMap.Strict as HMap
-import Data.List (isPrefixOf, stripPrefix)
-import qualified Data.Map as Map
+import Data.List (isInfixOf, isPrefixOf, isSubsequenceOf, stripPrefix, partition)
 import Data.Maybe (fromMaybe, isJust)
 import GHC.Utils.Monad (mapMaybeM)
 import qualified GTD.Cabal.Types as Cabal (ModuleNameS, Package (..), PackageKey, PackageWithResolvedDependencies, dKey, key, pKey)
@@ -27,13 +27,14 @@ import GTD.Haskell.Lines (Lines)
 import GTD.Haskell.Module (HsModule (..), metadataPrettyShow)
 import qualified GTD.Haskell.Module as HsModule
 import GTD.Resolution.Caching.Utils (binaryGet, pathAsFile)
-import GTD.Resolution.Types (Package (..), UsagesMap, UsagesInFileMap)
+import GTD.Resolution.Types (Package (..), UsagesInFileMap)
 import qualified GTD.Resolution.Types as Package
 import GTD.State (Context, cExports)
 import GTD.Utils (encodeWithTmp, logDebugNSS, removeIfExistsL)
 import System.Directory (createDirectoryIfMissing, doesFileExist, listDirectory, removeDirectoryRecursive)
-import System.FilePath (addTrailingPathSeparator, joinPath, splitPath, takeDirectory, (</>))
+import System.FilePath (addTrailingPathSeparator, joinPath, splitPath, takeFileName, (</>))
 import Text.Printf (printf)
+import qualified Data.Set as Set
 
 exportsN :: String
 exportsN = "exports.binary"
@@ -121,6 +122,9 @@ setCacheMaxSize n = do
 
 ---
 
+reposMarker :: String
+reposMarker = "@repos@"
+
 pathU'h :: Cabal.Package a -> FilePath -> (MonadReader GTDConfiguration m) => m (String, String)
 pathU'h cPkg f = do
   let pr = addTrailingPathSeparator $ Cabal._projectRoot cPkg
@@ -129,8 +133,8 @@ pathU'h cPkg f = do
   return $
     if rr `isPrefixOf` f
       then case splitPath $ fromMaybe "" $ rr `stripPrefix` f of
-        [] -> (rr, "")
-        (x : xs) -> (x, joinPath xs)
+        [] -> ("", "")
+        (x : xs) -> (x, joinPath xs ++ "." ++ reposMarker)
       else
         if pr `isPrefixOf` f
           then (pathAsFile pr, fromMaybe "" (pr `stripPrefix` f))
@@ -142,11 +146,28 @@ pathU cPkg f = do
   (d, fr) <- pathU'h cPkg f
   return $ (,) (c </> d) (pathAsFile fr)
 
-pGetU :: Cabal.Package a -> FilePath -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m [UsagesInFileMap]
-pGetU cPkg f0 = do
+pathUF :: Cabal.Package a -> FilePath -> FilePath -> FilePath
+pathUF cPkg d p = d </> (p ++ "." ++ (Cabal.pKey . Cabal.key $ cPkg) ++ "." ++ "usages.binary")
+
+pGetU :: [Cabal.Package a] -> Cabal.Package a -> FilePath -> (MonadLoggerIO m, MonadReader GTDConfiguration m) => m [UsagesInFileMap]
+pGetU cpkgsO cPkg f0 = do
   (d, f) <- pathU cPkg f0
   fs :: [FilePath] <- filter (f `isPrefixOf`) <$> liftIO (listDirectory d)
-  flip mapMaybeM fs $ \f1 -> do
+
+  let osF = Set.fromList $ (\cPkgO -> takeFileName $ pathUF cPkgO d f) <$> cpkgsO
+  let dF = takeFileName $ pathUF cPkg d f
+
+  let pO = flip Set.member osF
+  let pD = (== dF)
+  let pR = (reposMarker `isInfixOf`)
+  let (os, rm1) = partition pO fs
+  let (ds, rm2) = partition pD rm1
+  let (rs, _) = partition pR rm2
+  let fsA = os ++ ds ++ rs
+
+  logDebugNSS "pGetU" $ printf "f0=%s\nd=%s\nf=%s\nfs=%s\nosF=%s\ndF=%s\nos=%s\nds=%s\nrs=%s\nfsA=%s" f0 d f (show fs) (show osF) dF (show os) (show ds) (show rs) (show fsA)
+
+  flip mapMaybeM fsA $ \f1 -> do
     let p = d </> f1
     liftIO (Binary.decodeFileOrFail p) >>= \case
       Left (_, e) -> logDebugNSS "pGetU" e >> return Nothing
@@ -158,10 +179,10 @@ pStoreU ::
   (MonadLoggerIO m, MonadReader GTDConfiguration m) => m ()
 pStoreU cPkg pkg = do
   logDebugNSS "pStoreU" $ printf "starting - %s (%d)" (show $ Cabal.pKey . Cabal.key $ cPkg) (HMap.size $ _usages pkg)
-  forM_ (HMap.toList $ _usages pkg) $ \(p, v) -> do
-    (d, p) <- pathU cPkg $ BSW8.unpack p
+  forM_ (HMap.toList $ _usages pkg) $ \(f0, v) -> do
+    (d, f) <- pathU cPkg $ BSW8.unpack f0
     liftIO $ createDirectoryIfMissing False d
-    liftIO $ encodeWithTmp Binary.encodeFile (d </> (p ++ "." ++ (Cabal.pKey . Cabal.key $ cPkg) ++ "." ++ "usages.binary")) v
+    liftIO $ encodeWithTmp Binary.encodeFile (pathUF cPkg d f) v
   logDebugNSS "pStoreU" $ printf "done     - %s" (show $ Cabal.pKey . Cabal.key $ cPkg)
 
 ---

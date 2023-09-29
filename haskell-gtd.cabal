@@ -3,6 +3,7 @@ name:               haskell-gtd
 version:            0.0.3.3
 author:             dbaynak
 extra-source-files: CHANGELOG.md
+tested-with:        GHC == 9.2.7
 
 -- add the following line to `ghc-options` to enable profiling
 -- -fprof-auto -rtsopts "-with-rtsopts=-N -A16M -p -s -h -l -i0.1"
@@ -139,7 +140,7 @@ test-suite haskell-gtd-nl-tests
     main-is: Spec.hs
     build-depends:
         haskell-gtd
-        , QuickCheck ^>= 2.14.3
-        , hspec ^>= 2.11.1
+        , QuickCheck
+        , hspec
     build-tool-depends: hspec-discover:hspec-discover
     ghc-options: -O2 -g1 -Wall

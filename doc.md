@@ -5,6 +5,8 @@
   - add 'usage cases' (reverse go to definition)
   - add 'instances' list
   - goto for #include
+  - 'extract variable' + 'switch from `let` to `<-`' refactoring
+  - 'smart' operator flip (only known operators?)
 
 - performance:
   - when file is saved, the cache is dropped for the directory;

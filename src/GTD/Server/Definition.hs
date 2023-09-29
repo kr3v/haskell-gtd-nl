@@ -91,7 +91,8 @@ cabalPackage wd rf = do
 ---
 
 data DefinitionRequest = DefinitionRequest
-  { workDir :: FilePath,
+  { origWorkDir :: FilePath,
+    workDir :: FilePath,
     file :: FilePath,
     word :: String
   }
