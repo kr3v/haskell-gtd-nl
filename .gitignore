@@ -1,3 +1,5 @@
 test/integrationTestRepo/fake/*.txt
 dist-newstyle
 .vscode
+test/root
+reports

@@ -46,12 +46,13 @@ data Powers = Powers
   { _goToReferences_isEnabled :: Bool,
     _goToReferences_limit :: Int
   }
-  deriving (Show, Generic)
+  deriving (Show, Read, Generic)
 
 instance FromJSON Powers
 
 instance ToJSON Powers
 
+-- note: _root must be absolute
 data Args = Args
   { _ttl :: Int,
     _dynamicMemoryUsage :: Bool,
@@ -136,7 +137,21 @@ data GTDConfiguration = GTDConfiguration
 
 instance Show GTDConfiguration where
   show :: GTDConfiguration -> String
-  show c = "GTDConfiguration { _repos = " ++ _repos c ++ ", _cache = " ++ _cache c ++ ", _ccGetPath = " ++ _ccGetPath c ++ ", _status = " ++ _status c ++ ", _cversion = " ++ _cversion c ++ " }"
+  show c =
+    "GTDConfiguration {"
+      ++ "_repos = "
+      ++ _repos c
+      ++ ", _cache = "
+      ++ _cache c
+      ++ ", _ccGetPath = "
+      ++ _ccGetPath c
+      ++ ", _status = "
+      ++ _status c
+      ++ ", _args = "
+      ++ show (_args c)
+      ++ ", _cversion = "
+      ++ _cversion c
+      ++ " }"
 
 $(makeLenses ''GTDConfiguration)
 

@@ -37,7 +37,6 @@ import System.IO.Error (isDoesNotExistError)
 import System.Random (randomIO)
 import Text.Printf (printf)
 
-
 maybeToMaybeT :: Monad m => Maybe a -> MaybeT m a
 maybeToMaybeT = MaybeT . return
 
@@ -151,7 +150,6 @@ stats = do
     liftIO $ putStrLn $ printf "CPU : i:%s m:%s g:%s r:%s" (showF2 $ fromIntegral ic / cI) (showF2 $ fromIntegral mc / cI) (showF2 $ fromIntegral gc / cI) (showF2 $ fromIntegral (c - ic - mc - gc) / cI)
     liftIO $ putStrLn $ printf "Wall: i:%s m:%s g:%s r:%s" (showF2 $ fromIntegral ie / eI) (showF2 $ fromIntegral me / eI) (showF2 $ fromIntegral ge / eI) (showF2 $ fromIntegral (e - ie - me - ge) / eI)
     liftIO $ putStrLn $ "GCs: " ++ show s
-
 
 concatMapM :: (Traversable t, Monad f) => (a -> f [b]) -> t a -> f [b]
 concatMapM a b = concat <$> mapM a b

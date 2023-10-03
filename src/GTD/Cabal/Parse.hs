@@ -141,7 +141,7 @@ __exportsT ts = do
         Cabal.TestSuiteLibV09 _ p -> Set.singleton $ prettyShow p
         _ -> Set.empty,
       _reExports = Set.empty,
-      _allKnownModules = Set.fromList $ "Main" : (prettyShow <$> Cabal.otherModules (Cabal.testBuildInfo ts))
+      _allKnownModules = Set.fromList (prettyShow <$> Cabal.otherModules (Cabal.testBuildInfo ts))
     }
 
 __exportsB :: Cabal.Benchmark -> PackageModules
@@ -152,7 +152,7 @@ __exportsB ts = do
         Cabal.BenchmarkExeV10 _ p -> Set.singleton $ __pathAsModule p
         _ -> Set.empty,
       _reExports = Set.empty,
-      _allKnownModules = Set.fromList $ "Main" : (prettyShow <$> Cabal.otherModules (Cabal.benchmarkBuildInfo ts))
+      _allKnownModules = Set.fromList (prettyShow <$> Cabal.otherModules (Cabal.benchmarkBuildInfo ts))
     }
 
 libraryNameToDesignationName :: LibraryName -> Maybe String

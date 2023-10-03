@@ -350,6 +350,27 @@ export function identifier(s: string, pos0: number): [string, string[][]] {
 	return [a1.join("."), [lA, [e], rA, a, a1]];
 }
 
+class XCodeLensProvider implements vscode.CodeLensProvider {
+	async provideCodeLenses(document: vscode.TextDocument, token: vscode.CancellationToken): Promise<vscode.CodeLens[]> {
+		const codelensArray: vscode.CodeLens[] = [];
+
+		const range = new vscode.Range(new vscode.Position(0, 0), new vscode.Position(0, 0));
+		const references : vscode.Location[] = [new vscode.Location(document.uri, new vscode.Position(10, 0))];
+		const command: vscode.Command = {
+			title: "test code lens",
+			command: "editor.action.showReferences",
+			arguments: [document.uri, range.start, references],
+		};
+		codelensArray.push(new vscode.CodeLens(range, command));
+
+		return codelensArray;
+	}
+
+	async resolveCodeLens?(codeLens: vscode.CodeLens, token: vscode.CancellationToken): Promise<vscode.CodeLens> {
+		return codeLens;
+	}
+}
+
 async function genericDefProvider(
 	document: vscode.TextDocument,
 	position: vscode.Position,
@@ -381,7 +402,7 @@ async function genericDefProvider(
 	if (word == "") {
 		return Promise.resolve([]);
 	}
-	outputChannel.appendLine(util.format("getting a definition for %s @ %s/%s...", word, owd,rwd));
+	outputChannel.appendLine(util.format("getting a definition for %s @ %s/%s...", word, owd, rwd));
 
 	// send a request to the server
 	await startServerIfRequired();
@@ -622,6 +643,19 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.languages.registerReferenceProvider(
 			{ scheme: 'file', language: 'Hsc2Hs' },
 			new XReferenceProvider()
+		)
+	);
+
+	context.subscriptions.push(
+		vscode.languages.registerCodeLensProvider(
+			{ scheme: 'file', language: 'haskell' },
+			new XCodeLensProvider()
+		)
+	);
+	context.subscriptions.push(
+		vscode.languages.registerCodeLensProvider(
+			{ scheme: 'file', language: 'Hsc2Hs' },
+			new XCodeLensProvider()
 		)
 	);
 

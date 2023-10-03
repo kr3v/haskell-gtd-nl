@@ -30,6 +30,7 @@ common common-deps
         , unix
 
         , async
+        , deepseq
         , either
         , lifted-async
         , lifted-base
@@ -37,10 +38,10 @@ common common-deps
         , mtl
         , random
         , safe-exceptions
+        , split
         , time
         , transformers
         , unliftio
-        , deepseq
 
         , containers
         , unordered-containers
@@ -120,6 +121,7 @@ library
         GTD.Resolution.Package
         GTD.Resolution.Types
         GTD.Resolution.Utils
+        GTD.ParserExe
         GTD.Server
         GTD.Server.Cpphs
         GTD.Server.Definition
@@ -144,3 +146,17 @@ test-suite haskell-gtd-nl-tests
         , hspec
     build-tool-depends: hspec-discover:hspec-discover
     ghc-options: -O2 -g1 -Wall
+
+benchmark haskell-gtd-nl-bench
+    import: common-deps
+
+    type:             exitcode-stdio-1.0
+    hs-source-dirs:   test
+    main-is:          Bench.hs
+    build-depends:
+        haskell-gtd
+        , criterion
+        , statistics
+        , vector
+    default-language: Haskell2010
+    ghc-options: -O2 -g1 -threaded -Wall -rtsopts "-with-rtsopts=-N -A128M -T"

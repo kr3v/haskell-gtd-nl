@@ -2,11 +2,10 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# HLINT ignore "Use tuple-section" #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
-{-# LANGUAGE TypeSynonymInstances #-}
+{-# HLINT ignore "Use tuple-section" #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
@@ -51,7 +50,7 @@ import GTD.Server.Usages (usages)
 import qualified GTD.Server.Usages as Usages
 import GTD.State (LocalPackagesKey, cLocalPackages, emptyContext)
 import GTD.Utils (removeIfExists, storeIOExceptionToMonadError)
-import System.Directory (getCurrentDirectory, listDirectory, removeDirectoryRecursive)
+import System.Directory (getCurrentDirectory, listDirectory, removeDirectoryRecursive, createDirectoryIfMissing)
 import System.FilePath (makeRelative, (</>))
 import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
 import Test.Hspec (Expectation, Spec, describe, expectationFailure, it, runIO, shouldBe)
@@ -704,6 +703,8 @@ main = do
   c <- prepareConstants . set logLevel LevelDebug =<< defaultArgs
   removeDirectoryRecursive $ _cache c
   removeDirectoryRecursive $ _cacheUsages c
+  createDirectoryIfMissing True (_cache $ c)
+  createDirectoryIfMissing True (_cacheUsages $ c)
 
   hspecWith defaultConfig {configPrintCpuTime = False} $ do
     haskellApplyCppHsTest c
