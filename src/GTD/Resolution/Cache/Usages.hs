@@ -4,13 +4,11 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module GTD.Resolution.Cache.Usages (get, put) where
+module GTD.Resolution.Cache.Usages (get, put, remove) where
 
-import Control.Monad (forM_)
-import Control.Monad.Except (MonadIO (..))
-import Control.Monad.Logger (MonadLoggerIO)
+import Control.Monad (forM, forM_)
+import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.RWS (MonadReader (..), asks)
-import qualified Data.Binary as Binary (decodeFileOrFail, encodeFile)
 import qualified Data.ByteString.Char8 as BSW8
 import qualified Data.HashMap.Strict as HMap
 import Data.List (isInfixOf, isPrefixOf, partition, stripPrefix)
@@ -18,16 +16,19 @@ import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 import GHC.Utils.Monad (mapMaybeM)
 import qualified GTD.Cabal.Types as Cabal (Package (..), key, pKey)
-import GTD.Configuration (GTDConfiguration (..))
-import GTD.Resolution.Cache.Utils (pathAsFile)
+import GTD.Configuration (GTDConfiguration (..), MS0)
+import GTD.Resolution.Cache.Utils (pathAsFile, binaryPut, binaryGet)
 import GTD.Resolution.Types (Package (..), UsagesInFileMap)
-import GTD.Utils (encodeWithTmp, logDebugNSS)
+import GTD.Utils (logDebugNSS, removeIfExists)
 import System.Directory (createDirectoryIfMissing, listDirectory)
 import System.FilePath (addTrailingPathSeparator, joinPath, splitPath, takeFileName, (</>))
 import Text.Printf (printf)
 
 reposMarker :: String
 reposMarker = "@repos@"
+
+__dir'refs :: Cabal.Package a -> (MS0 m) => m FilePath
+__dir'refs cPkg = (</> ((Cabal.pKey . Cabal.key $ cPkg) ++ ".refs.binary")) <$> asks _cacheUsages
 
 -- for a given file path from a given package determine a directory and a file name in the cache/usages directory where the usages of the file should be stored
 __dir'file :: Cabal.Package a -> FilePath -> (MonadReader GTDConfiguration m) => m (FilePath, FilePath)
@@ -54,7 +55,7 @@ get ::
   [Cabal.Package a] ->
   Cabal.Package a ->
   FilePath ->
-  (MonadLoggerIO m, MonadReader GTDConfiguration m) => m [UsagesInFileMap]
+  (MS0 m) => m [UsagesInFileMap]
 get cpkgsO cPkg f0 = do
   (d, f) <- __dir'file cPkg f0
   fs :: [FilePath] <- filter (f `isPrefixOf`) <$> liftIO (listDirectory d)
@@ -74,18 +75,30 @@ get cpkgsO cPkg f0 = do
 
   flip mapMaybeM fsA $ \f1 -> do
     let p = d </> f1
-    liftIO (Binary.decodeFileOrFail p) >>= \case
-      Left (_, e) -> logDebugNSS "pGetU" e >> return Nothing
-      Right x -> return $ Just x
+    binaryGet p
 
 put ::
   Cabal.Package a ->
   Package ->
-  (MonadLoggerIO m, MonadReader GTDConfiguration m) => m ()
+  (MS0 m) => m ()
 put cPkg pkg = do
   logDebugNSS "pStoreU" $ printf "starting - %s (%d)" (show $ Cabal.pKey . Cabal.key $ cPkg) (HMap.size $ _usages pkg)
-  forM_ (HMap.toList $ _usages pkg) $ \(f0, v) -> do
+  paths <- forM (HMap.toList $ _usages pkg) $ \(f0, v) -> do
     (d, f) <- __dir'file cPkg $ BSW8.unpack f0
+    let p = __path cPkg d f
     liftIO $ createDirectoryIfMissing False d
-    liftIO $ encodeWithTmp Binary.encodeFile (__path cPkg d f) v
+    liftIO $ binaryPut p v
+    return p
+  __dir'refs cPkg >>= \p -> liftIO (binaryPut p paths)
   logDebugNSS "pStoreU" $ printf "done     - %s" (show $ Cabal.pKey . Cabal.key $ cPkg)
+
+remove ::
+  Cabal.Package a ->
+  (MS0 m) => m ()
+remove cPkg = do
+  d <- __dir'refs cPkg
+  ps <- fromMaybe [] <$> binaryGet d
+  liftIO $ forM_ ps removeIfExists
+  liftIO $ removeIfExists d
+  logDebugNSS "pRemoveU" $ printf "%s" (show $ Cabal.key cPkg)
+ 

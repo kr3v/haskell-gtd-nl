@@ -19,6 +19,7 @@ import qualified GTD.Cabal.Cache as CabalCache
 import qualified GTD.Cabal.Types as Cabal (Package (..), key)
 import qualified GTD.Resolution.Cache.Package as PackageCache
 import qualified GTD.Resolution.Cache.Resolution as ResolutionCache
+import qualified GTD.Resolution.Cache.Usages as UsagesCache
 import GTD.Resolution.Utils (reverseDependencies)
 import GTD.Server.Definition (cabalPackage, findAtF)
 import GTD.State (MS, cExports, cResolution)
@@ -59,6 +60,7 @@ dropPackageCache (DropCacheRequest {dcDir = d, dcFile = f}) = do
       PackageCache.remove cPkg
       ResolutionCache.remove cPkg
       CabalCache.dropCache cPkg
+      UsagesCache.remove cPkg
       cExports %= fst . LRU.delete (Cabal.key cPkg)
     cResolution %= LRU.newLRU . LRU.maxSize
     updateStatus ""

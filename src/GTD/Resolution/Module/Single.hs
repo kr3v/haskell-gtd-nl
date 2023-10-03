@@ -9,8 +9,6 @@ module GTD.Resolution.Module.Single (resolve, module'Dependencies, moduleR) wher
 import Control.Applicative (Applicative (liftA2))
 import Control.Monad (forM, forM_)
 import Control.Monad.Except (MonadError (..))
-import Control.Monad.Logger (MonadLoggerIO)
-import Control.Monad.RWS (MonadReader (ask))
 import Control.Monad.Trans.Except (runExceptT)
 import Data.Either (partitionEithers)
 import qualified Data.Set as Set
