@@ -17,6 +17,7 @@ import Control.Monad.RWS (gets)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.Cache.LRU as LRU
+import qualified Data.HashMap.Strict as HMap
 import Data.List (isPrefixOf, isSuffixOf)
 import qualified Data.Map as Map
 import Data.Maybe (isJust)
@@ -28,29 +29,29 @@ import GTD.Cabal.Types (PackageWithResolvedDependencies, PackageWithUnresolvedDe
 import qualified GTD.Cabal.Types as Cabal (Dependency, Designation (..), DesignationType (..), Package (..), PackageModules (..), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, key, pKey)
 import GTD.Haskell.Declaration (Declarations (..), SourceSpan (..))
 import GTD.Haskell.Module (HsModule (..), HsModuleMetadata (..), emptyHsModule, emptyMetadata)
-import qualified GTD.Resolution.Cache as PackageCache
+import qualified GTD.Resolution.Cache.Package as PackageCache
 import GTD.Resolution.Module.Utils (resolution'qualified, resolution'word)
 import GTD.Resolution.Package (package'resolution'withDependencies'forked)
 import GTD.Resolution.Types (Package (..))
 import GTD.State (Context (..), MS, cLocalPackages, cResolution)
-import GTD.Utils (logDebugNSS, peekM, stats, updateStatus, deduplicate)
+import GTD.Utils (deduplicate, logDebugNSS, peekM, stats, updateStatus)
 import System.FilePath (normalise, (</>))
 import Text.Printf (printf)
-import qualified Data.HashMap.Strict as HMap
+import qualified GTD.Resolution.Cache.Resolution as ResolutionCache
 
 package ::
   Cabal.PackageWithResolvedDependencies ->
   (MS m) => m (Maybe Package)
 package cPkg0 =
-  PackageCache.pGet cPkg0 >>= \case
+  PackageCache.get cPkg0 >>= \case
     Just p -> return $ Just p
     Nothing -> do
       package'resolution'withDependencies'forked cPkg0
-      PackageCache.pGet cPkg0
+      PackageCache.get cPkg0
 
 package_ :: Cabal.Package a -> (MS m) => m ()
 package_ cPkg0 =
-  PackageCache.pExists cPkg0 >>= \case
+  PackageCache.exists cPkg0 >>= \case
     True -> return ()
     False -> package'resolution'withDependencies'forked cPkg0
 
@@ -83,7 +84,7 @@ cabalPackage wd rf = do
           cPkgs = filter (any (`isPrefixOf` rf) . srcDirs) cPkgsU
       when (null cPkgs) $ throwError $ "cannot find a cabal 'item' with source directory that owns file " ++ rf
       forM_ cPkgs $ \cPkg -> do
-        e <- PackageCache.pExists cPkg
+        e <- PackageCache.exists cPkg
         unless e $ void $ package_ cPkg
       logDebugNSS "cabalPackage" $ printf "cPkgs = %s" (show $ Cabal.pKey . Cabal.key <$> cPkgs)
       return cPkgs
@@ -114,7 +115,8 @@ instance FromJSON DefinitionResponse
 
 resolution :: (MonadLoggerIO m, MonadError String m) => HMap.HashMap String Declarations -> String -> m [SourceSpan]
 resolution rm w =
-  mapMaybeM runMaybeT
+  mapMaybeM
+    runMaybeT
     [ resolution'qualified rm (w ++ "*"),
       resolution'qualified rm w,
       resolution'word rm w
@@ -139,7 +141,7 @@ definition (DefinitionRequest {workDir = wd, file = rf0, word = w}) = do
       Just x -> return x
       Nothing -> do
         let m = emptyHsModule {_metadata = emptyMetadata {_mPath = rf, _mPkgK = Cabal.key cPkg}}
-        r <- PackageCache.resolution'get m
+        r <- ResolutionCache.get m
         cResolution %= LRU.insert k r
         return r
 

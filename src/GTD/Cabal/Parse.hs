@@ -27,7 +27,7 @@ import Distribution.Pretty (prettyShow)
 import Distribution.Utils.Path (getSymbolicPath)
 import GTD.Cabal.Types (Dependency (..), Designation (Designation, _desName, _desType), DesignationType (..), Package (..), PackageModules (..), PackageWithUnresolvedDependencies, emptyPackageModules)
 import GTD.Configuration (Args (_logLevel), GTDConfiguration (..))
-import GTD.Resolution.Caching.Utils (binaryGet, binaryPut, pathAsFile)
+import GTD.Resolution.Cache.Utils (binaryGet, binaryPut, pathAsFile)
 import GTD.Utils (encodeWithTmp, logDebugNSS, removeIfExistsL)
 import System.FilePath (dropExtension, normalise, takeDirectory, (</>))
 

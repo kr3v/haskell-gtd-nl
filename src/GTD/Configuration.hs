@@ -2,22 +2,21 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE InstanceSigs #-}
-{-# HLINT ignore "Use newtype instead of data" #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 module GTD.Configuration where
 
 import Control.Concurrent (QSem, newQSem)
 import Control.Exception (IOException, catch)
-import Control.Lens (makeLenses, (^.))
+import Control.Lens (makeLenses, view, (^.))
 import Control.Monad (when)
+import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Logger (LogLevel (..), MonadLoggerIO)
-import Control.Monad.RWS (MonadReader)
+import Control.Monad.RWS (MonadReader (..))
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Aeson (FromJSON, ToJSON, Value, eitherDecodeStrict)
 import Data.Aeson.Types (FromJSON (..), ToJSON (..), Value (..))
@@ -195,3 +194,11 @@ prepareConstants a = do
   return constants
 
 type MS0 m = (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m)
+
+resetCache :: (MonadIO m, MonadReader GTDConfiguration m) => m ()
+resetCache = do
+  c <- ask
+  liftIO $ removeDirectoryRecursive (_cache c)
+  liftIO $ removeDirectoryRecursive (_cacheUsages c)
+  liftIO $ createDirectoryIfMissing True (_cache c)
+  liftIO $ createDirectoryIfMissing True (_cacheUsages c)

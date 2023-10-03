@@ -65,15 +65,14 @@ import qualified GTD.Cabal.Parse as Cabal (__read'packageDescription)
 import GTD.Cabal.Types (isMainLib)
 import qualified GTD.Cabal.Types as Cabal (Package (..), key, resolve)
 import GTD.Configuration (defaultArgs, prepareConstants, repos)
-import GTD.Haskell.Module (HsModule (..), emptyHsModule, emptyMetadata)
+import GTD.Haskell.Module (emptyHsModule, emptyMetadata)
 import qualified GTD.Haskell.Module as HsModule
 import GTD.Haskell.Parser.GhcLibParser (fakeSettings, parsePragmasIntoDynFlags, showO)
-import qualified GTD.Resolution.Cache as PackageCache
 import GTD.Resolution.Package (package'dependencies'ordered, package'order'default)
 import GTD.Server.Definition (cabalPackage, findAtF)
 import qualified GTD.Server.Definition as Server (resolution)
 import GTD.State (ccGet, emptyContext)
-import GTD.Utils (deduplicate, deduplicateBy, fromMaybeM, maybeM)
+import GTD.Utils (fromMaybeM, maybeM)
 import Options.Applicative (Parser, ParserInfo, auto, command, execParser, fullDesc, help, helper, info, long, metavar, option, progDesc, strOption, subparser, (<**>))
 import System.Directory (getCurrentDirectory, makeAbsolute, setCurrentDirectory)
 import System.FilePath (isRelative, (</>))
@@ -81,6 +80,7 @@ import System.IO (BufferMode (LineBuffering), hPrint, hSetBuffering, stderr, std
 import Text.Printf (printf)
 import GTD.Resolution.Module.Single (module'Dependencies)
 import GTD.Resolution.Module (orderedByDependencies)
+import qualified GTD.Resolution.Cache.Resolution as ResolutionCache
 
 showT2 :: (String, String) -> String
 showT2 (a, b) = "(" ++ a ++ "," ++ b ++ ")"
@@ -304,7 +304,7 @@ resolution pkg ident = do
     liftIO $ hPrint stderr $ Cabal.key cPkg
     liftIO $ hPrint stderr f
     let m = emptyHsModule {HsModule._metadata = emptyMetadata {HsModule._mPath = f, HsModule._mPkgK = Cabal.key cPkg}}
-    r <- fromMaybeM (throwError "for a given module in a given package, there's no 'resolution' cache") $ PackageCache.resolution'get m
+    r <- fromMaybeM (throwError "for a given module in a given package, there's no 'resolution' cache") $ ResolutionCache.get m
     w <- Server.resolution r ident
     liftIO $ print w
 

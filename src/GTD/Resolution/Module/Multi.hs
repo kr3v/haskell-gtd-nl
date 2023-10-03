@@ -12,6 +12,7 @@ import Control.Monad.State.Lazy (execStateT, modify)
 import Control.Monad.Trans.Writer (execWriterT)
 import qualified Data.ByteString.Char8 as BSW8
 import Data.Functor ((<&>))
+import qualified Data.HashMap.Strict as HMap
 import qualified Data.Map.Strict as Map
 import Data.Maybe (mapMaybe)
 import GTD.Cabal.Types (ModuleNameS)
@@ -19,22 +20,21 @@ import GTD.Configuration (GTDConfiguration)
 import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), IdentifierWithUsageLocation (..), Module (..), ModuleImportType (..), SourceSpan (..), SourceSpanFileName, asDeclsMap, emptySourceSpan)
 import GTD.Haskell.Module (HsModule (..), HsModuleData (..), HsModuleP (..), HsModuleParams (..), _name)
 import qualified GTD.Haskell.Module as HsModule
-import qualified GTD.Resolution.Cache as PackageCache
+import qualified GTD.Resolution.Cache.Resolution as ResolutionCache
 import GTD.Resolution.Module.Utils (resolution'simplify, resolution'word'parsed'b)
 import GTD.Utils (mapFrom)
-import qualified Data.HashMap.Strict as HMap
 
 resolution ::
   HMap.HashMap ModuleNameS HsModuleP ->
   HsModule ->
   (MonadLoggerIO m, MonadReader GTDConfiguration m) => m (HMap.HashMap ModuleNameS Declarations)
 resolution sM m = do
-  x <- runNoLoggingT $ PackageCache.resolution'get m
+  x <- runNoLoggingT $ ResolutionCache.get m
   case x of
     Just r -> return r
     Nothing -> do
       r <- resolution'direct sM m
-      PackageCache.resolution'put m r
+      ResolutionCache.put m r
       return r
 
 -- resolution'direct returns a map that allows 'resolving' 'words' for the given module

@@ -25,7 +25,8 @@ import qualified Data.Set as Set
 import qualified GTD.Cabal.Dependencies as CabalCache (full, fullS)
 import qualified GTD.Cabal.Types as Cabal (Designation (..), GetCache (_vs), Package (..), PackageModules (..), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, key, pKey)
 import GTD.Configuration (Args (..), GTDConfiguration (_args), Powers (..), args)
-import qualified GTD.Resolution.Cache as PackageCache
+import qualified GTD.Resolution.Cache.Package as PackageCache
+import qualified GTD.Resolution.Cache.Usages as UsagesCache
 import GTD.Resolution.Module (modules)
 import GTD.Resolution.Types (Package (..))
 import qualified GTD.Resolution.Types as Package
@@ -45,16 +46,16 @@ package'resolution'withMutator'direct ::
 package'resolution'withMutator'direct c cPkg = do
   let logTag = "package'resolution'withMutator'direct " ++ show (Cabal.pKey . Cabal.key $ cPkg)
 
-  (depsC, m) <- bimap catMaybes (foldr (.) id) <$> mapAndUnzipM (PackageCache.get c <==< CabalCache.full c) (Cabal._dependencies cPkg)
+  (depsC, m) <- bimap catMaybes (foldr (.) id) <$> mapAndUnzipM (PackageCache.getS c <==< CabalCache.full c) (Cabal._dependencies cPkg)
   let deps = foldr (<>) HMap.empty $ Package._exports <$> depsC
 
   pkgE <- modules $ Package {_cabalPackage = cPkg, Package._modules = deps, Package._exports = HMap.empty, Package._usages = HMap.empty}
   let reexports = restrictKeys deps $ Cabal._reExports . Cabal._modules $ cPkg
   let pkg = pkgE {Package._exports = Package._exports pkgE <> reexports}
-  PackageCache.pStore cPkg pkg
+  PackageCache.put cPkg pkg
 
   e <- asks $ _goToReferences_isEnabled . _powers . _args
-  when e $ PackageCache.pStoreU cPkg pkg
+  when e $ UsagesCache.put cPkg pkg
 
   logDebugNSS logTag $
     printf
@@ -74,7 +75,7 @@ package'resolution'withMutator ::
   Cabal.PackageWithResolvedDependencies ->
   (MS0 m) => m (Context -> Context)
 package'resolution'withMutator c cPkg = do
-  (pkgM, f) <- PackageCache.get c cPkg
+  (pkgM, f) <- PackageCache.getS c cPkg
   case pkgM of
     Just _ -> return f
     Nothing -> package'resolution'withMutator'direct c cPkg
@@ -88,7 +89,7 @@ package'resolution cPkg = do
   modify m
 
 package'order'ignoringAlreadyCached :: Cabal.PackageWithUnresolvedDependencies -> (MS m) => m (Maybe Cabal.PackageWithResolvedDependencies)
-package'order'ignoringAlreadyCached cPkg = do b <- PackageCache.pExists cPkg; if b then return Nothing else package'order'default cPkg
+package'order'ignoringAlreadyCached cPkg = do b <- PackageCache.exists cPkg; if b then return Nothing else package'order'default cPkg
 
 package'order'default :: Cabal.PackageWithUnresolvedDependencies -> (MS m) => m (Maybe Cabal.PackageWithResolvedDependencies)
 package'order'default = (Just <$>) . CabalCache.fullS

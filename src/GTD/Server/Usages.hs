@@ -5,7 +5,7 @@
 
 module GTD.Server.Usages where
 
-import Control.Monad (forM_, join, unless)
+import Control.Monad (forM_, unless)
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.RWS (asks)
@@ -15,12 +15,12 @@ import qualified Data.HashMap.Strict as HMap
 import Data.List (isPrefixOf, stripPrefix)
 import Data.Maybe (listToMaybe, mapMaybe)
 import GHC.Generics (Generic)
-import qualified GTD.Cabal as CabalCache
+import qualified GTD.Cabal.FindAt as CabalCache (findAt)
 import qualified GTD.Cabal.Types as Cabal (key, pKey)
 import GTD.Configuration (Args (_powers), GTDConfiguration (..), Powers (_goToReferences_isEnabled, _goToReferences_limit))
 import GTD.Haskell.Declaration (SourceSpan (..))
-import GTD.Resolution.Cache (pGetU)
-import GTD.Server (DefinitionRequest (DefinitionRequest), cabalPackage, definition)
+import qualified GTD.Resolution.Cache.Usages as UsagesCache
+import GTD.Server.Definition (DefinitionRequest (DefinitionRequest), cabalPackage, definition)
 import qualified GTD.Server.Definition as Definition (DefinitionRequest (..), err, srcSpan)
 import GTD.State (MS)
 import GTD.Utils (concatForM, deduplicate, logDebugNSS, stats, updateStatus)
@@ -58,7 +58,7 @@ usages (Request {origWorkDir = owd, workDir = wd, file = rf0, word = w}) = do
   let rf = normalise rf0
   let logTag = printf "usages: %s @ %s / %s" w rf wd
 
-  r <- definition $ DefinitionRequest {Definition.origWorkDir=owd, Definition.workDir = wd, Definition.file = rf, Definition.word = w}
+  r <- definition $ DefinitionRequest {Definition.origWorkDir = owd, Definition.workDir = wd, Definition.file = rf, Definition.word = w}
   forM_ (Definition.err r) throwError
   loc <- case Definition.srcSpan r of
     [] -> throwError $ printf "no definition found for %s" w
@@ -82,7 +82,7 @@ usages (Request {origWorkDir = owd, workDir = wd, file = rf0, word = w}) = do
     let f = BSC8.unpack $ sourceSpanFileName loc
     concatForM (listToMaybe cpkgsD) $ \cpkgD -> do
       logDebugNSS logTag $ printf "pkg: %s" (show $ Cabal.pKey . Cabal.key $ cpkgD)
-      mapMaybe (HMap.lookup loc) <$> pGetU cpkgsO cpkgD f
+      mapMaybe (HMap.lookup loc) <$> UsagesCache.get cpkgsO cpkgD f
   liftIO stats
   updateStatus ""
 

@@ -112,16 +112,18 @@ library
         GTD.Haskell.Lines
         GTD.Haskell.Module
         GTD.Haskell.Parser.GhcLibParser
-        GTD.Resolution.Cache
-        GTD.Resolution.Caching.Utils
+        GTD.ParserExe
+        GTD.Resolution.Cache.Package
+        GTD.Resolution.Cache.Resolution
+        GTD.Resolution.Cache.Usages
+        GTD.Resolution.Cache.Utils
         GTD.Resolution.Module
-        GTD.Resolution.Module.Single
         GTD.Resolution.Module.Multi
+        GTD.Resolution.Module.Single
         GTD.Resolution.Module.Utils
         GTD.Resolution.Package
         GTD.Resolution.Types
         GTD.Resolution.Utils
-        GTD.ParserExe
         GTD.Server
         GTD.Server.Cpphs
         GTD.Server.Definition

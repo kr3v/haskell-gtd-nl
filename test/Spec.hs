@@ -37,13 +37,12 @@ import GHC.Generics (Generic)
 import GTD.Cabal.Cache as Cabal (load, store)
 import GTD.Cabal.Types (Dependency, PackageModules, PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, Version, transformPaths, transformPathsR)
 import qualified GTD.Cabal.Types as Cabal
-import GTD.Configuration (Args (..), GTDConfiguration (..), Powers (..), defaultArgs, logLevel, prepareConstants)
+import GTD.Configuration (Args (..), GTDConfiguration (..), Powers (..), defaultArgs, logLevel, prepareConstants, resetCache)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (Declarations (..), Exports, Imports, SourceSpan (SourceSpan, sourceSpanEndColumn, sourceSpanEndLine, sourceSpanFileName, sourceSpanStartColumn, sourceSpanStartLine), emptySourceSpan)
 import GTD.Haskell.Lines (Line (..), buildMap, resolve)
 import GTD.Haskell.Module (HsModule (..), HsModuleMetadata (_mPath), HsModuleP (..), emptyMetadata, parseModule)
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
-import qualified GTD.Resolution.Cache as PackageCache
 import GTD.Resolution.Module (ModuleState (..), figureOutExports, figureOutExports'old)
 import GTD.Server (DefinitionRequest (..), DefinitionResponse (..), DropPackageCacheRequest (..), cabalPackage, cabalPackage'contextWithLocals, cabalPackage'resolve, cabalPackage'unresolved'plusStoreInLocals, definition, dropPackageCache)
 import GTD.Server.Usages (usages)
@@ -56,6 +55,7 @@ import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
 import Test.Hspec (Expectation, Spec, describe, expectationFailure, it, runIO, shouldBe)
 import Test.Hspec.Runner (Config (configPrintCpuTime), defaultConfig, hspecWith)
 import Text.Printf (printf)
+import qualified GTD.Resolution.Cache.Package as PackageCache
 
 haskellApplyCppHsTest :: GTDConfiguration -> Spec
 haskellApplyCppHsTest consts = do
@@ -602,32 +602,32 @@ dropCacheTest consts = do
             =<< cabalPackage wdT mainF
         cpkgL <- head <$> cabalPackage wdT libF
 
-        PackageCache.pExists cpkgM >>= tell . (`shouldBe` True)
-        PackageCache.pExists cpkgL >>= tell . (`shouldBe` True)
+        PackageCache.exists cpkgM >>= tell . (`shouldBe` True)
+        PackageCache.exists cpkgL >>= tell . (`shouldBe` True)
 
         _ <- dropPackageCache DropCacheRequest {dcDir = wdT, dcFile = mainF}
-        PackageCache.pExists cpkgM >>= tell . (`shouldBe` False)
-        PackageCache.pExists cpkgL >>= tell . (`shouldBe` True)
+        PackageCache.exists cpkgM >>= tell . (`shouldBe` False)
+        PackageCache.exists cpkgL >>= tell . (`shouldBe` True)
 
         _ <- dropPackageCache DropCacheRequest {dcDir = wdT, dcFile = libF}
-        PackageCache.pExists cpkgM >>= tell . (`shouldBe` False)
-        PackageCache.pExists cpkgL >>= tell . (`shouldBe` False)
+        PackageCache.exists cpkgM >>= tell . (`shouldBe` False)
+        PackageCache.exists cpkgL >>= tell . (`shouldBe` False)
 
         _ <- definition reqL
-        PackageCache.pExists cpkgM >>= tell . (`shouldBe` False)
-        PackageCache.pExists cpkgL >>= tell . (`shouldBe` True)
+        PackageCache.exists cpkgM >>= tell . (`shouldBe` False)
+        PackageCache.exists cpkgL >>= tell . (`shouldBe` True)
 
         _ <- dropPackageCache DropCacheRequest {dcDir = wdT, dcFile = libF}
-        PackageCache.pExists cpkgM >>= tell . (`shouldBe` False)
-        PackageCache.pExists cpkgL >>= tell . (`shouldBe` False)
+        PackageCache.exists cpkgM >>= tell . (`shouldBe` False)
+        PackageCache.exists cpkgL >>= tell . (`shouldBe` False)
 
         _ <- definition reqM
-        PackageCache.pExists cpkgM >>= tell . (`shouldBe` True)
-        PackageCache.pExists cpkgL >>= tell . (`shouldBe` True)
+        PackageCache.exists cpkgM >>= tell . (`shouldBe` True)
+        PackageCache.exists cpkgL >>= tell . (`shouldBe` True)
 
         _ <- dropPackageCache DropCacheRequest {dcDir = wdT, dcFile = libF}
-        PackageCache.pExists cpkgM >>= tell . (`shouldBe` False)
-        PackageCache.pExists cpkgL >>= tell . (`shouldBe` False)
+        PackageCache.exists cpkgM >>= tell . (`shouldBe` False)
+        PackageCache.exists cpkgL >>= tell . (`shouldBe` False)
 
       either (expectationFailure . show) id x
 
@@ -641,6 +641,7 @@ usagesTest consts0 = do
                   _powers = (_powers . _args $ consts0) {_goToReferences_limit = 3, _goToReferences_isEnabled = True}
                 }
           }
+  runIO $ runReaderT resetCache consts
   pwd <- runIO getCurrentDirectory
 
   let descr = "usages"
@@ -701,10 +702,7 @@ main = do
   hSetBuffering stderr LineBuffering
 
   c <- prepareConstants . set logLevel LevelDebug =<< defaultArgs
-  removeDirectoryRecursive $ _cache c
-  removeDirectoryRecursive $ _cacheUsages c
-  createDirectoryIfMissing True (_cache $ c)
-  createDirectoryIfMissing True (_cacheUsages $ c)
+  runReaderT resetCache c
 
   hspecWith defaultConfig {configPrintCpuTime = False} $ do
     haskellApplyCppHsTest c
