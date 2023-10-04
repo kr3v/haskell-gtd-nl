@@ -22,6 +22,7 @@ import Data.Proxy (Proxy (..))
 import GHC.TypeLits (KnownSymbol)
 import qualified GTD.Cabal.Cache as CabalCache
 import GTD.Configuration (Args (..), GTDConfiguration (..), argsP, prepareConstants)
+import qualified GTD.Server.CodeLens.LocalUsages as LocalUsages
 import GTD.Server.Cpphs (CpphsRequest, CpphsResponse (..), cpphs)
 import GTD.Server.Definition (DefinitionRequest (..), DefinitionResponse (..), definition)
 import GTD.Server.DropPackageCache (DropPackageCacheRequest, dropPackageCache)
@@ -68,6 +69,9 @@ type API =
     :<|> "usages"
       :> ReqBody '[JSON] Usages.Request
       :> Post '[JSON] Usages.Response
+    :<|> "usagelenses"
+      :> ReqBody '[JSON] LocalUsages.Request
+      :> Post '[JSON] LocalUsages.Response
 
 api :: Proxy API
 api = Proxy
@@ -103,7 +107,7 @@ h n c m respP1 respP2 req = do
 ---
 
 definitionH ::
-  KnownSymbol hs =>
+  (KnownSymbol hs) =>
   GTDConfiguration ->
   MVar ServerState ->
   DefinitionRequest ->
@@ -143,6 +147,15 @@ usagesH ::
 usagesH c m req = do
   let defH = either (\e -> Usages.Response {Usages.err = Just e, Usages.srcSpan = []}) id
   liftIO $ h "usages" c m Usages.usages (\_ e -> defH e) req
+
+localUsagesH ::
+  GTDConfiguration ->
+  MVar ServerState ->
+  LocalUsages.Request ->
+  Handler LocalUsages.Response
+localUsagesH c m req = do
+  let defH = either (\e -> LocalUsages.Response {LocalUsages.err = Just e, LocalUsages.srcSpan = []}) id
+  liftIO $ h "localUsages" c m LocalUsages.usages (\_ e -> defH e) req
 
 ---
 
@@ -196,4 +209,9 @@ main = withSocketsDo $ do
   _ <- forkIO $ selfKiller s (_ttl as)
   runSettingsSocket defaultSettings sock $
     serve api $
-      definitionH constants s :<|> pingH s :<|> dropCacheH constants s :<|> runCpphsH constants s :<|> usagesH constants s
+      definitionH constants s
+        :<|> pingH s
+        :<|> dropCacheH constants s
+        :<|> runCpphsH constants s
+        :<|> usagesH constants s
+        :<|> localUsagesH constants s

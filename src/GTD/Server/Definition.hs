@@ -68,7 +68,7 @@ cabalPackage'contextWithLocals cPkgsU = do
   l <- use cLocalPackages
   logDebugNSS "cabalPackage'contextWithLocals" $ printf "cLocalPackages = %s" (show ((\(k, vs) -> (\(v, p) -> (k, v, Cabal._designation p)) <$> Map.toList vs) <$> Map.toList l))
 
-cabalPackage'resolve :: (MS m) => [Cabal.Package Cabal.Dependency] -> m [PackageWithResolvedDependencies]
+cabalPackage'resolve :: (MS m) => [PackageWithUnresolvedDependencies] -> m [PackageWithResolvedDependencies]
 cabalPackage'resolve = mapM Cabal.fullS
 
 findAtF :: FilePath -> (MS m, MonadError String m) => m [PackageWithResolvedDependencies]

@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
 module GTD.Utils where
@@ -37,7 +38,7 @@ import System.IO.Error (isDoesNotExistError)
 import System.Random (randomIO)
 import Text.Printf (printf)
 
-maybeToMaybeT :: Monad m => Maybe a -> MaybeT m a
+maybeToMaybeT :: (Monad m) => Maybe a -> MaybeT m a
 maybeToMaybeT = MaybeT . return
 
 ultraZoom :: (MonadState s m) => Lens' s a -> StateT a m b -> m b
@@ -59,7 +60,7 @@ modifyEachM l f = do
   tb <- traverse f ta
   l .= tb
 
-logDebugNSS :: MonadLoggerIO m => String -> String -> m ()
+logDebugNSS :: (MonadLoggerIO m) => String -> String -> m ()
 logDebugNSS a b = do
   now <- liftIO getCurrentTime
   threadID <- liftIO myThreadId
@@ -71,25 +72,25 @@ logDebugNSS' a b = do
   threadID <- liftIO myThreadId
   logDebugNS (T.pack a) (T.pack $ printf "%s (thread id=%s): %s" (iso8601Show now) (show threadID) b)
 
-logErrorNSS :: MonadLoggerIO m => String -> String -> m ()
+logErrorNSS :: (MonadLoggerIO m) => String -> String -> m ()
 logErrorNSS a b = do
   now <- liftIO getCurrentTime
   threadID <- liftIO myThreadId
   logErrorNS (T.pack a) (T.pack $ printf "%s (thread id=%s): %s" (iso8601Show now) (show threadID) b)
 
-tryE :: Monad m => ExceptT e m a -> ExceptT e m (Either e a)
+tryE :: (Monad m) => ExceptT e m a -> ExceptT e m (Either e a)
 tryE m = catchE (fmap Right m) (return . Left)
 
-mapFrom :: Ord k => (a -> k) -> [a] -> Map.Map k a
+mapFrom :: (Ord k) => (a -> k) -> [a] -> Map.Map k a
 mapFrom f xs = Map.fromList $ (\x -> (f x, x)) <$> xs
 
-mapDFrom :: Ord k => (a -> k) -> [a] -> Map.Map k [a]
+mapDFrom :: (Ord k) => (a -> k) -> [a] -> Map.Map k [a]
 mapDFrom f xs = foldr (Map.unionWith (<>)) Map.empty $ uncurry Map.singleton . (\x -> (f x, [x])) <$> xs
 
-deduplicateBy :: Ord k => (a -> k) -> [a] -> [a]
+deduplicateBy :: (Ord k) => (a -> k) -> [a] -> [a]
 deduplicateBy f xs = Map.elems $ Map.fromList $ (\x -> (f x, x)) <$> xs
 
-deduplicate :: Ord k => [k] -> [k]
+deduplicate :: (Ord k) => [k] -> [k]
 deduplicate = deduplicateBy id
 
 withExceptT :: (Functor m) => (e -> e') -> ExceptT e m a -> ExceptT e' m a
@@ -98,7 +99,7 @@ withExceptT f = mapExceptT $ fmap $ either (Left . f) Right
 flipTuple :: (a, b) -> (b, a)
 flipTuple (a, b) = (b, a)
 
-peekM :: Monad m => (a -> m b) -> m a -> m a
+peekM :: (Monad m) => (a -> m b) -> m a -> m a
 peekM a m = do
   r <- m
   _ <- a r
@@ -165,21 +166,25 @@ storeIOExceptionToMonadError a = do
     Right x -> return x
 
 -- | Monadic generalization of 'maybe'.
-maybeM :: Monad m => m b -> (a -> m b) -> m (Maybe a) -> m b
+maybeM :: (Monad m) => m b -> (a -> m b) -> m (Maybe a) -> m b
 maybeM n j x = maybe n j =<< x
 
 -- | Monadic generalization of 'fromMaybe'.
-fromMaybeM :: Monad m => m a -> m (Maybe a) -> m a
+fromMaybeM :: (Monad m) => m a -> m (Maybe a) -> m a
 fromMaybeM n = maybeM n pure
 
-(>==>) :: Monad m => (a -> m (b, s -> s)) -> (b -> m (c, s -> s)) -> (a -> m (c, s -> s))
+(>==>) :: (Monad m) => (a -> m (b, s -> s)) -> (b -> m (c, s -> s)) -> (a -> m (c, s -> s))
 f >==> g = \x -> do
   (y, m1) <- f x
   (z, m2) <- g y
   return (z, m2 . m1)
 
-(<==<) :: Monad m => (b -> m (c, s -> s)) -> (a -> m (b, s -> s)) -> (a -> m (c, s -> s))
+(<==<) :: (Monad m) => (b -> m (c, s -> s)) -> (a -> m (b, s -> s)) -> (a -> m (c, s -> s))
 (<==<) = flip (>==>)
+
+type family TupleList m where
+  TupleList (Map.Map a b) = [(a, b)]
+  TupleList (HMap.HashMap a b) = [(a, b)]
 
 ---
 
@@ -198,7 +203,7 @@ statusS = "status.log"
 statusL :: FilePath -> LogF
 statusL p a b c d = encodeWithTmp BS.writeFile p $ BS.drop 3 $ fromLogStr $ defaultLogStr a b c d
 
-updateStatus :: String -> MonadLogger m => m ()
+updateStatus :: String -> (MonadLogger m) => m ()
 updateStatus s = logOtherNS (T.pack statusS) (LevelOther $ T.pack "") (T.pack s)
 
 logOutput :: MVar Handle -> Loc -> LogSource -> LogLevel -> LogStr -> IO ()
@@ -214,7 +219,7 @@ withLogging logP logS ll action = withFile logP AppendMode $ \h -> do
     filterLogger (\_ l -> l >= ll) $ do
       action
 
-restrictKeys :: Ord k => HMap.HashMap k v -> Set.Set k -> HMap.HashMap k v
+restrictKeys :: (Ord k) => HMap.HashMap k v -> Set.Set k -> HMap.HashMap k v
 restrictKeys s m = HMap.filterWithKey (\k _ -> k `Set.member` m) s
 
 ---

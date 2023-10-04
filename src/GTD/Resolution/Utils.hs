@@ -12,7 +12,7 @@ import Control.Concurrent.MVar.Lifted
 import Control.Lens (makeLenses, use, (%=), (.=))
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (MonadState (get))
-import Control.Monad (mapAndUnzipM, when)
+import Control.Monad (when)
 import Control.Monad.State (MonadIO (..), MonadTrans (..), StateT, evalStateT, execStateT, gets)
 import Control.Monad.Trans.Control (MonadBaseControl (..))
 import qualified Data.Graph as Graph

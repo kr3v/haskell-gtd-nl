@@ -4,7 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module GTD.Resolution.Cache.Usages (get, put, remove) where
+module GTD.Resolution.Cache.Usages (get, getAll, put, remove) where
 
 import Control.Monad (forM, forM_)
 import Control.Monad.IO.Class (MonadIO (..))
@@ -17,7 +17,7 @@ import qualified Data.Set as Set
 import GHC.Utils.Monad (mapMaybeM)
 import qualified GTD.Cabal.Types as Cabal (Package (..), key, pKey)
 import GTD.Configuration (GTDConfiguration (..), MS0)
-import GTD.Resolution.Cache.Utils (pathAsFile, binaryPut, binaryGet)
+import GTD.Resolution.Cache.Utils (binaryGet, binaryPut, pathAsFile)
 import GTD.Resolution.Types (Package (..), UsagesInFileMap)
 import GTD.Utils (logDebugNSS, removeIfExists)
 import System.Directory (createDirectoryIfMissing, listDirectory)
@@ -77,6 +77,17 @@ get cpkgsO cPkg f0 = do
     let p = d </> f1
     binaryGet p
 
+getAll ::
+  Cabal.Package a ->
+  FilePath ->
+  (MS0 m) => m [UsagesInFileMap]
+getAll cPkg f0 = do
+  (d, f) <- __dir'file cPkg f0
+  fs :: [FilePath] <- filter (f `isPrefixOf`) <$> liftIO (listDirectory d)
+  flip mapMaybeM fs $ \f1 -> do
+    let p = d </> f1
+    binaryGet p
+
 put ::
   Cabal.Package a ->
   Package ->
@@ -96,9 +107,8 @@ remove ::
   Cabal.Package a ->
   (MS0 m) => m ()
 remove cPkg = do
+  logDebugNSS "pRemoveU" $ printf "%s" (show $ Cabal.key cPkg)
   d <- __dir'refs cPkg
   ps <- fromMaybe [] <$> binaryGet d
   liftIO $ forM_ ps removeIfExists
   liftIO $ removeIfExists d
-  logDebugNSS "pRemoveU" $ printf "%s" (show $ Cabal.key cPkg)
- 

@@ -124,7 +124,7 @@ library
         GTD.Resolution.Package
         GTD.Resolution.Types
         GTD.Resolution.Utils
-        GTD.Server
+        GTD.Server.CodeLens.LocalUsages
         GTD.Server.Cpphs
         GTD.Server.Definition
         GTD.Server.DropPackageCache
