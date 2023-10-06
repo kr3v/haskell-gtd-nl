@@ -11,21 +11,21 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.RWS (asks)
 import Data.Aeson (FromJSON, ToJSON)
 import qualified Data.ByteString.Char8 as BSC8
-import qualified Data.HashMap.Strict as HMap
 import Data.List (isPrefixOf, stripPrefix)
-import Data.Maybe (listToMaybe, mapMaybe)
+import Data.Maybe (listToMaybe)
 import GHC.Generics (Generic)
 import qualified GTD.Cabal.FindAt as CabalCache (findAt)
 import qualified GTD.Cabal.Types as Cabal (key, pKey)
-import GTD.Configuration (Args (_powers), GTDConfiguration (..), Powers (_goToReferences_isEnabled, _goToReferences_limit))
+import GTD.Configuration (Args (_powers), GTDConfiguration (..), Powers (..))
 import GTD.Haskell.Declaration (SourceSpan (..))
 import qualified GTD.Resolution.Cache.Usages as UsagesCache
-import GTD.Server.Definition (DefinitionRequest (DefinitionRequest), cabalPackage, definition)
+import GTD.Server.Definition (DefinitionRequest (DefinitionRequest), cabalPackage, definition, package_, cabalPackage'unresolved'plusStoreInLocals)
 import qualified GTD.Server.Definition as Definition (DefinitionRequest (..), err, srcSpan)
 import GTD.State (MS)
 import GTD.Utils (concatForM, deduplicate, logDebugNSS, stats, updateStatus)
 import System.FilePath (normalise, splitDirectories, (</>))
 import Text.Printf (printf)
+import GTD.Server.Utils (x)
 
 data Request = Request
   { origWorkDir :: FilePath,
@@ -51,9 +51,9 @@ instance ToJSON Response
 
 usages :: Request -> (MS m, MonadError String m) => m Response
 usages (Request {origWorkDir = owd, workDir = wd, file = rf0, word = w}) = do
-  e <- asks $ _goToReferences_isEnabled . _powers . _args
-  unless e $ throwError "Go to References is not enabled"
-  lim <- asks $ _goToReferences_limit . _powers . _args
+  p <- asks $ _powers . _args
+  unless (_goToReferences_isEnabled p) $ throwError "Go to References is not enabled"
+  let lim = _goToReferences_limit p
 
   let rf = normalise rf0
   let logTag = printf "usages: %s @ %s / %s" w rf wd
@@ -75,14 +75,14 @@ usages (Request {origWorkDir = owd, workDir = wd, file = rf0, word = w}) = do
         else return wd
   logDebugNSS logTag $ printf "rs=%s, locP=%s, wdD=%s" (show rs) (show locP) wdD
   cpkgsD <- cabalPackage wdD (BSC8.unpack $ sourceSpanFileName loc)
-  cpkgsO <- CabalCache.findAt owd
+  cpkgsO <- cabalPackage'unresolved'plusStoreInLocals owd
+  forM_ cpkgsO package_
 
-  ss <- fmap concat $ do
-    logDebugNSS logTag $ printf "loc: %s" (show loc)
-    let f = BSC8.unpack $ sourceSpanFileName loc
-    concatForM (listToMaybe cpkgsD) $ \cpkgD -> do
-      logDebugNSS logTag $ printf "pkg: %s" (show $ Cabal.pKey . Cabal.key $ cpkgD)
-      mapMaybe (HMap.lookup loc) <$> UsagesCache.get cpkgsO cpkgD f
+  logDebugNSS logTag $ printf "loc: %s" (show loc)
+  let f = BSC8.unpack $ sourceSpanFileName loc
+  ss <- concatForM (listToMaybe cpkgsD) $ \cpkgD -> do
+    logDebugNSS logTag $ printf "pkg: %s" (show $ Cabal.pKey . Cabal.key $ cpkgD)
+    concatMap (x p loc) <$> UsagesCache.get cpkgsO cpkgD f
   liftIO stats
   updateStatus ""
 

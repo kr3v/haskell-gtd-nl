@@ -37,6 +37,7 @@ import System.IO (BufferMode (..), Handle, IOMode (..), hSetBuffering, withFile)
 import System.IO.Error (isDoesNotExistError)
 import System.Random (randomIO)
 import Text.Printf (printf)
+import Data.Hashable (Hashable)
 
 maybeToMaybeT :: (Monad m) => Maybe a -> MaybeT m a
 maybeToMaybeT = MaybeT . return
@@ -85,7 +86,10 @@ mapFrom :: (Ord k) => (a -> k) -> [a] -> Map.Map k a
 mapFrom f xs = Map.fromList $ (\x -> (f x, x)) <$> xs
 
 mapDFrom :: (Ord k) => (a -> k) -> [a] -> Map.Map k [a]
-mapDFrom f xs = foldr (Map.unionWith (<>)) Map.empty $ uncurry Map.singleton . (\x -> (f x, [x])) <$> xs
+mapDFrom f = foldr (Map.unionWith (<>) . uncurry Map.singleton . (\x -> (f x, [x]))) Map.empty
+
+mapHDFrom :: (Hashable k) => (a -> k) -> [a] -> HMap.HashMap k [a]
+mapHDFrom f = foldr (HMap.unionWith (<>) . uncurry HMap.singleton . (\x -> (f x, [x]))) HMap.empty
 
 deduplicateBy :: (Ord k) => (a -> k) -> [a] -> [a]
 deduplicateBy f xs = Map.elems $ Map.fromList $ (\x -> (f x, x)) <$> xs

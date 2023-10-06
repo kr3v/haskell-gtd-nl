@@ -18,7 +18,7 @@ import Control.DeepSeq (NFData)
 import Control.Lens (Each (..), makeLenses, (%=))
 import Control.Monad.RWS (MonadState, MonadTrans (lift))
 import Control.Monad.State (execStateT)
-import Data.Aeson (FromJSON (..), ToJSON (..), Value)
+import Data.Aeson (FromJSON (..), FromJSONKey (..), FromJSONKeyFunction (..), ToJSON (..), ToJSONKey, Value)
 import Data.Aeson.Types (Parser, Value (..))
 import Data.Binary (Binary)
 import qualified Data.Binary as Binary
@@ -59,6 +59,10 @@ instance FromJSON SourceSpanFileName where
 instance ToJSON SourceSpanFileName where
   toJSON :: SourceSpanFileName -> Value
   toJSON = toJSON . BSW8.unpack
+
+instance FromJSONKey SourceSpanFileName
+
+instance ToJSONKey SourceSpanFileName
 
 instance ToJSON SourceSpan
 
@@ -143,7 +147,7 @@ asDeclsMap ds = Map.fromList $ (\d -> (_declName d, d)) <$> ds
 asDeclsHMap :: [Declaration] -> HMap.HashMap Identifier Declaration
 asDeclsHMap ds = HMap.fromList $ (\d -> (_declName d, d)) <$> ds
 
-declarationsT :: Monad m => (Declaration -> Declaration) -> Declarations -> m Declarations
+declarationsT :: (Monad m) => (Declaration -> Declaration) -> Declarations -> m Declarations
 declarationsT d = execStateT (declarationsTS d)
 
 declarationsTS :: (Declaration -> Declaration) -> (MonadState Declarations m) => m ()
@@ -225,9 +229,22 @@ allImportedModules = fmap _mName
 
 ---
 
+data UsageType = Regular | Import | Export | UDeclaration deriving (Ord, Hashable, Enum, Eq, Show, Generic, NFData)
+
+instance FromJSON UsageType
+
+instance ToJSON UsageType
+
+instance ToJSONKey UsageType
+
+instance FromJSONKey UsageType
+
+instance Binary UsageType
+
 data IdentifierWithUsageLocation = IdentifierUsage
   { _iuModule :: String,
     _iuName :: String,
+    _iuType :: UsageType,
     _iuSourceSpan :: SourceSpan
   }
   deriving (NFData, Show, Eq, Generic)

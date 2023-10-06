@@ -13,6 +13,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
 module GTD.Cabal.Types where
 
@@ -33,16 +34,17 @@ import Distribution.Types.VersionRange (VersionRange)
 import qualified Distribution.Version as Cabal
 import System.Directory (doesFileExist)
 import System.FilePath ((</>))
+import Control.DeepSeq (NFData)
 
 type PackageNameS = String
 
 type ModuleNameS = String
 
 data DesignationType = Library | Executable | TestSuite | Benchmark
-  deriving (Eq, Ord, Read, Show, Generic)
+  deriving (NFData, Eq, Ord, Read, Show, Generic)
 
 data Designation = Designation {_desName :: Maybe String, _desType :: DesignationType}
-  deriving (Eq, Ord, Show, Read, Generic)
+  deriving (NFData, Eq, Ord, Show, Read, Generic)
 
 instance FromJSON Designation
 
@@ -148,7 +150,7 @@ data PackageKey = PackageKey
     _pkVersion :: String,
     _pkDesignation :: Designation
   }
-  deriving (Show, Eq, Ord, Generic)
+  deriving (NFData, Show, Eq, Ord, Generic)
 
 instance Binary PackageKey
 

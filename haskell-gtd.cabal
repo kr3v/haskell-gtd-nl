@@ -120,6 +120,7 @@ library
         GTD.Resolution.Module
         GTD.Resolution.Module.Multi
         GTD.Resolution.Module.Single
+        GTD.Resolution.Module.Types
         GTD.Resolution.Module.Utils
         GTD.Resolution.Package
         GTD.Resolution.Types
@@ -129,6 +130,7 @@ library
         GTD.Server.Definition
         GTD.Server.DropPackageCache
         GTD.Server.Usages
+        GTD.Server.Utils
         GTD.State
         GTD.Utils
         GTD.Utils.OS.Memory

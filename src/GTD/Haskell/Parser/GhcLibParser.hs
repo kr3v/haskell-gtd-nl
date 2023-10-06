@@ -15,9 +15,9 @@ import Control.Monad.Writer (MonadWriter (..))
 import qualified Data.ByteString.Char8 as BSW8
 import Data.Either (fromRight)
 import Data.Foldable (Foldable (..))
-import Data.Generics (listify)
+import Data.Generics (everythingWithContext)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (fromMaybe, mapMaybe)
+import Data.Maybe (fromMaybe, mapMaybe, catMaybes, listToMaybe)
 import GHC.Data.FastString (mkFastString, unpackFS)
 import GHC.Data.StringBuffer (stringToStringBuffer)
 import GHC.Driver.Config.Parser (initParserOpts)
@@ -37,12 +37,13 @@ import GHC.Types.SrcLoc (GenLocated (..), RealSrcSpan (srcSpanFile), SrcSpan (..
 import qualified GHC.Unit.Types as GenModule
 import GHC.Utils.Outputable (Outputable (..), SDocContext (..), defaultSDocContext, renderWithContext)
 import GTD.Cabal.Types (ModuleNameS)
-import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Exports, IdentifierWithUsageLocation (..), Imports, Module (..), SourceSpan (..), asDeclsMap, emptySourceSpan)
+import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Exports, IdentifierWithUsageLocation (..), Imports, Module (..), SourceSpan (..), asDeclsMap, emptySourceSpan, UsageType (..))
 import qualified GTD.Haskell.Declaration as Declarations
 import GTD.Utils (logDebugNSS)
 import Text.Printf (printf)
+import Data.Typeable (cast)
 
-showO :: Outputable a => a -> String
+showO :: (Outputable a) => a -> String
 showO = renderWithContext defaultSDocContext {sdocErrorSpans = True} . ppr
 
 ---
@@ -233,13 +234,18 @@ imports (HsModuleX HsModule {hsmodImports = is} ps) = do
 
 identifierUsages :: HsModuleX -> [IdentifierWithUsageLocation]
 identifierUsages (HsModuleX m@HsModule {} _) = do
-  let c :: HsModule GhcPs -> [GenLocated SrcSpanAnnN RdrName]
-      c = listify $ \(_ :: GenLocated l RdrName) -> True
+  let c :: HsModule GhcPs -> [(UsageType, GenLocated SrcSpanAnnN RdrName)]
+      c = everythingWithContext Regular (<>) $ \a s -> do
+        let c1 = (\(b :: GenLocated SrcSpanAnnN RdrName) -> ([(s, b)], s)) <$> cast a
+        let c2 = (\(_ :: IE GhcPs) -> ([], if s == Regular then Export else s)) <$> cast a
+        let c3 = (\(_ :: ImportDecl GhcPs) -> ([], if s == Regular then Import else s)) <$> cast a
+
+        fromMaybe ([], s) $ listToMaybe $ catMaybes [c1, c2, c3]
 
   let ids = c m
-  flip mapMaybe ids $ \(L (SrcSpanAnn _ l) n) -> do
+  flip mapMaybe ids $ \(ut, L (SrcSpanAnn _ l) n) -> do
     (mN, nN) <- rdr n
-    return $ IdentifierUsage {_iuName = nN, _iuModule = mN, _iuSourceSpan = asSourceSpan l}
+    return $ IdentifierUsage {_iuName = nN, _iuModule = mN, _iuType = ut,  _iuSourceSpan = asSourceSpan l}
 
 ---
 

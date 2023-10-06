@@ -21,7 +21,7 @@ import qualified Data.Vector.Unboxed as V
 import GHC.RTS.Flags (getRTSFlags)
 import GHC.Stats (RTSStats (..), getRTSStats)
 import GTD.Cabal.Types (Designation (..), DesignationType (..))
-import GTD.Configuration (Args (..), GTDConfiguration (..), Powers, defaultArgs, powersP, prepareConstants)
+import GTD.Configuration (Args (..), GTDConfiguration (..), Powers (..), defaultArgs, powersP, prepareConstants)
 import qualified GTD.ParserExe as ParserExe
 import GTD.Utils (concatForM)
 import Options.Applicative (Parser, ParserInfo, auto, execParser, fullDesc, help, helper, info, long, metavar, option, optional, showDefault, strOption, subparser, value, (<**>))
@@ -31,6 +31,7 @@ import System.Directory (createDirectoryIfMissing, listDirectory, makeAbsolute, 
 import System.FilePath (takeDirectory, takeFileName, (</>))
 import System.IO (BufferMode (..), Handle, IOMode (..), hPrint, hSetBuffering, stderr, stdout, withFile)
 import Text.Read (readMaybe)
+import qualified GTD.Configuration as Args
 
 data BArgs
   = BArgs
@@ -203,7 +204,7 @@ main = do
 
         rt <- makeAbsolute "test/root"
         a <- defaultArgs
-        c <- prepareConstants (a {_root = rt})
+        c <- prepareConstants (a {_root = rt, Args._powers = (Args._powers a) { _goToReferences_isEnabled = True }})
         hPrint h c
 
         fs <- getRTSFlags

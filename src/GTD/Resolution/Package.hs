@@ -24,7 +24,7 @@ import Data.Maybe (catMaybes)
 import qualified Data.Set as Set
 import qualified GTD.Cabal.Dependencies as CabalCache (full, fullS)
 import qualified GTD.Cabal.Types as Cabal (Designation (..), GetCache (_vs), Package (..), PackageModules (..), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, key, pKey)
-import GTD.Configuration (Args (..), GTDConfiguration (_args), Powers (..), args)
+import GTD.Configuration (Args (..), GTDConfiguration (_args), Powers (..), args, shouldCollectDataForGoToReferences)
 import qualified GTD.Resolution.Cache.Package as PackageCache
 import qualified GTD.Resolution.Cache.Usages as UsagesCache
 import GTD.Resolution.Module (modules)
@@ -47,14 +47,14 @@ package'resolution'withMutator'direct c cPkg = do
   let logTag = "package'resolution'withMutator'direct " ++ show (Cabal.pKey . Cabal.key $ cPkg)
 
   (depsC, m) <- bimap catMaybes (foldr (.) id) <$> mapAndUnzipM (PackageCache.getS c <==< CabalCache.full c) (Cabal._dependencies cPkg)
-  let deps = foldr (<>) HMap.empty $ Package._exports <$> depsC
+  let deps = foldr ((<>) . Package._exports) HMap.empty depsC
 
   pkgE <- modules $ Package {_cabalPackage = cPkg, Package._modules = deps, Package._exports = HMap.empty, Package._usages = HMap.empty}
   let reexports = restrictKeys deps $ Cabal._reExports . Cabal._modules $ cPkg
   let pkg = pkgE {Package._exports = Package._exports pkgE <> reexports}
   PackageCache.put cPkg pkg
 
-  e <- asks $ _goToReferences_isEnabled . _powers . _args
+  e <- asks $ shouldCollectDataForGoToReferences . _powers . _args
   when e $ UsagesCache.put cPkg pkg
 
   logDebugNSS logTag $

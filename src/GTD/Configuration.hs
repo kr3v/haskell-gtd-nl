@@ -25,6 +25,7 @@ import qualified Data.ByteString.Char8 as BS
 import qualified Data.Text as T
 import Data.Version (showVersion)
 import GHC.Generics (Generic)
+import GTD.Utils (logDebugNSS)
 import GTD.Utils.OS.Memory (availableMemory, totalMemory)
 import Options.Applicative (Parser, auto, eitherReader, help, long, option, showDefault, strOption, switch, value)
 import qualified Paths_haskell_gtd
@@ -43,6 +44,10 @@ instance ToJSON LogLevel where
 
 data Powers = Powers
   { _goToReferences_isEnabled :: Bool,
+    _goToReferences_lens_isEnabled :: Bool,
+    _goToReferences_shouldIncludeImports :: Bool,
+    _goToReferences_shouldIncludeExports :: Bool,
+    _goToReferences_shouldIncludeDeclarations :: Bool,
     _goToReferences_limit :: Int
   }
   deriving (Show, Read, Generic)
@@ -50,6 +55,9 @@ data Powers = Powers
 instance FromJSON Powers
 
 instance ToJSON Powers
+
+shouldCollectDataForGoToReferences :: Powers -> Bool
+shouldCollectDataForGoToReferences p = _goToReferences_isEnabled p || _goToReferences_lens_isEnabled p
 
 -- note: _root must be absolute
 data Args = Args
@@ -69,7 +77,7 @@ instance FromJSON Args
 
 instance ToJSON Args
 
-parseJson :: FromJSON a => String -> Either String a
+parseJson :: (FromJSON a) => String -> Either String a
 parseJson = eitherDecodeStrict . BS.pack
 
 defaultRoot :: String -> String
@@ -82,6 +90,10 @@ powersP :: Parser Powers
 powersP =
   Powers
     <$> switch (long "go-to-references" <> help "whether to support 'Go to References'" <> showDefault)
+    <*> switch (long "go-to-references-lens" <> help "whether to enable 'Go to References' local lens" <> showDefault)
+    <*> switch (long "go-to-references-imports" <> help "whether to include 'imports' usages in 'Go to References'" <> showDefault)
+    <*> switch (long "go-to-references-exports" <> help "whether to include 'exports' usages in 'Go to References'" <> showDefault)
+    <*> switch (long "go-to-references-declarations" <> help "whether to include 'declarations' usages in 'Go to References'" <> showDefault)
     <*> option auto (long "usages-limit" <> help "" <> showDefault <> value 256)
 
 argsP :: IO (Parser Args)
@@ -119,6 +131,10 @@ defaultArgs = do
         _powers =
           Powers
             { _goToReferences_isEnabled = False,
+              _goToReferences_lens_isEnabled = False,
+              _goToReferences_shouldIncludeImports = False,
+              _goToReferences_shouldIncludeExports = False,
+              _goToReferences_shouldIncludeDeclarations = False,
               _goToReferences_limit = 256
             }
       }
@@ -195,9 +211,10 @@ prepareConstants a = do
 
 type MS0 m = (MonadBaseControl IO m, MonadLoggerIO m, MonadReader GTDConfiguration m)
 
-resetCache :: (MonadIO m, MonadReader GTDConfiguration m) => m ()
+resetCache :: (MS0 m) => m ()
 resetCache = do
   c <- ask
+  logDebugNSS "configuration@resetCache" $ printf "c=%s cu=%s" (_cache c) (_cacheUsages c)
   liftIO $ removeDirectoryRecursive (_cache c)
   liftIO $ removeDirectoryRecursive (_cacheUsages c)
   liftIO $ createDirectoryIfMissing True (_cache c)

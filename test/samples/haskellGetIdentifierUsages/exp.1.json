@@ -1,0 +1,103 @@
+[
+  [
+    "Regular",
+    [
+      {
+        "_iuModule": "",
+        "_iuName": "lib2",
+        "_iuSourceSpan": {
+          "sourceSpanEndColumn": 5,
+          "sourceSpanEndLine": 3,
+          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.1.hs",
+          "sourceSpanStartColumn": 1,
+          "sourceSpanStartLine": 3
+        },
+        "_iuType": "Regular"
+      },
+      {
+        "_iuModule": "",
+        "_iuName": "IO",
+        "_iuSourceSpan": {
+          "sourceSpanEndColumn": 11,
+          "sourceSpanEndLine": 3,
+          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.1.hs",
+          "sourceSpanStartColumn": 9,
+          "sourceSpanStartLine": 3
+        },
+        "_iuType": "Regular"
+      },
+      {
+        "_iuModule": "",
+        "_iuName": "Int",
+        "_iuSourceSpan": {
+          "sourceSpanEndColumn": 15,
+          "sourceSpanEndLine": 3,
+          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.1.hs",
+          "sourceSpanStartColumn": 12,
+          "sourceSpanStartLine": 3
+        },
+        "_iuType": "Regular"
+      },
+      {
+        "_iuModule": "",
+        "_iuName": "lib2",
+        "_iuSourceSpan": {
+          "sourceSpanEndColumn": 5,
+          "sourceSpanEndLine": 4,
+          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.1.hs",
+          "sourceSpanStartColumn": 1,
+          "sourceSpanStartLine": 4
+        },
+        "_iuType": "Regular"
+      },
+      {
+        "_iuModule": "",
+        "_iuName": "lib2",
+        "_iuSourceSpan": {
+          "sourceSpanEndColumn": 5,
+          "sourceSpanEndLine": 4,
+          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.1.hs",
+          "sourceSpanStartColumn": 1,
+          "sourceSpanStartLine": 4
+        },
+        "_iuType": "Regular"
+      },
+      {
+        "_iuModule": "",
+        "_iuName": "return",
+        "_iuSourceSpan": {
+          "sourceSpanEndColumn": 14,
+          "sourceSpanEndLine": 4,
+          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.1.hs",
+          "sourceSpanStartColumn": 8,
+          "sourceSpanStartLine": 4
+        },
+        "_iuType": "Regular"
+      },
+      {
+        "_iuModule": "",
+        "_iuName": "Lib2_ReexportedTypeAlias",
+        "_iuSourceSpan": {
+          "sourceSpanEndColumn": 30,
+          "sourceSpanEndLine": 6,
+          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.1.hs",
+          "sourceSpanStartColumn": 6,
+          "sourceSpanStartLine": 6
+        },
+        "_iuType": "Regular"
+      },
+      {
+        "_iuModule": "",
+        "_iuName": "String",
+        "_iuSourceSpan": {
+          "sourceSpanEndColumn": 39,
+          "sourceSpanEndLine": 6,
+          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.1.hs",
+          "sourceSpanStartColumn": 33,
+          "sourceSpanStartLine": 6
+        },
+        "_iuType": "Regular"
+      }
+    ]
+  ]
+]

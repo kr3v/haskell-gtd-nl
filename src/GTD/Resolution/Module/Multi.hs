@@ -17,10 +17,11 @@ import qualified Data.Map.Strict as Map
 import Data.Maybe (mapMaybe)
 import GTD.Cabal.Types (ModuleNameS)
 import GTD.Configuration (GTDConfiguration)
-import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), IdentifierWithUsageLocation (..), Module (..), ModuleImportType (..), SourceSpan (..), SourceSpanFileName, asDeclsMap, emptySourceSpan)
+import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), IdentifierWithUsageLocation (..), Module (..), ModuleImportType (..), SourceSpan (..), asDeclsMap, emptySourceSpan)
 import GTD.Haskell.Module (HsModule (..), HsModuleData (..), HsModuleP (..), HsModuleParams (..), _name)
 import qualified GTD.Haskell.Module as HsModule
 import qualified GTD.Resolution.Cache.Resolution as ResolutionCache
+import GTD.Resolution.Module.Types (UsagesInFileMap (..), UsagesMap)
 import GTD.Resolution.Module.Utils (resolution'simplify, resolution'word'parsed'b)
 import GTD.Utils (mapFrom)
 
@@ -92,11 +93,11 @@ figureOutExports0 liM m = do
 collectUsages ::
   HsModule ->
   HMap.HashMap ModuleNameS Declarations ->
-  (HMap.HashMap SourceSpanFileName (HMap.HashMap SourceSpan [SourceSpan]) -> HMap.HashMap SourceSpanFileName (HMap.HashMap SourceSpan [SourceSpan]))
+  (UsagesMap -> UsagesMap)
 collectUsages m liM = do
   let ids = _identifierUsages . _info $ m
   let liMb = resolution'simplify <$> liM
   foldr (.) id $
-    flip mapMaybe ids \(IdentifierUsage {_iuModule = mn, _iuName = n, _iuSourceSpan = is}) -> do
+    flip mapMaybe ids \(IdentifierUsage {_iuModule = mn, _iuName = n, _iuType = iu, _iuSourceSpan = is}) ->
       resolution'word'parsed'b liMb mn n <&> \r ->
-        HMap.insertWith (HMap.unionWith (<>)) (sourceSpanFileName r) $ HMap.singleton r [is]
+        HMap.insertWith (HMap.unionWith (<>)) (sourceSpanFileName r) $ HMap.singleton iu (UsagesInFileMap $ HMap.singleton r [is])

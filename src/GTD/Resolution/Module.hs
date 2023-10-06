@@ -23,9 +23,7 @@ import Control.Lens (makeLenses, (%~))
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (MonadReader (..))
 import Control.Monad.State.Lazy (MonadState (..), modify)
-import Data.Aeson (FromJSON (..), KeyValue (..), ToJSON (..), Value, object, withObject, (.:))
-import Data.Aeson.Key (fromString)
-import Data.Aeson.Types (Parser)
+import Data.Aeson (FromJSON (..), ToJSON (..))
 import Data.Binary (Binary)
 import qualified Data.HashMap.Strict as HMap
 import qualified Data.Map.Strict as Map
@@ -34,38 +32,26 @@ import GHC.Generics (Generic)
 import GTD.Cabal.Types (ModuleNameS)
 import qualified GTD.Cabal.Types as Cabal (Package (..), PackageWithResolvedDependencies, key, _exports)
 import GTD.Configuration (GTDConfiguration, MS0)
-import GTD.Haskell.Declaration (SourceSpan (..), SourceSpanFileName)
 import GTD.Haskell.Module (HsModule (..), HsModuleP (..))
 import qualified GTD.Haskell.Module as HsModule
 import GTD.Resolution.Module.Multi (collectUsages, figureOutExports0, resolution)
 import GTD.Resolution.Module.Single (module'Dependencies, moduleR)
+import GTD.Resolution.Module.Types (UsagesMap)
 import qualified GTD.Resolution.Types as Package (Package (..))
 import GTD.Resolution.Utils (ParallelizedState (ParallelizedState), parallelized, scheme)
 import GTD.Utils (restrictKeys)
 
 data ModuleState = ModuleState
   { _mods :: HMap.HashMap ModuleNameS HsModuleP,
-    _usages :: HMap.HashMap SourceSpanFileName (HMap.HashMap SourceSpan [SourceSpan])
+    _usages :: UsagesMap
   }
   deriving (Generic)
 
 $(makeLenses ''ModuleState)
 
-instance ToJSON ModuleState where
-  toJSON :: ModuleState -> Value
-  toJSON (ModuleState m u) =
-    object
-      [ fromString "_mods" .= m,
-        fromString "_usages" .= HMap.toList (HMap.toList <$> u)
-      ]
+instance ToJSON ModuleState
 
-instance FromJSON ModuleState where
-  parseJSON :: Value -> Parser ModuleState
-  parseJSON = withObject "ModuleState" $ \v -> do
-    m <- v .: fromString "_mods"
-    uL <- v .: fromString "_usages"
-    let u = HMap.fromList <$> HMap.fromList uL
-    return $ ModuleState m u
+instance FromJSON ModuleState
 
 instance Binary ModuleState
 

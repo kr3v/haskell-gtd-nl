@@ -7,10 +7,11 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
 module GTD.Haskell.Module where
 
-import Control.DeepSeq (deepseq)
+import Control.DeepSeq (deepseq, NFData)
 import Control.Lens (makeLenses)
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.IO.Class (MonadIO (..))
@@ -22,7 +23,7 @@ import qualified Data.ByteString.Char8 as BSC8
 import qualified Data.Map.Strict as Map
 import GHC.Generics (Generic)
 import qualified GTD.Cabal.Types as Cabal
-import GTD.Configuration (Args (..), GTDConfiguration (_args), MS0, Powers (..))
+import GTD.Configuration (Args (..), GTDConfiguration (_args), MS0, Powers (..), shouldCollectDataForGoToReferences)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
 import GTD.Haskell.Declaration (ClassOrData (_cdtName), Declaration (..), Declarations (..), Exports, IdentifierWithUsageLocation, Imports, SourceSpan (..), declarationsT)
 import qualified GTD.Haskell.Declaration as Declaration
@@ -73,7 +74,7 @@ data HsModuleMetadata = HsModuleMetadata
     _mName :: Cabal.ModuleNameS,
     _mPath :: FilePath
   }
-  deriving (Show, Eq, Generic)
+  deriving (NFData, Show, Eq, Generic)
 
 instance FromJSON HsModuleMetadata
 
@@ -145,7 +146,7 @@ parseModule cm@HsModuleMetadata {_mPath = srcP} = do
       Just Lines.Line {path = p, num = n} -> d {_declSrcOrig = (_declSrcOrig d) {sourceSpanFileName = BSC8.pack p, sourceSpanStartLine = n, sourceSpanEndLine = n}}
       Nothing -> d
 
-  e <- asks $ _goToReferences_isEnabled . _powers . _args
+  e <- asks $ shouldCollectDataForGoToReferences . _powers . _args
   let ids =
         if not e
           then []
@@ -171,7 +172,7 @@ data HsModuleP = HsModuleP
   { _exports :: Declarations,
     _ometadata :: HsModuleMetadata
   }
-  deriving (Show, Eq, Generic)
+  deriving (NFData, Show, Eq, Generic)
 
 $(makeLenses ''HsModuleP)
 
