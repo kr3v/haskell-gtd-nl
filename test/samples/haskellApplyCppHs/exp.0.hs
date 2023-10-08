@@ -1,4 +1,4 @@
-#line 1 "./test/samples/haskellApplyCppHs/in.0.hs"
+#line 1 "test/samples/haskellApplyCppHs/in.0.hs"
 
 
 

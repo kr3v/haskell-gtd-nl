@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
@@ -13,17 +14,21 @@ import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.State (MonadIO (liftIO), MonadState (..), execState, execStateT, modify)
 import Control.Monad.Writer (MonadWriter (..))
 import qualified Data.ByteString.Char8 as BSW8
+import Data.Data (showConstr)
 import Data.Either (fromRight)
 import Data.Foldable (Foldable (..))
-import Data.Generics (everythingWithContext)
+import Data.Generics (Data (..), everythingWithContext)
+import Data.List (partition)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (fromMaybe, mapMaybe, catMaybes, listToMaybe)
+import Data.Maybe (catMaybes, fromMaybe, listToMaybe, mapMaybe)
+import qualified Data.Set as Set
+import Data.Typeable (cast)
 import GHC.Data.FastString (mkFastString, unpackFS)
 import GHC.Data.StringBuffer (stringToStringBuffer)
 import GHC.Driver.Config.Parser (initParserOpts)
 import GHC.Driver.Session (DynFlags (..), PlatformMisc (..), Settings (..), defaultDynFlags, parseDynamicFilePragma)
 import GHC.Fingerprint (fingerprint0)
-import GHC.Hs (ConDecl (..), ConDeclField (..), DataDefnCons (..), FamilyDecl (..), FieldOcc (..), GhcPs, HsConDetails (..), HsDataDefn (..), HsDecl (..), HsModule (..), IE (..), IEWrappedName (..), ImportDecl (..), ImportDeclQualifiedStyle (..), ImportListInterpretation (..), IsBootInterface (..), ModuleName (ModuleName), Sig (..), SrcSpanAnn' (..), SrcSpanAnnN, TyClDecl (..), moduleNameString)
+import GHC.Hs (ConDecl (..), ConDeclField (..), DataDefnCons (..), FamilyDecl (..), FieldOcc (..), GhcPs, HsBindLR (..), HsConDetails (..), HsDataDefn (..), HsDecl (..), HsMatchContext (..), HsModule (..), IE (..), IEWrappedName (..), ImportDecl (..), ImportDeclQualifiedStyle (..), ImportListInterpretation (..), IsBootInterface (..), Match (..), MatchGroup (..), ModuleName (ModuleName), Pat (..), Sig (..), SrcSpanAnn' (..), SrcSpanAnnN, TyClDecl (..), moduleNameString)
 import GHC.Parser (parseHeader, parseIdentifier, parseModule)
 import GHC.Parser.Header (getOptions)
 import GHC.Parser.Lexer (P (unP), PState (..), ParseResult (..), initParserState)
@@ -37,11 +42,10 @@ import GHC.Types.SrcLoc (GenLocated (..), RealSrcSpan (srcSpanFile), SrcSpan (..
 import qualified GHC.Unit.Types as GenModule
 import GHC.Utils.Outputable (Outputable (..), SDocContext (..), defaultSDocContext, renderWithContext)
 import GTD.Cabal.Types (ModuleNameS)
-import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Exports, IdentifierWithUsageLocation (..), Imports, Module (..), SourceSpan (..), asDeclsMap, emptySourceSpan, UsageType (..))
+import GTD.Haskell.Declaration (ClassOrData (..), Declaration (..), Declarations (..), Exports, IdentifierWithUsageLocation (..), Imports, Module (..), SourceSpan (..), UsageType (..), asDeclsMap, emptySourceSpan, srcSpans)
 import qualified GTD.Haskell.Declaration as Declarations
 import GTD.Utils (logDebugNSS)
 import Text.Printf (printf)
-import Data.Typeable (cast)
 
 showO :: (Outputable a) => a -> String
 showO = renderWithContext defaultSDocContext {sdocErrorSpans = True} . ppr
@@ -110,20 +114,20 @@ asSourceSpan (RealSrcSpan r _) =
     }
 asSourceSpan _ = emptySourceSpan
 
-declM :: String -> SrcSpan -> (Outputable a) => a -> Declaration
-declM m l k = Declaration {_declSrcOrig = asSourceSpan l, _declModule = m, _declName = showO k}
+declM :: String -> SrcSpan -> RdrName -> Declaration
+declM m l k = Declaration {_declSrcOrig = asSourceSpan l, _declSrcOthers = [], _declModule = m, _declName = showO k}
 
-declME :: String -> (Outputable a) => a -> Declaration
-declME m k = Declaration {_declSrcOrig = emptySourceSpan, _declModule = m, _declName = showO k}
+declME :: String -> RdrName -> Declaration
+declME m k = Declaration {_declSrcOrig = emptySourceSpan, _declSrcOthers = [], _declModule = m, _declName = showO k}
 
 declS :: String -> String -> Declaration
-declS m k = Declaration {_declSrcOrig = emptySourceSpan, _declModule = m, _declName = k}
+declS m k = Declaration {_declSrcOrig = emptySourceSpan, _declSrcOthers = [], _declModule = m, _declName = k}
 
 identifiers :: HsModuleX -> (MonadWriter Declarations m, MonadLoggerIO m) => m ()
 identifiers (HsModuleX HsModule {hsmodName = Just (L (SrcSpanAnn _ _) (ModuleName nF)), hsmodDecls = decls} _) = do
   let mN = unpackFS nF
   let decl = declM mN
-  let tellD l k = tell mempty {_decls = asDeclsMap [decl l k]}
+      tellD l k = tell mempty {_decls = asDeclsMap [decl l k]}
       tellC l k fs = tell mempty {_dataTypes = Map.singleton (showO k) ClassOrData {_cdtName = decl l k, _cdtFields = fs, _eWildcard = False}}
 
   forM_ decls $ \(L _ d) -> case d of
@@ -131,8 +135,14 @@ identifiers (HsModuleX HsModule {hsmodName = Just (L (SrcSpanAnn _ _) (ModuleNam
       TypeSig _ names _ -> do
         forM_ names $ \(L (SrcSpanAnn _ l) k) -> tellD l k
       _ -> return ()
+    ValD _ b -> case b of
+      FunBind {fun_id = L (SrcSpanAnn _ l) k, fun_matches = MG {mg_alts = (L _ ks)}} -> do
+        forM_ ks $ \case
+          L _ (Match {m_ctxt = FunRhs {mc_fun = L (SrcSpanAnn _ l1) k1}}) -> tellD l1 k1
+          _ -> tellD l k
+      _ -> return ()
     TyClD _ tc -> case tc of
-      FamDecl {tcdFam = FamilyDecl {fdLName = (L (SrcSpanAnn _ l) k)}} -> tellC l k mempty -- TODO: add more stuff?
+      FamDecl {tcdFam = FamilyDecl {fdLName = (L (SrcSpanAnn _ l) k)}} -> tellC l k mempty
       SynDecl {tcdLName = (L (SrcSpanAnn _ l) k)} -> tellC l k mempty
       DataDecl {tcdLName = (L (SrcSpanAnn _ l) k), tcdDataDefn = (HsDataDefn _ _ _ _ ctorsD _)} -> do
         let ctors = case ctorsD of
@@ -232,8 +242,10 @@ imports (HsModuleX HsModule {hsmodImports = is} ps) = do
   unless ("-XNoImplicitPrelude" `elem` ps) $ do
     tell [mempty {_mName = "Prelude", _mQualifier = "Prelude"}]
 
-identifierUsages :: HsModuleX -> [IdentifierWithUsageLocation]
-identifierUsages (HsModuleX m@HsModule {} _) = do
+---
+
+identifierUsages'raw :: HsModuleX -> [IdentifierWithUsageLocation]
+identifierUsages'raw (HsModuleX m@HsModule {} _) = do
   let c :: HsModule GhcPs -> [(UsageType, GenLocated SrcSpanAnnN RdrName)]
       c = everythingWithContext Regular (<>) $ \a s -> do
         let c1 = (\(b :: GenLocated SrcSpanAnnN RdrName) -> ([(s, b)], s)) <$> cast a
@@ -245,7 +257,13 @@ identifierUsages (HsModuleX m@HsModule {} _) = do
   let ids = c m
   flip mapMaybe ids $ \(ut, L (SrcSpanAnn _ l) n) -> do
     (mN, nN) <- rdr n
-    return $ IdentifierUsage {_iuName = nN, _iuModule = mN, _iuType = ut,  _iuSourceSpan = asSourceSpan l}
+    return $ IdentifierUsage {_iuName = nN, _iuModule = mN, _iuType = ut, _iuSourceSpan = asSourceSpan l}
+
+identifierUsages'declarations :: Declarations -> [IdentifierWithUsageLocation] -> [IdentifierWithUsageLocation]
+identifierUsages'declarations ds ius = do
+  let ss = Set.fromList $ srcSpans ds
+  let (l, r) = partition (\IdentifierUsage {_iuSourceSpan = s} -> s `Set.member` ss) ius
+  r ++ fmap (\iu -> iu {_iuType = UDeclaration}) l
 
 ---
 

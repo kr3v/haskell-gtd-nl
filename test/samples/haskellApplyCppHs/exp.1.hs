@@ -1,4 +1,4 @@
-#line 1 "./test/samples/haskellApplyCppHs/in.1.hs"
+#line 1 "test/samples/haskellApplyCppHs/in.1.hs"
 {-# LANGUAGE CPP #-}
 
 -- Import window managed backend specific modules.

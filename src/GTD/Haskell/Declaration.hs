@@ -74,6 +74,7 @@ instance Binary SourceSpan
 
 data Declaration = Declaration
   { _declSrcOrig :: SourceSpan,
+    _declSrcOthers :: [SourceSpan],
     _declModule :: ModuleNameS,
     _declName :: String
   }
@@ -86,6 +87,14 @@ instance FromJSON Declaration
 instance ToJSON Declaration
 
 instance Binary Declaration
+
+instance Semigroup Declaration where
+  (<>) :: Declaration -> Declaration -> Declaration
+  (<>) (Declaration s1 o1 m1 n1) (Declaration s2 o2 m2 n2) = Declaration s1 (o1 <> [s2] <> o2) m1 n1
+
+instance Monoid Declaration where
+  mempty :: Declaration
+  mempty = Declaration emptySourceSpan [] mempty mempty
 
 hasNonEmptyOrig :: Declaration -> Bool
 hasNonEmptyOrig = (/= emptySourceSpan) . _declSrcOrig
@@ -129,11 +138,17 @@ instance Binary Declarations
 
 instance Semigroup Declarations where
   (<>) :: Declarations -> Declarations -> Declarations
-  (<>) (Declarations d1 dt1) (Declarations d2 dt2) = Declarations (d1 <> d2) (dt1 <> dt2)
+  (<>) (Declarations d1 dt1) (Declarations d2 dt2) = Declarations (Map.unionWith (<>) d1 d2) (dt1 <> dt2)
 
 instance Monoid Declarations where
   mempty :: Declarations
   mempty = Declarations mempty mempty
+
+srcSpans :: Declarations -> [SourceSpan]
+srcSpans Declarations {_decls = ds, _dataTypes = dts} =
+  let ds' = concatMap (\d -> [_declSrcOrig d] <> _declSrcOthers d) (Map.elems ds)
+      dts' = concatMap (\cd -> [_cdtName cd] <> Map.elems (_cdtFields cd)) (Map.elems dts)
+   in ds' <> (_declSrcOrig <$> dts')
 
 asResolutionMap :: Declarations -> Map.Map Identifier Declaration
 asResolutionMap Declarations {_decls = ds, _dataTypes = dts} =
@@ -248,6 +263,8 @@ data IdentifierWithUsageLocation = IdentifierUsage
     _iuSourceSpan :: SourceSpan
   }
   deriving (NFData, Show, Eq, Generic)
+
+$(makeLenses ''IdentifierWithUsageLocation)
 
 instance FromJSON IdentifierWithUsageLocation
 

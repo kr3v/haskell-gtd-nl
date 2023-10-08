@@ -1,5 +1,0 @@
-not-yet-implemented:
-1. right now, the data structure fields are not parsed as 'identifiers'
-2. the generated `show` function is not caught as well
-3. generated lenses are not caught
-4. the `render` function from the explicit `instance` declaration is not caught

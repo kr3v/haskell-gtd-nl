@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -7,12 +8,11 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
-{-# LANGUAGE DeriveAnyClass #-}
 
 module GTD.Haskell.Module where
 
-import Control.DeepSeq (deepseq, NFData)
-import Control.Lens (makeLenses)
+import Control.DeepSeq (NFData, deepseq)
+import Control.Lens (Each (..), makeLenses, (%~))
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.RWS (asks)
@@ -25,7 +25,7 @@ import GHC.Generics (Generic)
 import qualified GTD.Cabal.Types as Cabal
 import GTD.Configuration (Args (..), GTDConfiguration (_args), MS0, Powers (..), shouldCollectDataForGoToReferences)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
-import GTD.Haskell.Declaration (ClassOrData (_cdtName), Declaration (..), Declarations (..), Exports, IdentifierWithUsageLocation, Imports, SourceSpan (..), declarationsT)
+import GTD.Haskell.Declaration (ClassOrData (_cdtName), Declaration (..), Declarations (..), Exports, IdentifierWithUsageLocation, Imports, SourceSpan (..), declSrcOrig, declSrcOthers, declarationsT, iuSourceSpan)
 import qualified GTD.Haskell.Declaration as Declaration
 import qualified GTD.Haskell.Lines as Lines
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
@@ -141,20 +141,15 @@ parseModule cm@HsModuleMetadata {_mPath = srcP} = do
   let iiea = GHC.isImplicitExportAll a
   is <- execWriterT $ GHC.imports a
   localsO <- execWriterT $ GHC.identifiers a
-  locals <- flip declarationsT localsO $ \d -> do
-    case Lines.resolve lines (sourceSpanStartLine . _declSrcOrig $ d) of
-      Just Lines.Line {path = p, num = n} -> d {_declSrcOrig = (_declSrcOrig d) {sourceSpanFileName = BSC8.pack p, sourceSpanStartLine = n, sourceSpanEndLine = n}}
-      Nothing -> d
+  locals <- declarationsT ((declSrcOrig %~ Lines.translate lines) . ((declSrcOthers . each) %~ Lines.translate lines)) localsO
 
   e <- asks $ shouldCollectDataForGoToReferences . _powers . _args
   let ids =
         if not e
           then []
-          else flip fmap (GHC.identifierUsages a) $ \f -> do
-            let ss = Declaration._iuSourceSpan f
-            case Lines.resolve lines (sourceSpanStartLine ss) of
-              Just Lines.Line {path = p, num = n} -> f {Declaration._iuSourceSpan = ss {sourceSpanFileName = BSC8.pack p, sourceSpanStartLine = n, sourceSpanEndLine = n}}
-              Nothing -> f
+          else
+            GHC.identifierUsages'declarations locals $
+              (iuSourceSpan %~ Lines.translate lines) <$> GHC.identifierUsages'raw a
 
   _ <- liftIO $ deepseq ids $ deepseq locals $ deepseq es $ deepseq is $ deepseq iiea $ return ()
 

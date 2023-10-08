@@ -13,7 +13,8 @@
             "sourceSpanFileName": "",
             "sourceSpanStartColumn": 0,
             "sourceSpanStartLine": 0
-          }
+          },
+          "_declSrcOthers": []
         },
         "_eWildcard": true
       }
@@ -28,7 +29,8 @@
           "sourceSpanFileName": "",
           "sourceSpanStartColumn": 0,
           "sourceSpanStartLine": 0
-        }
+        },
+        "_declSrcOthers": []
       },
       {
         "_declModule": "ScEaHs.Game.Surface",
@@ -39,7 +41,8 @@
           "sourceSpanFileName": "",
           "sourceSpanStartColumn": 0,
           "sourceSpanStartLine": 0
-        }
+        },
+        "_declSrcOthers": []
       },
       {
         "_declModule": "ScEaHs.Game.Surface",
@@ -50,7 +53,8 @@
           "sourceSpanFileName": "",
           "sourceSpanStartColumn": 0,
           "sourceSpanStartLine": 0
-        }
+        },
+        "_declSrcOthers": []
       },
       {
         "_declModule": "ScEaHs.Game.Surface",
@@ -61,7 +65,8 @@
           "sourceSpanFileName": "",
           "sourceSpanStartColumn": 0,
           "sourceSpanStartLine": 0
-        }
+        },
+        "_declSrcOthers": []
       },
       {
         "_declModule": "ScEaHs.Game.Surface",
@@ -72,7 +77,8 @@
           "sourceSpanFileName": "",
           "sourceSpanStartColumn": 0,
           "sourceSpanStartLine": 0
-        }
+        },
+        "_declSrcOthers": []
       },
       {
         "_declModule": "ScEaHs.Game.Surface",
@@ -83,7 +89,8 @@
           "sourceSpanFileName": "",
           "sourceSpanStartColumn": 0,
           "sourceSpanStartLine": 0
-        }
+        },
+        "_declSrcOthers": []
       }
     ],
     "_mName": "",

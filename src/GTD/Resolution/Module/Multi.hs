@@ -51,7 +51,7 @@ resolution'direct sM m = flip execStateT HMap.empty $ do
     \Module {_mName = k, _mType = mt, _mAllowNoQualifier = mnq, _mQualifier = mq, _mDecls = md, _mCDs = mc} ->
       forM_ (HMap.lookup k sM) $ \c -> do
         let o = emptySourceSpan {sourceSpanFileName = BSW8.pack . HsModule._mPath . HsModule._ometadata $ c, sourceSpanStartColumn = 1, sourceSpanStartLine = 1}
-        modify $ HMap.insertWith (<>) (k ++ "*") mempty {_decls = Map.singleton "" Declaration {_declModule = k, _declName = "", _declSrcOrig = o}}
+        modify $ HMap.insertWith (<>) (k ++ "*") mempty {_decls = Map.singleton "" Declaration {_declModule = k, _declName = "", _declSrcOrig = o, _declSrcOthers = []}}
         let stuff = case mt of
               All -> _exports c
               EverythingBut -> Declarations {_decls = Map.withoutKeys (_decls $ _exports c) (Map.keysSet $ asDeclsMap md), _dataTypes = Map.withoutKeys (_dataTypes $ _exports c) (Map.keysSet $ mapFrom (_declName . _cdtName) mc)}

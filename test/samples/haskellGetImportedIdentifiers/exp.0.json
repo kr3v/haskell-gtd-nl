@@ -12,7 +12,8 @@
           "sourceSpanFileName": "",
           "sourceSpanStartColumn": 0,
           "sourceSpanStartLine": 0
-        }
+        },
+        "_declSrcOthers": []
       }
     ],
     "_mName": "Control.Lens",
@@ -49,7 +50,8 @@
             "sourceSpanFileName": "",
             "sourceSpanStartColumn": 0,
             "sourceSpanStartLine": 0
-          }
+          },
+          "_declSrcOthers": []
         },
         "_eWildcard": false
       },
@@ -64,7 +66,8 @@
             "sourceSpanFileName": "",
             "sourceSpanStartColumn": 0,
             "sourceSpanStartLine": 0
-          }
+          },
+          "_declSrcOthers": []
         },
         "_eWildcard": true
       }
@@ -96,7 +99,8 @@
             "sourceSpanFileName": "",
             "sourceSpanStartColumn": 0,
             "sourceSpanStartLine": 0
-          }
+          },
+          "_declSrcOthers": []
         },
         "_eWildcard": false
       }
@@ -119,7 +123,8 @@
           "sourceSpanFileName": "",
           "sourceSpanStartColumn": 0,
           "sourceSpanStartLine": 0
-        }
+        },
+        "_declSrcOthers": []
       },
       {
         "_declModule": "ScEaHs.Game.Surface.Generator",
@@ -130,7 +135,8 @@
           "sourceSpanFileName": "",
           "sourceSpanStartColumn": 0,
           "sourceSpanStartLine": 0
-        }
+        },
+        "_declSrcOthers": []
       },
       {
         "_declModule": "ScEaHs.Game.Surface.Generator",
@@ -141,7 +147,8 @@
           "sourceSpanFileName": "",
           "sourceSpanStartColumn": 0,
           "sourceSpanStartLine": 0
-        }
+        },
+        "_declSrcOthers": []
       }
     ],
     "_mName": "ScEaHs.Game.Surface.Generator",

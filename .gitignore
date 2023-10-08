@@ -1,5 +1,8 @@
-test/integrationTestRepo/fake/*.txt
-dist-newstyle
 .vscode
-test/root
+dist-newstyle
 reports
+test/integrationTestRepo/fake/.repos
+test/integrationTestRepo/fake/*.txt
+test/root
+test/samples/*/*.log
+test/samples/*/out.*

@@ -62,9 +62,9 @@ haskellApplyCppHsTest :: GTDConfiguration -> Spec
 haskellApplyCppHsTest consts = do
   describe "haskellApplyCppHs" $ do
     it "applies #if-related C preprocessor directives" $ do
-      let srcPath = "./test/samples/haskellApplyCppHs/in.0.hs"
-      let dstPath = "./test/samples/haskellApplyCppHs/out.0.hs"
-      let expPath = "./test/samples/haskellApplyCppHs/exp.0.hs"
+      let srcPath = "test/samples/haskellApplyCppHs/in.0.hs"
+      let dstPath = "test/samples/haskellApplyCppHs/out.0.hs"
+      let expPath = "test/samples/haskellApplyCppHs/exp.0.hs"
 
       src <- readFile srcPath
       expected <- readFile expPath
@@ -76,9 +76,9 @@ haskellApplyCppHsTest consts = do
           writeFile dstPath r
           r `shouldBe` expected
     it "ignores #error directive" $ do
-      let srcPath = "./test/samples/haskellApplyCppHs/in.1.hs"
-      let dstPath = "./test/samples/haskellApplyCppHs/out.1.hs"
-      let expPath = "./test/samples/haskellApplyCppHs/exp.1.hs"
+      let srcPath = "test/samples/haskellApplyCppHs/in.1.hs"
+      let dstPath = "test/samples/haskellApplyCppHs/out.1.hs"
+      let expPath = "test/samples/haskellApplyCppHs/exp.1.hs"
 
       src <- readFile srcPath
       expected <- readFile expPath
@@ -95,9 +95,9 @@ haskellGetIdentifiersTest consts = do
   let descr = "haskellGetIdentifiers"
   let test n p i = do
         let iS = show i
-            srcPath = "./test/samples/" ++ descr ++ "/in." ++ iS ++ ".hs"
-            dstPath = "./test/samples/" ++ descr ++ "/out." ++ n ++ "." ++ iS ++ ".json"
-            expPath = "./test/samples/" ++ descr ++ "/exp." ++ iS ++ ".json"
+            srcPath = "test/samples" </> descr </> ("in." ++ iS ++ ".hs")
+            dstPath = "test/samples" </> descr </> ("out." ++ n ++ "." ++ iS ++ ".json")
+            expPath = "test/samples" </> descr </> ("exp." ++ iS ++ ".json")
 
         src <- readFile srcPath
         expectedS <- try (BS.readFile expPath) :: IO (Either IOException BS.ByteString)
@@ -108,14 +108,14 @@ haskellGetIdentifiersTest consts = do
                   let m :: Maybe Declarations = decode s
                   fromMaybe mempty m
 
-        result <- p srcPath src
+        result <- runFileLoggingT ("test/samples" </> descr </> "loggingT." ++ iS ++ ".log") $ p srcPath src
         case result of
           Left e -> expectationFailure $ printf "failed to parse %s: %s" srcPath e
           Right identifiers -> do
             BS.writeFile dstPath $ encode identifiers
             identifiers `shouldBe` expected
 
-  let ghcP a b = mapM (runNoLoggingT . execWriterT . GHC.identifiers) =<< runNoLoggingT (GHC.parse a b)
+  let ghcP a b = mapM (execWriterT . GHC.identifiers) =<< runNoLoggingT (GHC.parse a b)
   let parsers = [("ghc-lib-parser", ghcP)]
 
   forM_ parsers $ \(n, p) -> do
@@ -127,15 +127,17 @@ haskellGetIdentifiersTest consts = do
           test n p 1
         it "parses classes declarations" $
           test n p 2
+        it "tycd only plus multiple pattern matches" $
+          test n p 3
 
 haskellGetExportsTest :: GTDConfiguration -> Spec
 haskellGetExportsTest consts = do
   let descr = "haskellGetExportedIdentifiers"
   let test n p i = do
         let iS = show i
-            srcPath = "./test/samples/" ++ descr ++ "/in." ++ iS ++ ".hs"
-            dstPath = "./test/samples/" ++ descr ++ "/out." ++ n ++ "." ++ iS ++ ".json"
-            expPath = "./test/samples/" ++ descr ++ "/exp." ++ iS ++ ".json"
+            srcPath = "test/samples" </> descr </> ("in." ++ iS ++ ".hs")
+            dstPath = "test/samples" </> descr </> ("out." ++ n ++ "." ++ iS ++ ".json")
+            expPath = "test/samples" </> descr </> ("exp." ++ iS ++ ".json")
 
         src <- readFile srcPath
         expectedS <- BS.readFile expPath
@@ -162,9 +164,9 @@ haskellGetImportsTest consts = do
   let descr = "haskellGetImportedIdentifiers"
   let test n p i = do
         let iS = show i
-            srcPath = "./test/samples/" ++ descr ++ "/in." ++ iS ++ ".hs"
-            dstPath = "./test/samples/" ++ descr ++ "/out." ++ n ++ "." ++ iS ++ ".json"
-            expPath = "./test/samples/" ++ descr ++ "/exp." ++ iS ++ ".json"
+            srcPath = "test/samples" </> descr </> ("in." ++ iS ++ ".hs")
+            dstPath = "test/samples" </> descr </> ("out." ++ n ++ "." ++ iS ++ ".json")
+            expPath = "test/samples" </> descr </> ("exp." ++ iS ++ ".json")
 
         src <- readFile srcPath
         expectedS <- BS.readFile expPath
@@ -208,7 +210,7 @@ haskellGetIdentifierUsagesTest consts = do
             BS.writeFile dstPath $ encode identifiers
             identifiers `shouldBe` expected
 
-  let ghcP a b = mapRight (mapDFrom _iuType . GHC.identifierUsages) <$> runNoLoggingT (GHC.parse a b)
+  let ghcP a b = mapRight (mapDFrom _iuType . GHC.identifierUsages'raw) <$> runNoLoggingT (GHC.parse a b)
   let parsers = [("ghc-lib-parser", ghcP)]
 
   forM_ parsers $ \(n, p) -> do
@@ -222,7 +224,7 @@ haskellGetIdentifierUsagesTest consts = do
 figureOutExportsTest :: GTDConfiguration -> Spec
 figureOutExportsTest consts = do
   let descr = "figureOutExports"
-      root = "./test/samples/" </> descr
+      root = "test/samples" </> descr
   tests <- runIO $ listDirectory root
   describe descr $ do
     forM_ tests $ \test -> do
@@ -292,7 +294,7 @@ definitionTests consts = do
          in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
       expectedLib1 =
         let expFile = wd </> "lib1/src/Lib1.hs"
-            expLineNo = 5
+            expLineNo = 6
             expSrcSpan = SourceSpan {sourceSpanFileName = BSC8.pack expFile, sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = expLineNo, sourceSpanEndLine = expLineNo}
          in Right $ DefinitionResponse {srcSpan = [expSrcSpan], err = Nothing}
       expectedLib2 =
@@ -487,7 +489,7 @@ linesTest consts = do
   let descr = "lines"
   let test i = runExceptT $ do
         let iS = show i
-            sampleRoot = "./test/samples/" </> descr
+            sampleRoot = "test/samples" </> descr
             srcFile = "in." ++ iS ++ ".hs"
             srcPath = sampleRoot </> srcFile
             dstPath = sampleRoot </> ("out." ++ iS ++ ".json")
@@ -667,14 +669,8 @@ usagesTest :: GTDConfiguration -> Spec
 usagesTest consts0 = do
   let descr = "usages"
 
-  let consts =
-        consts0
-          { _args =
-              (_args consts0)
-                { _logLevel = LevelDebug,
-                  _powers = (_powers . _args $ consts0) {_goToReferences_limit = 3, _goToReferences_isEnabled = True}
-                }
-          }
+  let ps = (_powers . _args $ consts0) {_goToReferences_limit = 3, _goToReferences_isEnabled = True}
+  let consts = consts0 {_args = (_args consts0) {_logLevel = LevelDebug, _powers = ps}}
   cwd <- runIO getCurrentDirectory
 
   let wd = cwd </> "test/integrationTestRepo/fake"
@@ -702,11 +698,38 @@ usagesTest consts0 = do
             expSrcSpan2 = emptySourceSpan {sourceSpanFileName = BSC8.pack $ wd </> "lib2/src/Lib2.hs", sourceSpanStartColumn = 8, sourceSpanEndColumn = 14, sourceSpanStartLine = 4, sourceSpanEndLine = 4}
             expSrcSpan3 = emptySourceSpan {sourceSpanFileName = BSC8.pack $ _repos consts </> "base-4.16.4.0/Data/Fixed.hs", sourceSpanStartColumn = 5, sourceSpanEndColumn = 11, sourceSpanStartLine = 237, sourceSpanEndLine = 237}
          in Right $ Usages.Response {Usages.srcSpan = [expSrcSpan1, expSrcSpan2, expSrcSpan3], Usages.err = Nothing}
+  let expectedNothing = Right $ Usages.Response {Usages.srcSpan = [], Usages.err = Nothing}
+
+  let expectedLib1Decls =
+        let expSrcSpan1 = emptySourceSpan {sourceSpanFileName = BSC8.pack $ wd </> "lib1/src/Lib1.hs", sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = 6, sourceSpanEndLine = 6}
+            expSrcSpan2 = emptySourceSpan {sourceSpanFileName = BSC8.pack $ wd </> "lib1/src/Lib1.hs", sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = 7, sourceSpanEndLine = 7}
+         in Right $ Usages.Response {Usages.srcSpan = [expSrcSpan1, expSrcSpan2], Usages.err = Nothing}
+  let expectedLib2Decls =
+        let expSrcSpan1 = emptySourceSpan {sourceSpanFileName = BSC8.pack $ wd </> "lib2/src/Lib2.hs", sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = 3, sourceSpanEndLine = 3}
+            expSrcSpan2 = emptySourceSpan {sourceSpanFileName = BSC8.pack $ wd </> "lib2/src/Lib2.hs", sourceSpanStartColumn = 1, sourceSpanEndColumn = 5, sourceSpanStartLine = 4, sourceSpanEndLine = 4}
+         in Right $ Usages.Response {Usages.srcSpan = [expSrcSpan1, expSrcSpan2], Usages.err = Nothing}
+  let expectedLib1Exports =
+        let expSrcSpan1 = emptySourceSpan {sourceSpanFileName = BSC8.pack $ wd </> "lib1/src/Lib1.hs", sourceSpanStartColumn = 14, sourceSpanEndColumn = 18, sourceSpanStartLine = 1, sourceSpanEndLine = 1}
+         in Right $ Usages.Response {Usages.srcSpan = [expSrcSpan1], Usages.err = Nothing}
+  let expectedLib2Exports =
+        let expSrcSpan1 = emptySourceSpan {sourceSpanFileName = BSC8.pack $ wd </> "lib1/src/Lib1.hs", sourceSpanStartColumn = 20, sourceSpanEndColumn = 24, sourceSpanStartLine = 1, sourceSpanEndLine = 1}
+         in Right $ Usages.Response {Usages.srcSpan = [expSrcSpan1], Usages.err = Nothing}
+  let expectedLib2Imports =
+        let expSrcSpan1 = emptySourceSpan {sourceSpanFileName = BSC8.pack $ wd </> "lib1/src/Lib1.hs", sourceSpanStartColumn = 14, sourceSpanEndColumn = 18, sourceSpanStartLine = 4, sourceSpanEndLine = 4}
+         in Right $ Usages.Response {Usages.srcSpan = [expSrcSpan1], Usages.err = Nothing}
 
   let tests =
-        [ (exe3, wd, wd, "local function", "exe3", expectedExe3),
-          (exe3, wd, wd, "Prelude function", "return", expectedReturn),
-          ("Prelude.hs", baseWd, wd, "Prelude function", "return", expectedReturn)
+        [ (ps, exe3, wd, wd, "local function", "exe3", expectedNothing),
+          (ps, exe3, wd, wd, "Prelude function", "return", expectedReturn),
+          (ps, "Prelude.hs", baseWd, wd, "Prelude function", "return", expectedReturn),
+          (ps, lib1, wd, wd, "default", "lib1", expectedNothing),
+          (ps, lib1, wd, wd, "default", "lib2", expectedNothing),
+          (ps {_goToReferences_shouldIncludeImports = True}, lib1, wd, wd, "imports=True", "lib1", expectedNothing),
+          (ps {_goToReferences_shouldIncludeImports = True}, lib1, wd, wd, "imports=True", "lib2", expectedLib2Imports),
+          (ps {_goToReferences_shouldIncludeExports = True}, lib1, wd, wd, "exports=True", "lib1", expectedLib1Exports),
+          (ps {_goToReferences_shouldIncludeExports = True}, lib1, wd, wd, "exports=True", "lib2", expectedLib2Exports),
+          (ps {_goToReferences_shouldIncludeDeclarations = True}, lib1, wd, wd, "decl=True", "lib1", expectedLib1Decls),
+          (ps {_goToReferences_shouldIncludeDeclarations = True}, lib1, wd, wd, "decl=True", "lib2", expectedLib2Decls)
         ]
 
   let evalD f w = runExceptT $ definition req {workDir = wd, file = wd </> f, word = w}
@@ -715,19 +738,19 @@ usagesTest consts0 = do
         got <- runExceptT $ usages rq
         liftIO $ printf "%s -> %s ?= %s\n" (show rq) (show got) (show exp)
         return $ got `shouldBe` exp
-      mstack f a = runFileLoggingT logF $ f $ runReaderT a consts
+      mstack c f a = runFileLoggingT logF $ f $ runReaderT a c
 
   let init :: IO Context = do
         print descr
         printf "cwd = %s, wd = %s, logF = %s\n" cwd wd logF
         removeIfExists logF
         runFileLoggingT logF $ runReaderT resetCache consts
-        mstack (`execStateT` emptyContext) $ Cabal.load >> (evalD exe3 "return" >>= (liftIO . printf "%s %s %s -> %s\n" descr exe3 "return" . show)) >> Cabal.store
+        mstack consts (`execStateT` emptyContext) $ Cabal.load >> (evalD exe3 "return" >>= (liftIO . printf "%s %s %s -> %s\n" descr exe3 "return" . show)) >> Cabal.store
 
   beforeAll init $ describe descr $ do
-    forM_ tests $ \(f, wd, owd, n, q, r) -> do
+    forM_ tests $ \(ps, f, wd, owd, n, q, r) -> do
       it (printf "n=%s, f=%s, q=`%s`" n f q) $ \ss -> do
-        join $ mstack (`evalStateT` ss) $ do
+        join $ mstack (consts {_args = (_args consts) {_powers = ps}}) (`evalStateT` ss) $ do
           eval f wd owd q r
 
 main :: IO ()
