@@ -52,6 +52,8 @@ data Powers = Powers
   }
   deriving (Show, Read, Generic)
 
+$(makeLenses ''Powers)
+
 instance FromJSON Powers
 
 instance ToJSON Powers

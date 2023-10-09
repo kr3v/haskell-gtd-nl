@@ -2,9 +2,11 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module GTD.Server.Usages where
 
+import Control.Lens (makeLenses)
 import Control.Monad (forM_, unless)
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.IO.Class (MonadIO (..))
@@ -19,13 +21,13 @@ import qualified GTD.Cabal.Types as Cabal (key, pKey)
 import GTD.Configuration (Args (_powers), GTDConfiguration (..), Powers (..))
 import GTD.Haskell.Declaration (SourceSpan (..))
 import qualified GTD.Resolution.Cache.Usages as UsagesCache
-import GTD.Server.Definition (DefinitionRequest (DefinitionRequest), cabalPackage, definition, package_, cabalPackage'unresolved'plusStoreInLocals)
+import GTD.Server.Definition (DefinitionRequest (DefinitionRequest), cabalPackage, cabalPackage'unresolved'plusStoreInLocals, definition, package_)
 import qualified GTD.Server.Definition as Definition (DefinitionRequest (..), err, srcSpan)
+import GTD.Server.Utils (x)
 import GTD.State (MS)
 import GTD.Utils (concatForM, deduplicate, logDebugNSS, stats, updateStatus)
 import System.FilePath (normalise, splitDirectories, (</>))
 import Text.Printf (printf)
-import GTD.Server.Utils (x)
 
 data Request = Request
   { origWorkDir :: FilePath,
@@ -40,10 +42,12 @@ instance FromJSON Request
 instance ToJSON Request
 
 data Response = Response
-  { srcSpan :: [SourceSpan],
-    err :: Maybe String
+  { _srcSpan :: [SourceSpan],
+    _err :: Maybe String
   }
   deriving (Show, Eq, Generic)
+
+$(makeLenses ''Response)
 
 instance FromJSON Response
 
@@ -86,4 +90,4 @@ usages (Request {origWorkDir = owd, workDir = wd, file = rf0, word = w}) = do
   liftIO stats
   updateStatus ""
 
-  return Response {srcSpan = deduplicate $ take lim $ ss, err = Nothing}
+  return Response {_srcSpan = deduplicate $ take lim $ ss, _err = Nothing}

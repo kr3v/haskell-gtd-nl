@@ -144,6 +144,13 @@ test-suite haskell-gtd-nl-tests
     type: exitcode-stdio-1.0
     hs-source-dirs: test
     main-is: Spec.hs
+    other-modules:
+        Cabal
+        Cache
+        Definitions
+        Haskell
+        Resolution
+        Usages
     build-depends:
         haskell-gtd
         , QuickCheck

@@ -23,6 +23,7 @@ import Control.Monad.Trans.Maybe (MaybeT (..))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as S8
 import qualified Data.HashMap.Strict as HMap
+import Data.Hashable (Hashable)
 import Data.Int (Int32)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
@@ -37,7 +38,6 @@ import System.IO (BufferMode (..), Handle, IOMode (..), hSetBuffering, withFile)
 import System.IO.Error (isDoesNotExistError)
 import System.Random (randomIO)
 import Text.Printf (printf)
-import Data.Hashable (Hashable)
 
 maybeToMaybeT :: (Monad m) => Maybe a -> MaybeT m a
 maybeToMaybeT = MaybeT . return
@@ -189,6 +189,8 @@ f >==> g = \x -> do
 type family TupleList m where
   TupleList (Map.Map a b) = [(a, b)]
   TupleList (HMap.HashMap a b) = [(a, b)]
+
+up f x y z = f z $ f x y
 
 ---
 

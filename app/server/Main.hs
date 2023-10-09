@@ -145,7 +145,7 @@ usagesH ::
   Usages.Request ->
   Handler Usages.Response
 usagesH c m req = do
-  let defH = either (\e -> Usages.Response {Usages.err = Just e, Usages.srcSpan = []}) id
+  let defH = either (\e -> Usages.Response {Usages._err = Just e, Usages._srcSpan = []}) id
   liftIO $ h "usages" c m Usages.usages (\_ e -> defH e) req
 
 localUsagesH ::
