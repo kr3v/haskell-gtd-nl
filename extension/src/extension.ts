@@ -365,8 +365,8 @@ class XCodeLensProvider implements vscode.CodeLensProvider {
 		// send a request to the server
 		await startServerIfRequired();
 		let body = {
-			workDir: rwd,
-			file: rfile
+			_workDir: rwd,
+			_file: rfile
 		};
 		let res = await axios.
 			post(`http://localhost:${port}/usagelenses`, body).
@@ -378,18 +378,18 @@ class XCodeLensProvider implements vscode.CodeLensProvider {
 		statusPackageS = "";
 
 		let data = res.data;
-		if (data.err != undefined && data.err != "") {
-			outputChannel.appendLine(util.format("err=%s (data=%s)", data.err, JSON.stringify(data)));
+		if (data._err != undefined && data._err != "") {
+			outputChannel.appendLine(util.format("err=%s (data=%s)", data._err, JSON.stringify(data)));
 			return Promise.resolve([]);
 		}
-		if (data.srcSpan == undefined) {
+		if (data._srcSpan == undefined) {
 			outputChannel.appendLine(util.format("no srcSpan (data=%s)", JSON.stringify(data)));
 			return Promise.resolve([]);
 		}
 		outputChannel.appendLine(util.format("response = %s", data));
 
 		const codelensArray: vscode.CodeLens[] = [];
-		for (const [span0, spans] of data.srcSpan) {
+		for (const [span0, spans] of data._srcSpan) {
 			let span0R = spanToLocation(repos, owd, file, false, span0);
 			if (span0R == null) continue;
 			let spansR: vscode.Location[] = spans
@@ -488,10 +488,10 @@ async function genericDefProvider(
 	// send a request to the server
 	await startServerIfRequired();
 	let body = {
-		origWorkDir: owd,
-		workDir: rwd,
-		file: rfile,
-		word: word
+		_origWorkDir: owd,
+		_workDir: rwd,
+		_file: rfile,
+		_word: word
 	};
 	let res = await axios.
 		post(`http://localhost:${port}/` + endpoint, body).
@@ -503,11 +503,11 @@ async function genericDefProvider(
 	statusPackageS = "";
 
 	let data = res.data;
-	if (data.err != undefined && data.err != "") {
-		outputChannel.appendLine(util.format("%s -> err=%s (data=%s)", word, data.err, JSON.stringify(data)));
+	if (data._err != undefined && data._err != "") {
+		outputChannel.appendLine(util.format("%s -> err=%s (data=%s)", word, data._err, JSON.stringify(data)));
 		return Promise.resolve([]);
 	}
-	if (data.srcSpan == undefined) {
+	if (data._srcSpan == undefined) {
 		outputChannel.appendLine(util.format("%s -> no srcSpan (data=%s)", word, JSON.stringify(data)));
 		return Promise.resolve([]);
 	}
@@ -515,7 +515,7 @@ async function genericDefProvider(
 
 	let disableLocalDefs = isMainHaskellExtensionActive() && (vscode.workspace.getConfiguration('haskell-gtd-nl').get<boolean>("extension.disable-local-definitions-when-hls-is-active") ?? true);
 	let locs = [];
-	for (const span of data.srcSpan) {
+	for (const span of data._srcSpan) {
 		let definitionLocation = spanToLocation(repos, owd, file, disableLocalDefs, span);
 		if (definitionLocation == null) continue;
 		locs.push(definitionLocation);
@@ -561,23 +561,23 @@ async function cpphs() {
 	}
 
 	await startServerIfRequired();
-	let body = { crWorkDir: wd, crFile: file };
+	let body = { _workDir: wd, _file: file };
 	let url = `http://localhost:${port}/cpphs`;
 	let res = await axios.post(url, body).catch(function (error) {
 		outputChannel.appendLine(util.format("%s -> %s", body, error));
 		return { "data": {} };
 	});
 	let data = res.data;
-	if (data.crErr != undefined && data.crErr != "") {
-		outputChannel.appendLine(util.format("%s -> err=%s (data=%s)", data.crErr, JSON.stringify(data)));
+	if (data._err != undefined && data._err != "") {
+		outputChannel.appendLine(util.format("%s -> err=%s (data=%s)", data._err, JSON.stringify(data)));
 		return Promise.resolve([]);
 	}
-	if (data.crContent == undefined) {
+	if (data._content == undefined) {
 		outputChannel.appendLine(util.format("%s -> no content (data=%s)", JSON.stringify(data)));
 		return Promise.resolve([]);
 	}
 	outputChannel.appendLine(util.format("response = %s", data));
-	let newContent = data.crContent;
+	let newContent = data._content;
 
 	const fullRange = new vscode.Range(
 		doc.positionAt(0),

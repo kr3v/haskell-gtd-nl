@@ -2,9 +2,11 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module GTD.Server.CodeLens.LocalUsages where
 
+import Control.Lens (makeLenses)
 import Control.Monad (forM_, unless)
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.Reader (asks)
@@ -21,8 +23,8 @@ import GTD.Utils (TupleList, concatMapM, deduplicate, updateStatus)
 import System.FilePath (normalise)
 
 data Request = Request
-  { workDir :: FilePath,
-    file :: FilePath
+  { _workDir :: FilePath,
+    _file :: FilePath
   }
   deriving (Show, Eq, Generic)
 
@@ -30,18 +32,22 @@ instance FromJSON Request
 
 instance ToJSON Request
 
+$(makeLenses ''Request)
+
 data Response = Response
-  { srcSpan :: TupleList UsagesInFileMapM,
-    err :: Maybe String
+  { _srcSpan :: TupleList UsagesInFileMapM,
+    _err :: Maybe String
   }
   deriving (Show, Eq, Generic)
+
+$(makeLenses ''Response)
 
 instance FromJSON Response
 
 instance ToJSON Response
 
 usages :: Request -> (MS m, MonadError String m) => m Response
-usages (Request {workDir = wd, file = rf0}) = do
+usages (Request {_workDir = wd, _file = rf0}) = do
   p <- asks $ _powers . _args
   unless (_goToReferences_lens_isEnabled p) $ throwError "Go to References is not enabled"
 
@@ -55,4 +61,4 @@ usages (Request {workDir = wd, file = rf0}) = do
   updateStatus ""
   let z = foldr (HMap.unionWith (<>) . _m) HMap.empty fs
 
-  return Response {srcSpan = fmap deduplicate <$> HMap.toList z, err = Nothing}
+  return Response {_srcSpan = fmap deduplicate <$> HMap.toList z, _err = Nothing}

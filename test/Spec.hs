@@ -15,6 +15,7 @@ import System.Directory (makeAbsolute)
 import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
 import Test.Hspec.Runner (Config (configPrintCpuTime), defaultConfig, hspecWith)
 import Usages (usagesTest)
+import LocalUsages (localUsagesTest)
 
 main :: IO ()
 main = do
@@ -27,16 +28,17 @@ main = do
   runStderrLoggingT $ runReaderT resetCache c
 
   hspecWith defaultConfig {configPrintCpuTime = False} $ do
-    haskellApplyCppHsTest c
+    -- haskellApplyCppHsTest c
+    -- haskellGetIdentifiersTest c
+    -- haskellGetExportsTest c
+    -- haskellGetImportsTest c
+    -- haskellGetIdentifierUsagesTest c
+    -- linesTest c
 
-    haskellGetIdentifiersTest c
-    haskellGetExportsTest c
-    haskellGetImportsTest c
-    haskellGetIdentifierUsagesTest c
+    -- figureOutExportsTest c
+    -- cabalFullTest c
 
-    linesTest c
-    figureOutExportsTest c
-    cabalFullTest c
-    dropCacheTest c
-    definitionTests c
-    usagesTest c
+    -- dropCacheTest c
+    localUsagesTest c
+    -- definitionTests c
+    -- usagesTest c

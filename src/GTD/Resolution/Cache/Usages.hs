@@ -4,7 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module GTD.Resolution.Cache.Usages (get, getAll, put, remove) where
+module GTD.Resolution.Cache.Usages (get, getAll, put, remove, exists) where
 
 import Control.Monad (forM, forM_)
 import Control.Monad.IO.Class (MonadIO (..))
@@ -25,6 +25,7 @@ import GTD.Utils (encodeWithTmp1, logDebugNSS, removeIfExists, concatForM)
 import System.Directory (createDirectoryIfMissing, listDirectory)
 import System.FilePath (addTrailingPathSeparator, joinPath, splitPath, takeFileName, (</>))
 import Text.Printf (printf)
+import System.Posix (fileExist)
 
 reposMarker :: String
 reposMarker = "@repos@"
@@ -121,3 +122,8 @@ remove cPkg = do
   ps <- fromMaybe [] <$> binaryGet d
   liftIO $ forM_ ps removeIfExists
   liftIO $ removeIfExists d
+
+exists ::
+  Cabal.Package a ->
+  (MS0 m) => m Bool
+exists cPkg = liftIO . fileExist =<< __dir'refs cPkg

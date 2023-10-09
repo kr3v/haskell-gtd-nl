@@ -27,8 +27,8 @@ import GTD.Utils (mapFrom, updateStatus)
 import Text.Printf (printf)
 
 data DropPackageCacheRequest = DropCacheRequest
-  { dcDir :: FilePath,
-    dcFile :: FilePath
+  { _workDir :: FilePath,
+    _file :: FilePath
   }
   deriving (Show, Generic)
 
@@ -36,10 +36,17 @@ instance FromJSON DropPackageCacheRequest
 
 instance ToJSON DropPackageCacheRequest
 
+-- dropPackageCache ensures that cache is reset when a file is saved
+--
+-- a saved file can correspond to one or more packages
+-- all the package data should be dropped
+--
+-- in case this package was a library, we need to drop all the cache for its dependents,
+-- because they might have used this library (and some of its symbols are likely to be invalid)
 dropPackageCache ::
   DropPackageCacheRequest ->
   (MS m, MonadError String m) => m String
-dropPackageCache (DropCacheRequest {dcDir = d, dcFile = f}) = do
+dropPackageCache (DropCacheRequest {_workDir = d, _file = f}) = do
   updateStatus $ printf "resetting cache on %s..." d
 
   cPkgs <- findAtF d

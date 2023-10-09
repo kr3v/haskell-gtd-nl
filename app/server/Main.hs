@@ -24,7 +24,9 @@ import qualified GTD.Cabal.Cache as CabalCache
 import GTD.Configuration (Args (..), GTDConfiguration (..), argsP, prepareConstants)
 import qualified GTD.Server.CodeLens.LocalUsages as LocalUsages
 import GTD.Server.Cpphs (CpphsRequest, CpphsResponse (..), cpphs)
+import qualified GTD.Server.Cpphs as C
 import GTD.Server.Definition (DefinitionRequest (..), DefinitionResponse (..), definition)
+import qualified GTD.Server.Definition as D
 import GTD.Server.DropPackageCache (DropPackageCacheRequest, dropPackageCache)
 import qualified GTD.Server.Usages as Usages
 import GTD.State (Context, emptyContext)
@@ -113,7 +115,7 @@ definitionH ::
   DefinitionRequest ->
   Handler (Headers '[Header hs String] DefinitionResponse)
 definitionH c m req = do
-  let defH = either (\e -> DefinitionResponse {err = Just e, srcSpan = []}) id
+  let defH = either (\e -> DefinitionResponse {D._err = Just e, _srcSpan = []}) id
   liftIO $ h "definition" c m definition (\r e -> addHeader r $ defH e) req
 
 pingH :: MVar ServerState -> Handler String
@@ -136,7 +138,7 @@ runCpphsH ::
   CpphsRequest ->
   Handler CpphsResponse
 runCpphsH c m req = do
-  let defH = either (\e -> CpphsResponse {crErr = Just e, crContent = Nothing}) id
+  let defH = either (\e -> CpphsResponse {C._err = Just e, _content = Nothing}) id
   liftIO $ h "runCpphs" c m cpphs (\_ e -> defH e) req
 
 usagesH ::
@@ -154,7 +156,7 @@ localUsagesH ::
   LocalUsages.Request ->
   Handler LocalUsages.Response
 localUsagesH c m req = do
-  let defH = either (\e -> LocalUsages.Response {LocalUsages.err = Just e, LocalUsages.srcSpan = []}) id
+  let defH = either (\e -> LocalUsages.Response {LocalUsages._err = Just e, LocalUsages._srcSpan = []}) id
   liftIO $ h "localUsages" c m LocalUsages.usages (\_ e -> defH e) req
 
 ---

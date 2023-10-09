@@ -26,7 +26,6 @@ import GTD.Utils (encodeWithTmp, logDebugNSS, removeIfExistsL)
 import System.Directory (doesFileExist)
 import System.FilePath ((</>))
 import Text.Printf (printf)
-import GTD.Resolution.Module.Types (UsagesMap(..))
 
 exportsN :: String
 exportsN = "exports.binary"

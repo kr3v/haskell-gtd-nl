@@ -17,14 +17,14 @@ import GTD.Utils (storeIOExceptionToMonadError, updateStatus)
 import Text.Printf (printf)
 
 data CpphsRequest = CpphsRequest
-  { crWorkDir :: FilePath,
-    crFile :: FilePath
+  { _workDir :: FilePath,
+    _file :: FilePath
   }
   deriving (Show, Generic)
 
 data CpphsResponse = CpphsResponse
-  { crContent :: Maybe String,
-    crErr :: Maybe String
+  { _content :: Maybe String,
+    _err :: Maybe String
   }
   deriving (Show, Generic)
 
@@ -39,7 +39,7 @@ instance ToJSON CpphsResponse
 cpphs ::
   CpphsRequest ->
   (MS m, MonadError String m) => m CpphsResponse
-cpphs (CpphsRequest {crWorkDir = wd, crFile = rf}) = do
+cpphs (CpphsRequest {_workDir = wd, _file = rf}) = do
   updateStatus $ printf "executing `cpphs` for %s..." rf
   _ <- cabalPackage wd rf
   content <- storeIOExceptionToMonadError $ readFile rf

@@ -92,16 +92,16 @@ cabalPackage wd rf = do
 ---
 
 data DefinitionRequest = DefinitionRequest
-  { origWorkDir :: FilePath,
-    workDir :: FilePath,
-    file :: FilePath,
-    word :: String
+  { _origWorkDir :: FilePath,
+    _workDir :: FilePath,
+    _file :: FilePath,
+    _word :: String
   }
   deriving (Show, Generic)
 
 data DefinitionResponse = DefinitionResponse
-  { srcSpan :: [SourceSpan],
-    err :: Maybe String
+  { _srcSpan :: [SourceSpan],
+    _err :: Maybe String
   }
   deriving (Show, Generic, Eq)
 
@@ -125,7 +125,7 @@ resolution rm w =
 definition ::
   DefinitionRequest ->
   (MS m, MonadError String m) => m DefinitionResponse
-definition (DefinitionRequest {workDir = wd, file = rf0, word = w}) = do
+definition (DefinitionRequest {_workDir = wd, _file = rf0, _word = w}) = do
   let rf = normalise rf0
   updateStatus $ printf "resolving Cabal package for %s" wd
   cPkgs <- cabalPackage wd rf
@@ -154,4 +154,4 @@ definition (DefinitionRequest {workDir = wd, file = rf0, word = w}) = do
     return r
   liftIO stats
   updateStatus ""
-  return DefinitionResponse {srcSpan = deduplicate $ concat ss, err = Nothing}
+  return DefinitionResponse {_srcSpan = deduplicate $ concat ss, _err = Nothing}
