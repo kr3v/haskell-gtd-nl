@@ -14,3 +14,6 @@ data Lib1_Data
   | Lib1_Data2
       { lib1_data2_1 :: Int
       }
+  | Lib1_Data1_Dup
+      { lib1_data1_1 :: Int
+      }

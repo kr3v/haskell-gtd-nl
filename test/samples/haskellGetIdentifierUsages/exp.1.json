@@ -6,11 +6,11 @@
         "_iuModule": "",
         "_iuName": "lib2",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 5,
-          "sourceSpanEndLine": 3,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.1.hs",
-          "sourceSpanStartColumn": 1,
-          "sourceSpanStartLine": 3
+          "_colEnd": 5,
+          "_lineEnd": 3,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.1.hs",
+          "_colBegin": 1,
+          "_lineBegin": 3
         },
         "_iuType": "Regular"
       },
@@ -18,11 +18,11 @@
         "_iuModule": "",
         "_iuName": "IO",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 11,
-          "sourceSpanEndLine": 3,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.1.hs",
-          "sourceSpanStartColumn": 9,
-          "sourceSpanStartLine": 3
+          "_colEnd": 11,
+          "_lineEnd": 3,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.1.hs",
+          "_colBegin": 9,
+          "_lineBegin": 3
         },
         "_iuType": "Regular"
       },
@@ -30,11 +30,11 @@
         "_iuModule": "",
         "_iuName": "Int",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 15,
-          "sourceSpanEndLine": 3,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.1.hs",
-          "sourceSpanStartColumn": 12,
-          "sourceSpanStartLine": 3
+          "_colEnd": 15,
+          "_lineEnd": 3,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.1.hs",
+          "_colBegin": 12,
+          "_lineBegin": 3
         },
         "_iuType": "Regular"
       },
@@ -42,11 +42,11 @@
         "_iuModule": "",
         "_iuName": "lib2",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 5,
-          "sourceSpanEndLine": 4,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.1.hs",
-          "sourceSpanStartColumn": 1,
-          "sourceSpanStartLine": 4
+          "_colEnd": 5,
+          "_lineEnd": 4,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.1.hs",
+          "_colBegin": 1,
+          "_lineBegin": 4
         },
         "_iuType": "Regular"
       },
@@ -54,11 +54,11 @@
         "_iuModule": "",
         "_iuName": "lib2",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 5,
-          "sourceSpanEndLine": 4,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.1.hs",
-          "sourceSpanStartColumn": 1,
-          "sourceSpanStartLine": 4
+          "_colEnd": 5,
+          "_lineEnd": 4,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.1.hs",
+          "_colBegin": 1,
+          "_lineBegin": 4
         },
         "_iuType": "Regular"
       },
@@ -66,11 +66,11 @@
         "_iuModule": "",
         "_iuName": "return",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 14,
-          "sourceSpanEndLine": 4,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.1.hs",
-          "sourceSpanStartColumn": 8,
-          "sourceSpanStartLine": 4
+          "_colEnd": 14,
+          "_lineEnd": 4,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.1.hs",
+          "_colBegin": 8,
+          "_lineBegin": 4
         },
         "_iuType": "Regular"
       },
@@ -78,11 +78,11 @@
         "_iuModule": "",
         "_iuName": "Lib2_ReexportedTypeAlias",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 30,
-          "sourceSpanEndLine": 6,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.1.hs",
-          "sourceSpanStartColumn": 6,
-          "sourceSpanStartLine": 6
+          "_colEnd": 30,
+          "_lineEnd": 6,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.1.hs",
+          "_colBegin": 6,
+          "_lineBegin": 6
         },
         "_iuType": "Regular"
       },
@@ -90,11 +90,11 @@
         "_iuModule": "",
         "_iuName": "String",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 39,
-          "sourceSpanEndLine": 6,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.1.hs",
-          "sourceSpanStartColumn": 33,
-          "sourceSpanStartLine": 6
+          "_colEnd": 39,
+          "_lineEnd": 6,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.1.hs",
+          "_colBegin": 33,
+          "_lineBegin": 6
         },
         "_iuType": "Regular"
       }

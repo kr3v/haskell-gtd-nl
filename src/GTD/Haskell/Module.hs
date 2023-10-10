@@ -177,14 +177,3 @@ instance ToJSON HsModuleP
 
 instance Binary HsModuleP
 
----
-
-resolve :: Map.Map Cabal.ModuleNameS HsModuleP -> Declaration -> Maybe Declaration
-resolve moduleDecls orig = do
-  m <- _declModule orig `Map.lookup` moduleDecls
-  _declName orig `Map.lookup` (Declaration._decls . _exports) m
-
-resolveCDT :: Map.Map Cabal.ModuleNameS HsModuleP -> ClassOrData -> Maybe ClassOrData
-resolveCDT moduleDecls orig = do
-  m <- (_declModule . _cdtName) orig `Map.lookup` moduleDecls
-  (_declName . _cdtName) orig `Map.lookup` (Declaration._dataTypes . _exports) m

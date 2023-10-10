@@ -45,6 +45,6 @@ resolve m n = n `Map.lookupLE` m <&> \(n0, l@Line {num = n1}) -> l {num = n - n0
 
 translate :: Map.Map Int Line -> SourceSpan -> SourceSpan
 translate m d =
-  case resolve m (sourceSpanStartLine d) of
-    Just Line {path = p, num = n} -> d {sourceSpanFileName = p, sourceSpanStartLine = n, sourceSpanEndLine = n}
+  case resolve m (_lineBegin d) of
+    Just Line {path = p, num = n} -> d {_fileName = p, _lineBegin = n, _lineEnd = n}
     Nothing -> d

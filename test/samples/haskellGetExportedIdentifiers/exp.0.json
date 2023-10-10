@@ -8,11 +8,11 @@
           "_declModule": "ScEaHs.Game.Surface",
           "_declName": "Surface",
           "_declSrcOrig": {
-            "sourceSpanEndColumn": 0,
-            "sourceSpanEndLine": 0,
-            "sourceSpanFileName": "",
-            "sourceSpanStartColumn": 0,
-            "sourceSpanStartLine": 0
+            "_colEnd": 0,
+            "_lineEnd": 0,
+            "_fileName": "",
+            "_colBegin": 0,
+            "_lineBegin": 0
           },
           "_declSrcOthers": []
         },
@@ -24,11 +24,11 @@
         "_declModule": "ScEaHs.Game.Surface",
         "_declName": "heights",
         "_declSrcOrig": {
-          "sourceSpanEndColumn": 0,
-          "sourceSpanEndLine": 0,
-          "sourceSpanFileName": "",
-          "sourceSpanStartColumn": 0,
-          "sourceSpanStartLine": 0
+          "_colEnd": 0,
+          "_lineEnd": 0,
+          "_fileName": "",
+          "_colBegin": 0,
+          "_lineBegin": 0
         },
         "_declSrcOthers": []
       },
@@ -36,11 +36,11 @@
         "_declModule": "ScEaHs.Game.Surface",
         "_declName": "width",
         "_declSrcOrig": {
-          "sourceSpanEndColumn": 0,
-          "sourceSpanEndLine": 0,
-          "sourceSpanFileName": "",
-          "sourceSpanStartColumn": 0,
-          "sourceSpanStartLine": 0
+          "_colEnd": 0,
+          "_lineEnd": 0,
+          "_fileName": "",
+          "_colBegin": 0,
+          "_lineBegin": 0
         },
         "_declSrcOthers": []
       },
@@ -48,11 +48,11 @@
         "_declModule": "ScEaHs.Game.Surface",
         "_declName": "maxHeight",
         "_declSrcOrig": {
-          "sourceSpanEndColumn": 0,
-          "sourceSpanEndLine": 0,
-          "sourceSpanFileName": "",
-          "sourceSpanStartColumn": 0,
-          "sourceSpanStartLine": 0
+          "_colEnd": 0,
+          "_lineEnd": 0,
+          "_fileName": "",
+          "_colBegin": 0,
+          "_lineBegin": 0
         },
         "_declSrcOthers": []
       },
@@ -60,11 +60,11 @@
         "_declModule": "ScEaHs.Game.Surface",
         "_declName": "isWithinSurface",
         "_declSrcOrig": {
-          "sourceSpanEndColumn": 0,
-          "sourceSpanEndLine": 0,
-          "sourceSpanFileName": "",
-          "sourceSpanStartColumn": 0,
-          "sourceSpanStartLine": 0
+          "_colEnd": 0,
+          "_lineEnd": 0,
+          "_fileName": "",
+          "_colBegin": 0,
+          "_lineBegin": 0
         },
         "_declSrcOthers": []
       },
@@ -72,11 +72,11 @@
         "_declModule": "ScEaHs.Game.Surface",
         "_declName": "putOn'",
         "_declSrcOrig": {
-          "sourceSpanEndColumn": 0,
-          "sourceSpanEndLine": 0,
-          "sourceSpanFileName": "",
-          "sourceSpanStartColumn": 0,
-          "sourceSpanStartLine": 0
+          "_colEnd": 0,
+          "_lineEnd": 0,
+          "_fileName": "",
+          "_colBegin": 0,
+          "_lineBegin": 0
         },
         "_declSrcOthers": []
       },
@@ -84,11 +84,11 @@
         "_declModule": "ScEaHs.Game.Surface",
         "_declName": "putOn",
         "_declSrcOrig": {
-          "sourceSpanEndColumn": 0,
-          "sourceSpanEndLine": 0,
-          "sourceSpanFileName": "",
-          "sourceSpanStartColumn": 0,
-          "sourceSpanStartLine": 0
+          "_colEnd": 0,
+          "_lineEnd": 0,
+          "_fileName": "",
+          "_colBegin": 0,
+          "_lineBegin": 0
         },
         "_declSrcOthers": []
       }

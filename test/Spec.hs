@@ -28,17 +28,17 @@ main = do
   runStderrLoggingT $ runReaderT resetCache c
 
   hspecWith defaultConfig {configPrintCpuTime = False} $ do
-    -- haskellApplyCppHsTest c
-    -- haskellGetIdentifiersTest c
-    -- haskellGetExportsTest c
-    -- haskellGetImportsTest c
-    -- haskellGetIdentifierUsagesTest c
-    -- linesTest c
+    haskellApplyCppHsTest c
+    haskellGetIdentifiersTest c
+    haskellGetExportsTest c
+    haskellGetImportsTest c
+    haskellGetIdentifierUsagesTest c
+    linesTest c
 
-    -- figureOutExportsTest c
-    -- cabalFullTest c
+    figureOutExportsTest c
+    cabalFullTest c
 
-    -- dropCacheTest c
-    localUsagesTest c
-    -- definitionTests c
-    -- usagesTest c
+    dropCacheTest c
+    -- localUsagesTest c
+    definitionTests c
+    usagesTest c

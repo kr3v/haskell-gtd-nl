@@ -50,7 +50,7 @@ resolution'direct sM m = flip execStateT HMap.empty $ do
   forM_ (_imports . _info $ m) $
     \Module {_mName = k, _mType = mt, _mAllowNoQualifier = mnq, _mQualifier = mq, _mDecls = md, _mCDs = mc} ->
       forM_ (HMap.lookup k sM) $ \c -> do
-        let o = emptySourceSpan {sourceSpanFileName = BSW8.pack . HsModule._mPath . HsModule._ometadata $ c, sourceSpanStartColumn = 1, sourceSpanStartLine = 1}
+        let o = emptySourceSpan {_fileName = BSW8.pack . HsModule._mPath . HsModule._ometadata $ c, _colBegin = 1, _lineBegin = 1}
         modify $ HMap.insertWith (<>) (k ++ "*") mempty {_decls = Map.singleton "" Declaration {_declModule = k, _declName = "", _declSrcOrig = o, _declSrcOthers = []}}
         let stuff = case mt of
               All -> _exports c
@@ -100,4 +100,4 @@ collectUsages m liM = do
   foldr (.) id $
     flip mapMaybe ids \(IdentifierUsage {_iuModule = mn, _iuName = n, _iuType = iu, _iuSourceSpan = is}) ->
       resolution'word'parsed'b liMb mn n <&> \r ->
-        HMap.insertWith (HMap.unionWith (<>)) (sourceSpanFileName r) $ HMap.singleton iu (UsagesInFileMap $ HMap.singleton r [is])
+        HMap.insertWith (HMap.unionWith (<>)) (_fileName r) $ HMap.singleton iu (UsagesInFileMap $ HMap.singleton r [is])

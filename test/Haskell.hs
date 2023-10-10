@@ -67,6 +67,8 @@ haskellGetIdentifiersTest consts = do
         test n p 2
       it "tycd only plus multiple pattern matches" $
         test n p 3
+      it "duplicate field name" $
+        test n p 4
 
 haskellGetExportsTest :: GTDConfiguration -> Spec
 haskellGetExportsTest consts = do

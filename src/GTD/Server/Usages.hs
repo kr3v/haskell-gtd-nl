@@ -71,19 +71,19 @@ usages (Request {_origWorkDir = owd, _workDir = wd, _file = rf0, _word = w}) = d
 
   r <- asks _repos
   rs <- splitDirectories <$> asks _repos
-  let locP = splitDirectories $ BSC8.unpack $ sourceSpanFileName loc
+  let locP = splitDirectories $ BSC8.unpack $ _fileName loc
   wdD <-
     maybe (throwError "cannot figure out stuff") return $
       if rs `isPrefixOf` locP
         then (r </>) <$> (listToMaybe =<< (rs `stripPrefix` locP))
         else return wd
   logDebugNSS logTag $ printf "rs=%s, locP=%s, wdD=%s" (show rs) (show locP) wdD
-  cpkgsD <- cabalPackage wdD (BSC8.unpack $ sourceSpanFileName loc)
+  cpkgsD <- cabalPackage wdD (BSC8.unpack $ _fileName loc)
   cpkgsO <- cabalPackage'unresolved'plusStoreInLocals owd
   forM_ cpkgsO package_
 
   logDebugNSS logTag $ printf "loc: %s" (show loc)
-  let f = BSC8.unpack $ sourceSpanFileName loc
+  let f = BSC8.unpack $ _fileName loc
   ss <- concatForM (listToMaybe cpkgsD) $ \cpkgD -> do
     logDebugNSS logTag $ printf "pkg: %s" (show $ Cabal.pKey . Cabal.key $ cpkgD)
     concatMap (x p loc) <$> UsagesCache.get cpkgsO cpkgD f

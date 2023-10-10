@@ -14,11 +14,12 @@
 
 module GTD.Haskell.Declaration where
 
+import Control.Applicative (Applicative (liftA2))
 import Control.DeepSeq (NFData)
 import Control.Lens (Each (..), makeLenses, (%=))
 import Control.Monad.RWS (MonadState, MonadTrans (lift))
 import Control.Monad.State (execStateT)
-import Data.Aeson (FromJSON (..), FromJSONKey (..), FromJSONKeyFunction (..), ToJSON (..), ToJSONKey, Value)
+import Data.Aeson (FromJSON (..), FromJSONKey (..), ToJSON (..), ToJSONKey, Value)
 import Data.Aeson.Types (Parser, Value (..))
 import Data.Binary (Binary)
 import qualified Data.Binary as Binary
@@ -41,11 +42,11 @@ instance (Hashable k, Eq k, Binary k, Binary v) => Binary (HMap.HashMap k v) whe
 type SourceSpanFileName = ByteString
 
 data SourceSpan = SourceSpan
-  { sourceSpanFileName :: SourceSpanFileName,
-    sourceSpanStartLine :: Int,
-    sourceSpanStartColumn :: Int,
-    sourceSpanEndLine :: Int,
-    sourceSpanEndColumn :: Int
+  { _fileName :: SourceSpanFileName,
+    _lineBegin :: Int,
+    _lineEnd :: Int,
+    _colBegin :: Int,
+    _colEnd :: Int
   }
   deriving (NFData, Show, Generic, Eq, Ord, Hashable)
 
@@ -146,9 +147,9 @@ instance Monoid Declarations where
 
 srcSpans :: Declarations -> [SourceSpan]
 srcSpans Declarations {_decls = ds, _dataTypes = dts} =
-  let ds' = concatMap (\d -> [_declSrcOrig d] <> _declSrcOthers d) (Map.elems ds)
+  let ds' = Map.elems ds
       dts' = concatMap (\cd -> [_cdtName cd] <> Map.elems (_cdtFields cd)) (Map.elems dts)
-   in ds' <> (_declSrcOrig <$> dts')
+   in concatMap (liftA2 (<>) ((: []) . _declSrcOrig) _declSrcOthers) (ds' <> dts')
 
 asResolutionMap :: Declarations -> Map.Map Identifier Declaration
 asResolutionMap Declarations {_decls = ds, _dataTypes = dts} =
@@ -157,7 +158,7 @@ asResolutionMap Declarations {_decls = ds, _dataTypes = dts} =
    in asDeclsMap $ ds' <> dts'
 
 asDeclsMap :: [Declaration] -> Map.Map Identifier Declaration
-asDeclsMap ds = Map.fromList $ (\d -> (_declName d, d)) <$> ds
+asDeclsMap ds = Map.fromListWith (<>) $ (\d -> (_declName d, d)) <$> ds
 
 asDeclsHMap :: [Declaration] -> HMap.HashMap Identifier Declaration
 asDeclsHMap ds = HMap.fromList $ (\d -> (_declName d, d)) <$> ds

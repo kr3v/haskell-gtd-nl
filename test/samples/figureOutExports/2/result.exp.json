@@ -6,19 +6,19 @@
         "_declModule": "Test2",
         "_declName": "fx",
         "_declSrcOrig": {
-          "sourceSpanEndColumn": 3,
-          "sourceSpanEndLine": 5,
-          "sourceSpanFileName": "test/samples/figureOutExports/2/main.hs",
-          "sourceSpanStartColumn": 1,
-          "sourceSpanStartLine": 5
+          "_colEnd": 3,
+          "_lineEnd": 5,
+          "_fileName": "test/samples/figureOutExports/2/main.hs",
+          "_colBegin": 1,
+          "_lineBegin": 5
         },
         "_declSrcOthers": [
           {
-            "sourceSpanEndColumn": 3,
-            "sourceSpanEndLine": 6,
-            "sourceSpanFileName": "test/samples/figureOutExports/2/main.hs",
-            "sourceSpanStartColumn": 1,
-            "sourceSpanStartLine": 6
+            "_colEnd": 3,
+            "_lineEnd": 6,
+            "_fileName": "test/samples/figureOutExports/2/main.hs",
+            "_colBegin": 1,
+            "_lineBegin": 6
           }
         ]
       }

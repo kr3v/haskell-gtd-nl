@@ -106,11 +106,11 @@ parse p content = do
 asSourceSpan :: SrcSpan -> SourceSpan
 asSourceSpan (RealSrcSpan r _) =
   SourceSpan
-    { sourceSpanFileName = BSW8.pack $ unpackFS $ srcSpanFile r,
-      sourceSpanStartLine = srcSpanStartLine r,
-      sourceSpanStartColumn = srcSpanStartCol r,
-      sourceSpanEndLine = srcSpanEndLine r,
-      sourceSpanEndColumn = srcSpanEndCol r
+    { _fileName = BSW8.pack $ unpackFS $ srcSpanFile r,
+      _lineBegin = srcSpanStartLine r,
+      _colBegin = srcSpanStartCol r,
+      _lineEnd = srcSpanEndLine r,
+      _colEnd = srcSpanEndCol r
     }
 asSourceSpan _ = emptySourceSpan
 
@@ -144,7 +144,7 @@ identifiers (HsModuleX HsModule {hsmodName = Just (L (SrcSpanAnn _ _) (ModuleNam
     TyClD _ tc -> case tc of
       FamDecl {tcdFam = FamilyDecl {fdLName = (L (SrcSpanAnn _ l) k)}} -> tellC l k mempty
       SynDecl {tcdLName = (L (SrcSpanAnn _ l) k)} -> tellC l k mempty
-      DataDecl {tcdLName = (L (SrcSpanAnn _ l) k), tcdDataDefn = (HsDataDefn _ _ _ _ ctorsD _)} -> do
+      DataDecl {tcdLName = (L (SrcSpanAnn _ l) k), tcdDataDefn = (HsDataDefn {dd_cons = ctorsD})} -> do
         let ctors = case ctorsD of
               NewTypeCon a -> [a]
               DataTypeCons _ as -> as

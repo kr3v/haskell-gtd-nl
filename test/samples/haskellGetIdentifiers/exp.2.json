@@ -6,11 +6,11 @@
           "_declModule": "G",
           "_declName": "f",
           "_declSrcOrig": {
-            "sourceSpanEndColumn": 4,
-            "sourceSpanEndLine": 7,
-            "sourceSpanFileName": "test/samples/haskellGetIdentifiers/in.2.hs",
-            "sourceSpanStartColumn": 3,
-            "sourceSpanStartLine": 7
+            "_colEnd": 4,
+            "_lineEnd": 7,
+            "_fileName": "test/samples/haskellGetIdentifiers/in.2.hs",
+            "_colBegin": 3,
+            "_lineBegin": 7
           },
           "_declSrcOthers": []
         }
@@ -19,11 +19,11 @@
         "_declModule": "G",
         "_declName": "C",
         "_declSrcOrig": {
-          "sourceSpanEndColumn": 8,
-          "sourceSpanEndLine": 6,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifiers/in.2.hs",
-          "sourceSpanStartColumn": 7,
-          "sourceSpanStartLine": 6
+          "_colEnd": 8,
+          "_lineEnd": 6,
+          "_fileName": "test/samples/haskellGetIdentifiers/in.2.hs",
+          "_colBegin": 7,
+          "_lineBegin": 6
         },
         "_declSrcOthers": []
       },
@@ -35,11 +35,11 @@
           "_declModule": "G",
           "_declName": ">>",
           "_declSrcOrig": {
-            "sourceSpanEndColumn": 9,
-            "sourceSpanEndLine": 16,
-            "sourceSpanFileName": "test/samples/haskellGetIdentifiers/in.2.hs",
-            "sourceSpanStartColumn": 5,
-            "sourceSpanStartLine": 16
+            "_colEnd": 9,
+            "_lineEnd": 16,
+            "_fileName": "test/samples/haskellGetIdentifiers/in.2.hs",
+            "_colBegin": 5,
+            "_lineBegin": 16
           },
           "_declSrcOthers": []
         },
@@ -47,11 +47,11 @@
           "_declModule": "G",
           "_declName": ">>=",
           "_declSrcOrig": {
-            "sourceSpanEndColumn": 10,
-            "sourceSpanEndLine": 14,
-            "sourceSpanFileName": "test/samples/haskellGetIdentifiers/in.2.hs",
-            "sourceSpanStartColumn": 5,
-            "sourceSpanStartLine": 14
+            "_colEnd": 10,
+            "_lineEnd": 14,
+            "_fileName": "test/samples/haskellGetIdentifiers/in.2.hs",
+            "_colBegin": 5,
+            "_lineBegin": 14
           },
           "_declSrcOthers": []
         },
@@ -59,11 +59,11 @@
           "_declModule": "G",
           "_declName": "return",
           "_declSrcOrig": {
-            "sourceSpanEndColumn": 11,
-            "sourceSpanEndLine": 20,
-            "sourceSpanFileName": "test/samples/haskellGetIdentifiers/in.2.hs",
-            "sourceSpanStartColumn": 5,
-            "sourceSpanStartLine": 20
+            "_colEnd": 11,
+            "_lineEnd": 20,
+            "_fileName": "test/samples/haskellGetIdentifiers/in.2.hs",
+            "_colBegin": 5,
+            "_lineBegin": 20
           },
           "_declSrcOthers": []
         }
@@ -72,11 +72,11 @@
         "_declModule": "G",
         "_declName": "Monad",
         "_declSrcOrig": {
-          "sourceSpanEndColumn": 29,
-          "sourceSpanEndLine": 13,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifiers/in.2.hs",
-          "sourceSpanStartColumn": 24,
-          "sourceSpanStartLine": 13
+          "_colEnd": 29,
+          "_lineEnd": 13,
+          "_fileName": "test/samples/haskellGetIdentifiers/in.2.hs",
+          "_colBegin": 24,
+          "_lineBegin": 13
         },
         "_declSrcOthers": []
       },

@@ -7,11 +7,11 @@
         "_declModule": "Control.Lens",
         "_declName": "makeLenses",
         "_declSrcOrig": {
-          "sourceSpanEndColumn": 0,
-          "sourceSpanEndLine": 0,
-          "sourceSpanFileName": "",
-          "sourceSpanStartColumn": 0,
-          "sourceSpanStartLine": 0
+          "_colEnd": 0,
+          "_lineEnd": 0,
+          "_fileName": "",
+          "_colBegin": 0,
+          "_lineBegin": 0
         },
         "_declSrcOthers": []
       }
@@ -45,11 +45,11 @@
           "_declModule": "Graphics.Gloss",
           "_declName": "Point",
           "_declSrcOrig": {
-            "sourceSpanEndColumn": 0,
-            "sourceSpanEndLine": 0,
-            "sourceSpanFileName": "",
-            "sourceSpanStartColumn": 0,
-            "sourceSpanStartLine": 0
+            "_colEnd": 0,
+            "_lineEnd": 0,
+            "_fileName": "",
+            "_colBegin": 0,
+            "_lineBegin": 0
           },
           "_declSrcOthers": []
         },
@@ -61,11 +61,11 @@
           "_declModule": "Graphics.Gloss",
           "_declName": "Picture",
           "_declSrcOrig": {
-            "sourceSpanEndColumn": 0,
-            "sourceSpanEndLine": 0,
-            "sourceSpanFileName": "",
-            "sourceSpanStartColumn": 0,
-            "sourceSpanStartLine": 0
+            "_colEnd": 0,
+            "_lineEnd": 0,
+            "_fileName": "",
+            "_colBegin": 0,
+            "_lineBegin": 0
           },
           "_declSrcOthers": []
         },
@@ -94,11 +94,11 @@
           "_declModule": "System.Random.Stateful",
           "_declName": "StdGen",
           "_declSrcOrig": {
-            "sourceSpanEndColumn": 0,
-            "sourceSpanEndLine": 0,
-            "sourceSpanFileName": "",
-            "sourceSpanStartColumn": 0,
-            "sourceSpanStartLine": 0
+            "_colEnd": 0,
+            "_lineEnd": 0,
+            "_fileName": "",
+            "_colBegin": 0,
+            "_lineBegin": 0
           },
           "_declSrcOthers": []
         },
@@ -118,11 +118,11 @@
         "_declModule": "ScEaHs.Game.Surface.Generator",
         "_declName": "heights",
         "_declSrcOrig": {
-          "sourceSpanEndColumn": 0,
-          "sourceSpanEndLine": 0,
-          "sourceSpanFileName": "",
-          "sourceSpanStartColumn": 0,
-          "sourceSpanStartLine": 0
+          "_colEnd": 0,
+          "_lineEnd": 0,
+          "_fileName": "",
+          "_colBegin": 0,
+          "_lineBegin": 0
         },
         "_declSrcOthers": []
       },
@@ -130,11 +130,11 @@
         "_declModule": "ScEaHs.Game.Surface.Generator",
         "_declName": "width",
         "_declSrcOrig": {
-          "sourceSpanEndColumn": 0,
-          "sourceSpanEndLine": 0,
-          "sourceSpanFileName": "",
-          "sourceSpanStartColumn": 0,
-          "sourceSpanStartLine": 0
+          "_colEnd": 0,
+          "_lineEnd": 0,
+          "_fileName": "",
+          "_colBegin": 0,
+          "_lineBegin": 0
         },
         "_declSrcOthers": []
       },
@@ -142,11 +142,11 @@
         "_declModule": "ScEaHs.Game.Surface.Generator",
         "_declName": "maxHeight",
         "_declSrcOrig": {
-          "sourceSpanEndColumn": 0,
-          "sourceSpanEndLine": 0,
-          "sourceSpanFileName": "",
-          "sourceSpanStartColumn": 0,
-          "sourceSpanStartLine": 0
+          "_colEnd": 0,
+          "_lineEnd": 0,
+          "_fileName": "",
+          "_colBegin": 0,
+          "_lineBegin": 0
         },
         "_declSrcOthers": []
       }

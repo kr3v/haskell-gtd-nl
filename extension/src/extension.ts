@@ -430,7 +430,7 @@ function spanToLocation(
 ): vscode.Location | null {
 	// HLS BUG #1: in case definition is located at `repos` directory, rewrite the path to local symlink to `repos` (named `{wd}/.repos`) to prevent Haskell VS Code extension from spawning a new instance of the HLS
 	// HLS interoperability: if HLS is provided via `haskell.haskell` extension, then this extension should not provide local resolutions until they become the same as the ones provided by `haskell.haskell` extension
-	let wordSourcePathO = span.sourceSpanFileName;
+	let wordSourcePathO = span._fileName;
 	let wordSourcePath;
 	if (isParentOf(owd, wordSourcePathO) && !isParentOf(repos, wordSourcePathO)) {
 		wordSourcePath = wordSourcePathO;
@@ -454,8 +454,8 @@ function spanToLocation(
 	return new vscode.Location(
 		wordSourceURI,
 		new vscode.Range(
-			new vscode.Position(span.sourceSpanStartLine - 1, span.sourceSpanStartColumn - 1),
-			new vscode.Position(span.sourceSpanEndLine - 1, span.sourceSpanEndColumn - 1)
+			new vscode.Position(span._lineBegin - 1, span._colBegin - 1),
+			new vscode.Position(span._lineEnd - 1, span._colEnd - 1)
 		)
 	);
 }

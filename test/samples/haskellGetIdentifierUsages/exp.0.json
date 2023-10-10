@@ -6,11 +6,11 @@
         "_iuModule": "",
         "_iuName": "Surface",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 13,
-          "sourceSpanEndLine": 13,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 6,
-          "sourceSpanStartLine": 13
+          "_colEnd": 13,
+          "_lineEnd": 13,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 6,
+          "_lineBegin": 13
         },
         "_iuType": "Regular"
       },
@@ -18,11 +18,11 @@
         "_iuModule": "",
         "_iuName": "Surface",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 23,
-          "sourceSpanEndLine": 13,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 16,
-          "sourceSpanStartLine": 13
+          "_colEnd": 23,
+          "_lineEnd": 13,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 16,
+          "_lineBegin": 13
         },
         "_iuType": "Regular"
       },
@@ -30,11 +30,11 @@
         "_iuModule": "",
         "_iuName": "_maxHeight",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 15,
-          "sourceSpanEndLine": 14,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 5,
-          "sourceSpanStartLine": 14
+          "_colEnd": 15,
+          "_lineEnd": 14,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 5,
+          "_lineBegin": 14
         },
         "_iuType": "Regular"
       },
@@ -42,11 +42,11 @@
         "_iuModule": "",
         "_iuName": "Int",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 22,
-          "sourceSpanEndLine": 14,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 19,
-          "sourceSpanStartLine": 14
+          "_colEnd": 22,
+          "_lineEnd": 14,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 19,
+          "_lineBegin": 14
         },
         "_iuType": "Regular"
       },
@@ -54,11 +54,11 @@
         "_iuModule": "",
         "_iuName": "_width",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 11,
-          "sourceSpanEndLine": 15,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 5,
-          "sourceSpanStartLine": 15
+          "_colEnd": 11,
+          "_lineEnd": 15,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 5,
+          "_lineBegin": 15
         },
         "_iuType": "Regular"
       },
@@ -66,11 +66,11 @@
         "_iuModule": "",
         "_iuName": "Int",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 18,
-          "sourceSpanEndLine": 15,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 15,
-          "sourceSpanStartLine": 15
+          "_colEnd": 18,
+          "_lineEnd": 15,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 15,
+          "_lineBegin": 15
         },
         "_iuType": "Regular"
       },
@@ -78,11 +78,11 @@
         "_iuModule": "",
         "_iuName": "_heights",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 13,
-          "sourceSpanEndLine": 16,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 5,
-          "sourceSpanStartLine": 16
+          "_colEnd": 13,
+          "_lineEnd": 16,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 5,
+          "_lineBegin": 16
         },
         "_iuType": "Regular"
       },
@@ -90,11 +90,11 @@
         "_iuModule": "Map",
         "_iuName": "Map",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 24,
-          "sourceSpanEndLine": 16,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 17,
-          "sourceSpanStartLine": 16
+          "_colEnd": 24,
+          "_lineEnd": 16,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 17,
+          "_lineBegin": 16
         },
         "_iuType": "Regular"
       },
@@ -102,11 +102,11 @@
         "_iuModule": "",
         "_iuName": "Int",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 28,
-          "sourceSpanEndLine": 16,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 25,
-          "sourceSpanStartLine": 16
+          "_colEnd": 28,
+          "_lineEnd": 16,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 25,
+          "_lineBegin": 16
         },
         "_iuType": "Regular"
       },
@@ -114,11 +114,11 @@
         "_iuModule": "",
         "_iuName": "Int",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 32,
-          "sourceSpanEndLine": 16,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 29,
-          "sourceSpanStartLine": 16
+          "_colEnd": 32,
+          "_lineEnd": 16,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 29,
+          "_lineBegin": 16
         },
         "_iuType": "Regular"
       },
@@ -126,11 +126,11 @@
         "_iuModule": "",
         "_iuName": "Show",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 17,
-          "sourceSpanEndLine": 18,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 13,
-          "sourceSpanStartLine": 18
+          "_colEnd": 17,
+          "_lineEnd": 18,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 13,
+          "_lineBegin": 18
         },
         "_iuType": "Regular"
       },
@@ -138,11 +138,11 @@
         "_iuModule": "",
         "_iuName": "makeLenses",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 13,
-          "sourceSpanEndLine": 20,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 3,
-          "sourceSpanStartLine": 20
+          "_colEnd": 13,
+          "_lineEnd": 20,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 3,
+          "_lineBegin": 20
         },
         "_iuType": "Regular"
       },
@@ -150,11 +150,11 @@
         "_iuModule": "",
         "_iuName": "Surface",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 23,
-          "sourceSpanEndLine": 20,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 16,
-          "sourceSpanStartLine": 20
+          "_colEnd": 23,
+          "_lineEnd": 20,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 16,
+          "_lineBegin": 20
         },
         "_iuType": "Regular"
       },
@@ -162,11 +162,11 @@
         "_iuModule": "",
         "_iuName": "Renderable",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 20,
-          "sourceSpanEndLine": 22,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 10,
-          "sourceSpanStartLine": 22
+          "_colEnd": 20,
+          "_lineEnd": 22,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 10,
+          "_lineBegin": 22
         },
         "_iuType": "Regular"
       },
@@ -174,11 +174,11 @@
         "_iuModule": "",
         "_iuName": "Surface",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 28,
-          "sourceSpanEndLine": 22,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 21,
-          "sourceSpanStartLine": 22
+          "_colEnd": 28,
+          "_lineEnd": 22,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 21,
+          "_lineBegin": 22
         },
         "_iuType": "Regular"
       },
@@ -186,11 +186,11 @@
         "_iuModule": "",
         "_iuName": "render",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 9,
-          "sourceSpanEndLine": 24,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 3,
-          "sourceSpanStartLine": 24
+          "_colEnd": 9,
+          "_lineEnd": 24,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 3,
+          "_lineBegin": 24
         },
         "_iuType": "Regular"
       },
@@ -198,11 +198,11 @@
         "_iuModule": "",
         "_iuName": "render",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 9,
-          "sourceSpanEndLine": 24,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 3,
-          "sourceSpanStartLine": 24
+          "_colEnd": 9,
+          "_lineEnd": 24,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 3,
+          "_lineBegin": 24
         },
         "_iuType": "Regular"
       },
@@ -210,11 +210,11 @@
         "_iuModule": "",
         "_iuName": "Surface",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 18,
-          "sourceSpanEndLine": 24,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 11,
-          "sourceSpanStartLine": 24
+          "_colEnd": 18,
+          "_lineEnd": 24,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 11,
+          "_lineBegin": 24
         },
         "_iuType": "Regular"
       },
@@ -222,11 +222,11 @@
         "_iuModule": "",
         "_iuName": "hs",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 25,
-          "sourceSpanEndLine": 24,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 23,
-          "sourceSpanStartLine": 24
+          "_colEnd": 25,
+          "_lineEnd": 24,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 23,
+          "_lineBegin": 24
         },
         "_iuType": "Regular"
       },
@@ -234,11 +234,11 @@
         "_iuModule": "",
         "_iuName": "Pictures",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 37,
-          "sourceSpanEndLine": 24,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 29,
-          "sourceSpanStartLine": 24
+          "_colEnd": 37,
+          "_lineEnd": 24,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 29,
+          "_lineBegin": 24
         },
         "_iuType": "Regular"
       },
@@ -246,11 +246,11 @@
         "_iuModule": "",
         "_iuName": "$",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 39,
-          "sourceSpanEndLine": 24,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 38,
-          "sourceSpanStartLine": 24
+          "_colEnd": 39,
+          "_lineEnd": 24,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 38,
+          "_lineBegin": 24
         },
         "_iuType": "Regular"
       },
@@ -258,11 +258,11 @@
         "_iuModule": "",
         "_iuName": "imap",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 44,
-          "sourceSpanEndLine": 24,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 40,
-          "sourceSpanStartLine": 24
+          "_colEnd": 44,
+          "_lineEnd": 24,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 40,
+          "_lineBegin": 24
         },
         "_iuType": "Regular"
       },
@@ -270,11 +270,11 @@
         "_iuModule": "",
         "_iuName": "x",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 48,
-          "sourceSpanEndLine": 24,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 47,
-          "sourceSpanStartLine": 24
+          "_colEnd": 48,
+          "_lineEnd": 24,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 47,
+          "_lineBegin": 24
         },
         "_iuType": "Regular"
       },
@@ -282,11 +282,11 @@
         "_iuModule": "",
         "_iuName": "h",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 50,
-          "sourceSpanEndLine": 24,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 49,
-          "sourceSpanStartLine": 24
+          "_colEnd": 50,
+          "_lineEnd": 24,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 49,
+          "_lineBegin": 24
         },
         "_iuType": "Regular"
       },
@@ -294,11 +294,11 @@
         "_iuModule": "",
         "_iuName": "translate",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 63,
-          "sourceSpanEndLine": 24,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 54,
-          "sourceSpanStartLine": 24
+          "_colEnd": 63,
+          "_lineEnd": 24,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 54,
+          "_lineBegin": 24
         },
         "_iuType": "Regular"
       },
@@ -306,11 +306,11 @@
         "_iuModule": "",
         "_iuName": "fromIntegral",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 77,
-          "sourceSpanEndLine": 24,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 65,
-          "sourceSpanStartLine": 24
+          "_colEnd": 77,
+          "_lineEnd": 24,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 65,
+          "_lineBegin": 24
         },
         "_iuType": "Regular"
       },
@@ -318,11 +318,11 @@
         "_iuModule": "",
         "_iuName": "x",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 79,
-          "sourceSpanEndLine": 24,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 78,
-          "sourceSpanStartLine": 24
+          "_colEnd": 79,
+          "_lineEnd": 24,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 78,
+          "_lineBegin": 24
         },
         "_iuType": "Regular"
       },
@@ -330,11 +330,11 @@
         "_iuModule": "",
         "_iuName": "fromIntegral",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 94,
-          "sourceSpanEndLine": 24,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 82,
-          "sourceSpanStartLine": 24
+          "_colEnd": 94,
+          "_lineEnd": 24,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 82,
+          "_lineBegin": 24
         },
         "_iuType": "Regular"
       },
@@ -342,11 +342,11 @@
         "_iuModule": "",
         "_iuName": "h",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 97,
-          "sourceSpanEndLine": 24,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 96,
-          "sourceSpanStartLine": 24
+          "_colEnd": 97,
+          "_lineEnd": 24,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 96,
+          "_lineBegin": 24
         },
         "_iuType": "Regular"
       },
@@ -354,11 +354,11 @@
         "_iuModule": "",
         "_iuName": "div",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 103,
-          "sourceSpanEndLine": 24,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 98,
-          "sourceSpanStartLine": 24
+          "_colEnd": 103,
+          "_lineEnd": 24,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 98,
+          "_lineBegin": 24
         },
         "_iuType": "Regular"
       },
@@ -366,11 +366,11 @@
         "_iuModule": "",
         "_iuName": "$",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 109,
-          "sourceSpanEndLine": 24,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 108,
-          "sourceSpanStartLine": 24
+          "_colEnd": 109,
+          "_lineEnd": 24,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 108,
+          "_lineBegin": 24
         },
         "_iuType": "Regular"
       },
@@ -378,11 +378,11 @@
         "_iuModule": "",
         "_iuName": "rectangleSolid",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 124,
-          "sourceSpanEndLine": 24,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 110,
-          "sourceSpanStartLine": 24
+          "_colEnd": 124,
+          "_lineEnd": 24,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 110,
+          "_lineBegin": 24
         },
         "_iuType": "Regular"
       },
@@ -390,11 +390,11 @@
         "_iuModule": "",
         "_iuName": "fromIntegral",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 140,
-          "sourceSpanEndLine": 24,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 128,
-          "sourceSpanStartLine": 24
+          "_colEnd": 140,
+          "_lineEnd": 24,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 128,
+          "_lineBegin": 24
         },
         "_iuType": "Regular"
       },
@@ -402,11 +402,11 @@
         "_iuModule": "",
         "_iuName": "h",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 142,
-          "sourceSpanEndLine": 24,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 141,
-          "sourceSpanStartLine": 24
+          "_colEnd": 142,
+          "_lineEnd": 24,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 141,
+          "_lineBegin": 24
         },
         "_iuType": "Regular"
       },
@@ -414,11 +414,11 @@
         "_iuModule": "",
         "_iuName": "$",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 146,
-          "sourceSpanEndLine": 24,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 145,
-          "sourceSpanStartLine": 24
+          "_colEnd": 146,
+          "_lineEnd": 24,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 145,
+          "_lineBegin": 24
         },
         "_iuType": "Regular"
       },
@@ -426,11 +426,11 @@
         "_iuModule": "Map",
         "_iuName": "elems",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 156,
-          "sourceSpanEndLine": 24,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 147,
-          "sourceSpanStartLine": 24
+          "_colEnd": 156,
+          "_lineEnd": 24,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 147,
+          "_lineBegin": 24
         },
         "_iuType": "Regular"
       },
@@ -438,11 +438,11 @@
         "_iuModule": "",
         "_iuName": "hs",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 159,
-          "sourceSpanEndLine": 24,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 157,
-          "sourceSpanStartLine": 24
+          "_colEnd": 159,
+          "_lineEnd": 24,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 157,
+          "_lineBegin": 24
         },
         "_iuType": "Regular"
       },
@@ -450,11 +450,11 @@
         "_iuModule": "",
         "_iuName": "render",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 9,
-          "sourceSpanEndLine": 23,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 3,
-          "sourceSpanStartLine": 23
+          "_colEnd": 9,
+          "_lineEnd": 23,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 3,
+          "_lineBegin": 23
         },
         "_iuType": "Regular"
       },
@@ -462,11 +462,11 @@
         "_iuModule": "",
         "_iuName": "Surface",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 20,
-          "sourceSpanEndLine": 23,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 13,
-          "sourceSpanStartLine": 23
+          "_colEnd": 20,
+          "_lineEnd": 23,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 13,
+          "_lineBegin": 23
         },
         "_iuType": "Regular"
       },
@@ -474,11 +474,11 @@
         "_iuModule": "",
         "_iuName": "Picture",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 31,
-          "sourceSpanEndLine": 23,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 24,
-          "sourceSpanStartLine": 23
+          "_colEnd": 31,
+          "_lineEnd": 23,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 24,
+          "_lineBegin": 23
         },
         "_iuType": "Regular"
       },
@@ -486,11 +486,11 @@
         "_iuModule": "",
         "_iuName": "putOn",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 6,
-          "sourceSpanEndLine": 26,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 1,
-          "sourceSpanStartLine": 26
+          "_colEnd": 6,
+          "_lineEnd": 26,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 1,
+          "_lineBegin": 26
         },
         "_iuType": "Regular"
       },
@@ -498,11 +498,11 @@
         "_iuModule": "",
         "_iuName": "Surface",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 17,
-          "sourceSpanEndLine": 26,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 10,
-          "sourceSpanStartLine": 26
+          "_colEnd": 17,
+          "_lineEnd": 26,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 10,
+          "_lineBegin": 26
         },
         "_iuType": "Regular"
       },
@@ -510,11 +510,11 @@
         "_iuModule": "",
         "_iuName": "Point",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 26,
-          "sourceSpanEndLine": 26,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 21,
-          "sourceSpanStartLine": 26
+          "_colEnd": 26,
+          "_lineEnd": 26,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 21,
+          "_lineBegin": 26
         },
         "_iuType": "Regular"
       },
@@ -522,11 +522,11 @@
         "_iuModule": "",
         "_iuName": "Maybe",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 35,
-          "sourceSpanEndLine": 26,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 30,
-          "sourceSpanStartLine": 26
+          "_colEnd": 35,
+          "_lineEnd": 26,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 30,
+          "_lineBegin": 26
         },
         "_iuType": "Regular"
       },
@@ -534,11 +534,11 @@
         "_iuModule": "",
         "_iuName": "Point",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 41,
-          "sourceSpanEndLine": 26,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 36,
-          "sourceSpanStartLine": 26
+          "_colEnd": 41,
+          "_lineEnd": 26,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 36,
+          "_lineBegin": 26
         },
         "_iuType": "Regular"
       },
@@ -546,11 +546,11 @@
         "_iuModule": "",
         "_iuName": "putOn",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 6,
-          "sourceSpanEndLine": 27,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 1,
-          "sourceSpanStartLine": 27
+          "_colEnd": 6,
+          "_lineEnd": 27,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 1,
+          "_lineBegin": 27
         },
         "_iuType": "Regular"
       },
@@ -558,11 +558,11 @@
         "_iuModule": "",
         "_iuName": "putOn",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 6,
-          "sourceSpanEndLine": 27,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 1,
-          "sourceSpanStartLine": 27
+          "_colEnd": 6,
+          "_lineEnd": 27,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 1,
+          "_lineBegin": 27
         },
         "_iuType": "Regular"
       },
@@ -570,11 +570,11 @@
         "_iuModule": "",
         "_iuName": "Surface",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 15,
-          "sourceSpanEndLine": 27,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 8,
-          "sourceSpanStartLine": 27
+          "_colEnd": 15,
+          "_lineEnd": 27,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 8,
+          "_lineBegin": 27
         },
         "_iuType": "Regular"
       },
@@ -582,11 +582,11 @@
         "_iuModule": "",
         "_iuName": "mh",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 18,
-          "sourceSpanEndLine": 27,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 16,
-          "sourceSpanStartLine": 27
+          "_colEnd": 18,
+          "_lineEnd": 27,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 16,
+          "_lineBegin": 27
         },
         "_iuType": "Regular"
       },
@@ -594,11 +594,11 @@
         "_iuModule": "",
         "_iuName": "mw",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 21,
-          "sourceSpanEndLine": 27,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 19,
-          "sourceSpanStartLine": 27
+          "_colEnd": 21,
+          "_lineEnd": 27,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 19,
+          "_lineBegin": 27
         },
         "_iuType": "Regular"
       },
@@ -606,11 +606,11 @@
         "_iuModule": "",
         "_iuName": "hs",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 24,
-          "sourceSpanEndLine": 27,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 22,
-          "sourceSpanStartLine": 27
+          "_colEnd": 24,
+          "_lineEnd": 27,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 22,
+          "_lineBegin": 27
         },
         "_iuType": "Regular"
       },
@@ -618,11 +618,11 @@
         "_iuModule": "",
         "_iuName": "x",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 28,
-          "sourceSpanEndLine": 27,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 27,
-          "sourceSpanStartLine": 27
+          "_colEnd": 28,
+          "_lineEnd": 27,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 27,
+          "_lineBegin": 27
         },
         "_iuType": "Regular"
       },
@@ -630,11 +630,11 @@
         "_iuModule": "",
         "_iuName": "y",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 31,
-          "sourceSpanEndLine": 27,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 30,
-          "sourceSpanStartLine": 27
+          "_colEnd": 31,
+          "_lineEnd": 27,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 30,
+          "_lineBegin": 27
         },
         "_iuType": "Regular"
       },
@@ -642,11 +642,11 @@
         "_iuModule": "",
         "_iuName": "x",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 37,
-          "sourceSpanEndLine": 27,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 36,
-          "sourceSpanStartLine": 27
+          "_colEnd": 37,
+          "_lineEnd": 27,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 36,
+          "_lineBegin": 27
         },
         "_iuType": "Regular"
       },
@@ -654,11 +654,11 @@
         "_iuModule": "",
         "_iuName": ".",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 41,
-          "sourceSpanEndLine": 27,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 40,
-          "sourceSpanStartLine": 27
+          "_colEnd": 41,
+          "_lineEnd": 27,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 40,
+          "_lineBegin": 27
         },
         "_iuType": "Regular"
       },
@@ -666,11 +666,11 @@
         "_iuModule": "",
         "_iuName": "fromIntegral",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 54,
-          "sourceSpanEndLine": 27,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 42,
-          "sourceSpanStartLine": 27
+          "_colEnd": 54,
+          "_lineEnd": 27,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 42,
+          "_lineBegin": 27
         },
         "_iuType": "Regular"
       },
@@ -678,11 +678,11 @@
         "_iuModule": "",
         "_iuName": "<$>",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 58,
-          "sourceSpanEndLine": 27,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 55,
-          "sourceSpanStartLine": 27
+          "_colEnd": 58,
+          "_lineEnd": 27,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 55,
+          "_lineBegin": 27
         },
         "_iuType": "Regular"
       },
@@ -690,11 +690,11 @@
         "_iuModule": "Map",
         "_iuName": "lookup",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 69,
-          "sourceSpanEndLine": 27,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 59,
-          "sourceSpanStartLine": 27
+          "_colEnd": 69,
+          "_lineEnd": 27,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 59,
+          "_lineBegin": 27
         },
         "_iuType": "Regular"
       },
@@ -702,11 +702,11 @@
         "_iuModule": "",
         "_iuName": "round",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 76,
-          "sourceSpanEndLine": 27,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 71,
-          "sourceSpanStartLine": 27
+          "_colEnd": 76,
+          "_lineEnd": 27,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 71,
+          "_lineBegin": 27
         },
         "_iuType": "Regular"
       },
@@ -714,11 +714,11 @@
         "_iuModule": "",
         "_iuName": "x",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 78,
-          "sourceSpanEndLine": 27,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 77,
-          "sourceSpanStartLine": 27
+          "_colEnd": 78,
+          "_lineEnd": 27,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 77,
+          "_lineBegin": 27
         },
         "_iuType": "Regular"
       },
@@ -726,11 +726,11 @@
         "_iuModule": "",
         "_iuName": "hs",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 82,
-          "sourceSpanEndLine": 27,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 80,
-          "sourceSpanStartLine": 27
+          "_colEnd": 82,
+          "_lineEnd": 27,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 80,
+          "_lineBegin": 27
         },
         "_iuType": "Regular"
       }
@@ -743,11 +743,11 @@
         "_iuModule": "",
         "_iuName": "makeLenses",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 32,
-          "sourceSpanEndLine": 7,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 22,
-          "sourceSpanStartLine": 7
+          "_colEnd": 32,
+          "_lineEnd": 7,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 22,
+          "_lineBegin": 7
         },
         "_iuType": "Import"
       },
@@ -755,11 +755,11 @@
         "_iuModule": "",
         "_iuName": "Picture",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 31,
-          "sourceSpanEndLine": 10,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 24,
-          "sourceSpanStartLine": 10
+          "_colEnd": 31,
+          "_lineEnd": 10,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 24,
+          "_lineBegin": 10
         },
         "_iuType": "Import"
       },
@@ -767,11 +767,11 @@
         "_iuModule": "",
         "_iuName": "Point",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 43,
-          "sourceSpanEndLine": 10,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 38,
-          "sourceSpanStartLine": 10
+          "_colEnd": 43,
+          "_lineEnd": 10,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 38,
+          "_lineBegin": 10
         },
         "_iuType": "Import"
       },
@@ -779,11 +779,11 @@
         "_iuModule": "",
         "_iuName": "maxHeight",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 55,
-          "sourceSpanEndLine": 11,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 46,
-          "sourceSpanStartLine": 11
+          "_colEnd": 55,
+          "_lineEnd": 11,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 46,
+          "_lineBegin": 11
         },
         "_iuType": "Import"
       },
@@ -791,11 +791,11 @@
         "_iuModule": "",
         "_iuName": "width",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 62,
-          "sourceSpanEndLine": 11,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 57,
-          "sourceSpanStartLine": 11
+          "_colEnd": 62,
+          "_lineEnd": 11,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 57,
+          "_lineBegin": 11
         },
         "_iuType": "Import"
       },
@@ -803,11 +803,11 @@
         "_iuModule": "",
         "_iuName": "heights",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 71,
-          "sourceSpanEndLine": 11,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 64,
-          "sourceSpanStartLine": 11
+          "_colEnd": 71,
+          "_lineEnd": 11,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 64,
+          "_lineBegin": 11
         },
         "_iuType": "Import"
       }
@@ -820,11 +820,11 @@
         "_iuModule": "",
         "_iuName": "Surface",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 36,
-          "sourceSpanEndLine": 5,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 29,
-          "sourceSpanStartLine": 5
+          "_colEnd": 36,
+          "_lineEnd": 5,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 29,
+          "_lineBegin": 5
         },
         "_iuType": "Export"
       },
@@ -832,11 +832,11 @@
         "_iuModule": "",
         "_iuName": "putOn",
         "_iuSourceSpan": {
-          "sourceSpanEndColumn": 86,
-          "sourceSpanEndLine": 5,
-          "sourceSpanFileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
-          "sourceSpanStartColumn": 81,
-          "sourceSpanStartLine": 5
+          "_colEnd": 86,
+          "_lineEnd": 5,
+          "_fileName": "test/samples/haskellGetIdentifierUsages/in.0.hs",
+          "_colBegin": 81,
+          "_lineBegin": 5
         },
         "_iuType": "Export"
       }

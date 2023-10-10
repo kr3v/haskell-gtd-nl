@@ -31,7 +31,7 @@ resolution'qualified ::
 resolution'qualified rm w = do
   y <- maybeToMaybeT $ w `HMap.lookup` rm
   case HMap.elems $ resolution'simplify y of
-    (d : _) -> return $ emptySourceSpan {sourceSpanFileName = sourceSpanFileName . _declSrcOrig $ d, sourceSpanStartColumn = 1, sourceSpanStartLine = 1, sourceSpanEndColumn = 1, sourceSpanEndLine = 1}
+    (d : _) -> return $ emptySourceSpan {_fileName = _fileName . _declSrcOrig $ d, _colBegin = 1, _lineBegin = 1, _colEnd = 1, _lineEnd = 1}
     _ -> throwError "given word is a known module, but it has no declarations"
 
 resolution'word ::
