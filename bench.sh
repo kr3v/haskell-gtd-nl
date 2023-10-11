@@ -39,4 +39,37 @@ run_benchmark_with_all_parameters() {
     run_benchmark "-N24 -A512M" "$1"
 }
 
-run_benchmark_with_all_parameters "--repo-path /data/workspace/data/workspace/workspace/repos/cloned-public/plutus --des-type Library --des-name marlowe-internal"
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --single)
+        MODE="single"
+        SINGLE_RTS_ARGS=$2
+        shift
+        shift
+        ;;
+    --all)
+        if [[ -z "$MODE" ]]; then
+            MODE="all"
+        else
+            echo "Cannot specify both --single and --all"
+            exit 1
+        fi
+        MODE="all"
+        shift
+        ;;
+  esac
+done
+
+echo "MODE: $MODE"
+echo "SINGLE_RTS_ARGS: $SINGLE_RTS_ARGS"
+
+BIG_ARGS="--repo-path /data/workspace/data/workspace/workspace/repos/cloned-public/plutus --des-type Library --des-name marlowe-internal"
+
+if [[ "$MODE" == "single" ]]; then
+    run_benchmark "$SINGLE_RTS_ARGS" "$BIG_ARGS"
+    exit 0
+elif [[ "$MODE" != "all" ]]; then
+    echo "Assuming --all"
+fi
+run_benchmark_with_all_parameters "$BIG_ARGS"

@@ -19,7 +19,9 @@ module GTD.Resolution.Module
   )
 where
 
+import Control.DeepSeq (deepseq)
 import Control.Lens (makeLenses, (%~))
+import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (MonadReader (..))
 import Control.Monad.State.Lazy (MonadState (..), modify)
@@ -72,6 +74,7 @@ figureOutExports st m = do
   liM <- resolution (_mods st) m
   (r, mM) <- figureOutExports0 liM m
   let uM = collectUsages m liM
+  liftIO $ deepseq uM $ deepseq mM $ return ()
   return $ (r,) $ (mods %~ mM) . (usages %~ uM)
 
 ---

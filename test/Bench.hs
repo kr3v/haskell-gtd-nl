@@ -259,4 +259,3 @@ main = do
         runMode
           (Run cfg Pattern [""])
           bs
-    _ -> error "unreachable"
