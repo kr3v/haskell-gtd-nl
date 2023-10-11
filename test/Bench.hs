@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# HLINT ignore "Use newtype instead of data" #-}
@@ -18,20 +19,42 @@ import Data.Time (ZonedTime)
 import Data.Time.Format (defaultTimeLocale, formatTime)
 import Data.Time.Format.ISO8601 (iso8601ParseM)
 import qualified Data.Vector.Unboxed as V
+import GHC.Generics (Generic)
 import GHC.RTS.Flags (getRTSFlags)
 import GHC.Stats (RTSStats (..), getRTSStats)
 import GTD.Cabal.Types (Designation (..), DesignationType (..))
-import GTD.Configuration (Args (..), GTDConfiguration (..), Powers (..), defaultArgs, powersP, prepareConstants)
+import GTD.Configuration (GTDConfiguration (..), defaultArgs, powersP, prepareConstants)
+import qualified GTD.Configuration as Args
+import qualified GTD.Configuration as Conf (Powers (..))
 import qualified GTD.ParserExe as ParserExe
 import GTD.Utils (concatForM)
-import Options.Applicative (Parser, ParserInfo, auto, execParser, fullDesc, help, helper, info, long, metavar, option, optional, showDefault, strOption, subparser, value, (<**>))
+import Options.Applicative (Parser, ParserInfo, auto, execParser, fullDesc, help, helper, info, long, metavar, option, optional, showDefault, strOption, subparser, switch, value, (<**>))
 import Options.Applicative.Builder (command)
 import Statistics.Sample (mean, stdDev)
 import System.Directory (createDirectoryIfMissing, listDirectory, makeAbsolute, removeDirectoryRecursive)
 import System.FilePath (takeDirectory, takeFileName, (</>))
 import System.IO (BufferMode (..), Handle, IOMode (..), hPrint, hSetBuffering, stderr, stdout, withFile)
-import Text.Read (readMaybe)
-import qualified GTD.Configuration as Args
+import Text.Read (readEither, readMaybe)
+
+-- BArgs {
+--    _criterionReport = "reports/2023-10-05T20:20:51+03:00/_N24__A128M.2023-10-05T23:14:03+03:00.json",
+--    _ownReport = "reports/2023-10-05T20:20:51+03:00/_N24__A128M.2023-10-05T23:14:03+03:00.txt",
+--    _repo = "/data/workspace/data/workspace/workspace/repos/cloned-public/plutus",
+--    _des = Designation {_desName = Just "marlowe-internal", _desType = Library},
+--    _powers = Powers {_goToReferences_isEnabled = False, _goToReferences_limit = 256}}
+
+data Powers = Powers {_goToReferences_isEnabled :: Bool, _goToReferences_limit :: Int}
+  deriving (Show, Read, Generic)
+
+instance JSON.FromJSON Powers
+
+instance JSON.ToJSON Powers
+
+powersOP :: Parser Powers
+powersOP =
+  Powers
+    <$> switch (long "go-to-references-is-enabled" <> help "enable go to references" <> showDefault)
+    <*> option auto (long "go-to-references-limit" <> help "limit the number of references" <> showDefault <> value 256)
 
 data BArgs
   = BArgs
@@ -44,7 +67,11 @@ data BArgs
   | RArgs
       { _dir :: FilePath
       }
-  deriving (Show, Read)
+  deriving (Show, Read, Generic)
+
+instance JSON.FromJSON BArgs
+
+instance JSON.ToJSON BArgs
 
 bargsP :: Parser BArgs
 bargsP =
@@ -56,7 +83,7 @@ bargsP =
             <$> optional (strOption (long "des-name" <> metavar "NAME" <> help "designation name" <> showDefault <> value "exe3"))
             <*> option auto (long "des-type" <> metavar "TYPE" <> help "designation type" <> showDefault <> value Executable)
         )
-    <*> powersP
+    <*> powersOP
 
 rargsP :: Parser BArgs
 rargsP =
@@ -155,6 +182,10 @@ withDiff h a = do
   s2 <- getRTSStats
   hPrint h $ sub s2 s1
 
+-- cabal v2-bench haskell-gtd-nl-bench \
+--         --benchmark-options="+RTS $1 -RTS bench --criterion-report-path $root/$rts.$t.json --report-path $report $2" \
+--         >> "$root/bench.$1.$t.stdout" \
+--         2>> "$root/bench.$1.$t.stderr"
 main :: IO ()
 main = do
   hSetBuffering stderr LineBuffering
@@ -177,8 +208,8 @@ main = do
         let dt1f = formatTime defaultTimeLocale "%F %T" <$> dt1
 
         return $ case ls of
-          (rtsArgs : bargsS : rtsConf : stats) -> do
-            let (bargs :: Maybe BArgs) = readMaybe bargsS
+          (rtsArgs : bargsS : gtdConf : rtsConf : stats) -> do
+            let bargs = readEither bargsS
             let vs :: [(String, [Double])] = select0 $ mapMaybe readMaybe stats
             vs <&> \(n, v) -> do
               let z = V.fromList v
@@ -187,9 +218,9 @@ main = do
                   dt0f
                   dt1f
                   rtsArgs
-                  (_desName . _des <$> bargs)
-                  (_desType . _des <$> bargs)
-                  (_repo <$> bargs)
+                  (either Just (_desName . _des) bargs)
+                  (either id (show . _desType . _des) bargs)
+                  (either id _repo bargs)
                   n
                   (mean z)
                   (stdDev z)
@@ -200,11 +231,11 @@ main = do
       withFile (_ownReport ca) AppendMode $ \h -> do
         hSetBuffering h LineBuffering
 
-        hPrint h ca
+        BS.hPutStrLn h $ JSON.encode ca
 
         rt <- makeAbsolute "test/root"
         a <- defaultArgs
-        c <- prepareConstants (a {_root = rt, Args._powers = (Args._powers a) { _goToReferences_isEnabled = True }})
+        c <- prepareConstants (a {Args._root = rt, Args._powers = (Args._powers a) {Conf._goToReferences_isEnabled = True}})
         hPrint h c
 
         fs <- getRTSFlags
@@ -228,3 +259,4 @@ main = do
         runMode
           (Run cfg Pattern [""])
           bs
+    _ -> error "unreachable"
