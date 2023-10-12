@@ -7,7 +7,7 @@
 
 module GTD.Resolution.Utils (scheme, parallelized, reverseDependencies, ParallelizedState (..)) where
 
-import Control.Concurrent.Async.Lifted (Async, async, wait)
+import Control.Concurrent.Async.Lifted (Async, async, wait, forConcurrently)
 import Control.Concurrent.MVar.Lifted
 import Control.Lens (makeLenses, use, (%=), (.=))
 import Control.Monad.Logger (MonadLoggerIO)
@@ -30,19 +30,19 @@ data SchemeState k a b = SchemeState
 $(makeLenses ''SchemeState)
 
 _scheme ::
-  (Ord k, Monad m) =>
+  (Ord k, MonadBaseControl IO m) =>
   (b -> m (Maybe a)) ->
   (b -> k) ->
   (a -> m [b]) ->
   [b] ->
   StateT (SchemeState k a b) m ()
 _scheme f kb p ks = do
-  z <- lift $ catMaybes <$> mapM (\x -> fmap (x,) <$> f x) ks
+  z <- lift $ catMaybes <$> forConcurrently ks (\x -> fmap (x,) <$> f x)
   let (bs1, as1) = unzip z
   let ks1 = kb <$> bs1
   schemeStateA %= Map.union (Map.fromList $ zip ks1 as1)
   schemeStateB %= Map.union (Map.fromList $ zip ks1 bs1)
-  deps <- lift $ concat <$> mapM p as1
+  deps <- lift $ concat <$> forConcurrently as1 p
   let ds = mapFrom kb deps
   _ks <- use schemeStateB
   let ds' = ds `Map.difference` _ks
@@ -51,7 +51,7 @@ _scheme f kb p ks = do
     else _scheme f kb p (Map.elems ds')
 
 graph ::
-  (Ord k, Monad m) =>
+  (Ord k, MonadBaseControl IO m) =>
   (b -> m (Maybe a)) ->
   (a -> k) ->
   (b -> k) ->
@@ -84,7 +84,7 @@ graph f ka kb p ks = do
 -- `p` is a function that produces dependencies for a value
 -- `ks` is a set of keys to start with (root set)
 schemeS ::
-  (Ord k, Monad m) =>
+  (Ord k, MonadBaseControl IO m) =>
   (b -> m (Maybe a)) ->
   (a -> k) ->
   (b -> k) ->
@@ -97,7 +97,7 @@ schemeS f ka kb p ks = do
   return $ fromJust . (`Map.lookup` vToA) <$> cs
 
 reverseDependenciesS ::
-  (Ord k, Monad m) =>
+  (Ord k, MonadBaseControl IO m) =>
   (b -> m (Maybe a)) ->
   (a -> k) ->
   (b -> k) ->

@@ -136,13 +136,13 @@ library
         GTD.Utils.OS.Memory
         Paths_haskell_gtd
 
-    ghc-options: -O2 -g1 -Wall
+    ghc-options: -fprof-auto -O2 -g1 -Wall
 
 test-suite haskell-gtd-nl-tests
     import: common-deps
 
     type: exitcode-stdio-1.0
-    hs-source-dirs: test
+    hs-source-dirs: test/src
     main-is: Spec.hs
     other-modules:
         Cabal
@@ -162,7 +162,7 @@ benchmark haskell-gtd-nl-bench
     import: common-deps
 
     type:             exitcode-stdio-1.0
-    hs-source-dirs:   test
+    hs-source-dirs:   bench
     main-is:          Bench.hs
     build-depends:
         haskell-gtd
@@ -170,4 +170,5 @@ benchmark haskell-gtd-nl-bench
         , statistics
         , vector
     default-language: Haskell2010
-    ghc-options: -O2 -g1 -threaded -Wall -rtsopts "-with-rtsopts=-N -A128M -T"
+    -- ghc-options: -O2 -g1 -threaded -Wall -rtsopts "-with-rtsopts=-N -A128M -T"
+    ghc-options: -fprof-auto -O2 -g1 -threaded -Wall -rtsopts "-with-rtsopts=-N -A128M -pj -hc -l -L4096 -T"

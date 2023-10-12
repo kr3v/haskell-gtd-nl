@@ -1,4 +1,7 @@
 ignore-project: False
+-- library-profiling: True
+-- profiling: True
+-- profiling-detail: all-functions
 library-profiling: False
 profiling: False
 profiling-detail: none
