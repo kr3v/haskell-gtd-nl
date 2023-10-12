@@ -16,6 +16,7 @@ import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.RWS (gets)
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Data.Aeson (FromJSON, ToJSON)
+import qualified Data.ByteString.Char8 as BSC8
 import qualified Data.Cache.LRU as LRU
 import qualified Data.HashMap.Strict as HMap
 import Data.List (isPrefixOf, isSuffixOf)
@@ -27,9 +28,10 @@ import qualified GTD.Cabal.Dependencies as Cabal (fullS)
 import qualified GTD.Cabal.FindAt as CabalCache (findAt)
 import GTD.Cabal.Types (PackageWithResolvedDependencies, PackageWithUnresolvedDependencies)
 import qualified GTD.Cabal.Types as Cabal (Dependency, Designation (..), DesignationType (..), Package (..), PackageModules (..), PackageWithResolvedDependencies, PackageWithUnresolvedDependencies, key, pKey)
-import GTD.Haskell.Declaration (Declarations (..), SourceSpan (..))
+import GTD.Haskell.Declaration (Declarations (..), Identifier, SourceSpan (..))
 import GTD.Haskell.Module (HsModule (..), HsModuleMetadata (..), emptyHsModule, emptyMetadata)
 import qualified GTD.Resolution.Cache.Package as PackageCache
+import qualified GTD.Resolution.Cache.Resolution as ResolutionCache
 import GTD.Resolution.Module.Utils (resolution'qualified, resolution'word)
 import GTD.Resolution.Package (package'resolution'withDependencies'forked)
 import GTD.Resolution.Types (Package (..))
@@ -37,7 +39,6 @@ import GTD.State (Context (..), MS, cLocalPackages, cResolution)
 import GTD.Utils (deduplicate, logDebugNSS, peekM, stats, updateStatus)
 import System.FilePath (normalise, (</>))
 import Text.Printf (printf)
-import qualified GTD.Resolution.Cache.Resolution as ResolutionCache
 
 package ::
   Cabal.PackageWithResolvedDependencies ->
@@ -95,7 +96,7 @@ data DefinitionRequest = DefinitionRequest
   { _origWorkDir :: FilePath,
     _workDir :: FilePath,
     _file :: FilePath,
-    _word :: String
+    _word :: BSC8.ByteString
   }
   deriving (Show, Generic)
 
@@ -113,11 +114,11 @@ instance ToJSON DefinitionResponse
 
 instance FromJSON DefinitionResponse
 
-resolution :: (MonadLoggerIO m, MonadError String m) => HMap.HashMap String Declarations -> String -> m [SourceSpan]
+resolution :: (MonadLoggerIO m, MonadError String m) => HMap.HashMap Identifier Declarations -> BSC8.ByteString -> m [SourceSpan]
 resolution rm w =
   mapMaybeM
     runMaybeT
-    [ resolution'qualified rm (w ++ "*"),
+    [ resolution'qualified rm (w <> BSC8.pack "*"),
       resolution'qualified rm w,
       resolution'word rm w
     ]
@@ -148,9 +149,9 @@ definition (DefinitionRequest {_workDir = wd, _file = rf0, _word = w}) = do
     r <- case resM of
       Nothing -> return []
       Just rm -> do
-        updateStatus $ printf "figuring out what `%s` is in %s" w pn
+        updateStatus $ printf "figuring out what `%s` is in %s" (show w) pn
         resolution rm w
-    logDebugNSS "definition" $ printf "resolution %s %s (resM = %s) = %s" w pn (show $ isJust resM) (show r)
+    logDebugNSS "definition" $ printf "resolution %s %s (resM = %s) = %s" (show w) pn (show $ isJust resM) (show r)
     return r
   liftIO stats
   updateStatus ""

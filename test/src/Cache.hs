@@ -29,6 +29,7 @@ import GTD.Utils (removeIfExists)
 import System.Directory (getCurrentDirectory)
 import System.FilePath ((</>))
 import Test.Hspec (Expectation, Spec, beforeAll, describe, expectationFailure, it, runIO, shouldBe)
+import qualified Data.ByteString.Char8 as BSC8
 
 dropCacheTest :: GTDConfiguration -> Spec
 dropCacheTest consts0 = do
@@ -39,12 +40,12 @@ dropCacheTest consts0 = do
       mainF = wdT </> "executables/app/exe3/Main.hs"
       libF = wdT </> "lib1/src/Lib1.hs"
       logF = wdT </> descr ++ ".txt"
-      reqDM = DefinitionRequest {D._workDir = wdT, D._file = mainF, D._word = "return"}
-      reqDL = DefinitionRequest {D._workDir = wdT, D._file = libF, D._word = "return"}
+      reqDM = DefinitionRequest {D._workDir = wdT, D._file = mainF, D._word = BSC8.pack "return"}
+      reqDL = DefinitionRequest {D._workDir = wdT, D._file = libF, D._word = BSC8.pack "return"}
       reqLUM = LocalUsages.Request wdT mainF
       reqLUL = LocalUsages.Request wdT mainF
-      reqUM = Usages.Request wdT wdT mainF "return"
-      reqUL = Usages.Request wdT wdT mainF "return"
+      reqUM = Usages.Request wdT wdT mainF (BSC8.pack "return")
+      reqUL = Usages.Request wdT wdT mainF (BSC8.pack "return")
   runIO $ removeIfExists logF
 
   let mstack f a = runFileLoggingT logF $ f $ runReaderT a consts

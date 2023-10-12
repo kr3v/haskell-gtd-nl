@@ -1,45 +1,51 @@
 {
-  "_dataTypes": {},
-  "_decls": {
-    "f": {
-      "_declModule": "F",
-      "_declName": "f",
-      "_declSrcOrig": {
-        "_colEnd": 2,
-        "_lineEnd": 3,
-        "_fileName": "test/samples/haskellGetIdentifiers/in.1.hs",
-        "_colBegin": 1,
-        "_lineBegin": 3
-      },
-      "_declSrcOthers": [
-        {
-          "_colEnd": 2,
-          "_lineEnd": 4,
+  "_dataTypes": [],
+  "_decls": [
+    [
+      ".g",
+      {
+        "_declModule": "F",
+        "_declName": ".g",
+        "_declSrcOrig": {
+          "_colBegin": 4,
+          "_colEnd": 5,
           "_fileName": "test/samples/haskellGetIdentifiers/in.1.hs",
+          "_lineBegin": 3,
+          "_lineEnd": 3
+        },
+        "_declSrcOthers": [
+          {
+            "_colBegin": 1,
+            "_colEnd": 2,
+            "_fileName": "test/samples/haskellGetIdentifiers/in.1.hs",
+            "_lineBegin": 5,
+            "_lineEnd": 5
+          }
+        ]
+      }
+    ],
+    [
+      ".f",
+      {
+        "_declModule": "F",
+        "_declName": ".f",
+        "_declSrcOrig": {
           "_colBegin": 1,
-          "_lineBegin": 4
-        }
-      ]
-    },
-    "g": {
-      "_declModule": "F",
-      "_declName": "g",
-      "_declSrcOrig": {
-        "_colEnd": 5,
-        "_lineEnd": 3,
-        "_fileName": "test/samples/haskellGetIdentifiers/in.1.hs",
-        "_colBegin": 4,
-        "_lineBegin": 3
-      },
-      "_declSrcOthers": [
-        {
           "_colEnd": 2,
-          "_lineEnd": 5,
           "_fileName": "test/samples/haskellGetIdentifiers/in.1.hs",
-          "_colBegin": 1,
-          "_lineBegin": 5
-        }
-      ]
-    }
-  }
+          "_lineBegin": 3,
+          "_lineEnd": 3
+        },
+        "_declSrcOthers": [
+          {
+            "_colBegin": 1,
+            "_colEnd": 2,
+            "_fileName": "test/samples/haskellGetIdentifiers/in.1.hs",
+            "_lineBegin": 4,
+            "_lineEnd": 4
+          }
+        ]
+      }
+    ]
+  ]
 }

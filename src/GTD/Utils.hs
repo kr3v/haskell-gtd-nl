@@ -85,6 +85,9 @@ tryE m = catchE (fmap Right m) (return . Left)
 mapFrom :: (Ord k) => (a -> k) -> [a] -> Map.Map k a
 mapFrom f xs = Map.fromList $ (\x -> (f x, x)) <$> xs
 
+mapHFrom :: (Hashable k) => (a -> k) -> [a] -> HMap.HashMap k a
+mapHFrom f xs = HMap.fromList $ (\x -> (f x, x)) <$> xs
+
 mapDFrom :: (Ord k) => (a -> k) -> [a] -> Map.Map k [a]
 mapDFrom f = foldr (Map.unionWith (<>) . uncurry Map.singleton . (\x -> (f x, [x]))) Map.empty
 
@@ -191,6 +194,9 @@ type family TupleList m where
   TupleList (HMap.HashMap a b) = [(a, b)]
 
 up f x y z = f z $ f x y
+
+withoutKeys :: (Hashable k) => HMap.HashMap k v -> (Traversable t) => t k -> HMap.HashMap k v
+withoutKeys = foldr HMap.delete
 
 ---
 

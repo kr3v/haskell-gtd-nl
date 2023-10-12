@@ -28,6 +28,7 @@ import GTD.Utils (mapDFrom, storeIOExceptionToMonadError)
 import System.FilePath ((</>))
 import Test.Hspec (Spec, describe, expectationFailure, it, shouldBe)
 import Text.Printf (printf)
+import qualified Data.ByteString.Char8 as BSC8
 
 haskellGetIdentifiersTest :: GTDConfiguration -> Spec
 haskellGetIdentifiersTest consts = do
@@ -38,7 +39,7 @@ haskellGetIdentifiersTest consts = do
             dstPath = "test/samples" </> descr </> ("out." ++ n ++ "." ++ iS ++ ".json")
             expPath = "test/samples" </> descr </> ("exp." ++ iS ++ ".json")
 
-        src <- readFile srcPath
+        src <- BSC8.readFile srcPath
         expectedS <- try (BS.readFile expPath) :: IO (Either IOException BS.ByteString)
         let expected :: Declarations =
               case expectedS of
@@ -79,7 +80,7 @@ haskellGetExportsTest consts = do
             dstPath = "test/samples" </> descr </> ("out." ++ n ++ "." ++ iS ++ ".json")
             expPath = "test/samples" </> descr </> ("exp." ++ iS ++ ".json")
 
-        src <- readFile srcPath
+        src <- BSC8.readFile srcPath
         expectedS <- BS.readFile expPath
         let expected :: Exports = fromJust $ decode expectedS
 
@@ -107,7 +108,7 @@ haskellGetImportsTest consts = do
             dstPath = "test/samples" </> descr </> ("out." ++ n ++ "." ++ iS ++ ".json")
             expPath = "test/samples" </> descr </> ("exp." ++ iS ++ ".json")
 
-        src <- readFile srcPath
+        src <- BSC8.readFile srcPath
         expectedS <- BS.readFile expPath
 
         let expected :: Imports = fromJust $ decode expectedS
@@ -137,7 +138,7 @@ haskellGetIdentifierUsagesTest consts = do
             dstPath = "test/samples" </> descr </> ("out." ++ n ++ "." ++ iS ++ ".json")
             expPath = "test/samples" </> descr </> ("exp." ++ iS ++ ".json")
 
-        src <- readFile srcPath
+        src <- BSC8.readFile srcPath
         expectedS <- BS.readFile expPath
         let expected :: Map.Map UsageType [IdentifierWithUsageLocation] = fromJust $ decode expectedS
 
@@ -225,7 +226,7 @@ linesTest consts = do
         testsS <- storeIOExceptionToMonadError $ BS.readFile testsPath
         let tests :: [LinesSpecTestCase] = fromMaybe mempty $ decode testsS
 
-        let result = buildMap c1
+        let result = buildMap $ BSC8.pack c1
         liftIO $ BS.writeFile dstPath $ encode result
         let e1 = result `shouldBe` expected
 

@@ -22,9 +22,10 @@ import qualified GTD.Haskell.Module as HsModule
 import GTD.Utils (logDebugNSS, logErrorNSS)
 import System.FilePath (normalise, (</>))
 import Text.Printf (printf)
+import qualified Data.ByteString.Char8 as BSC8
 
 resolve :: FilePath -> FilePath -> ModuleNameS -> FilePath
-resolve repoRoot srcDir moduleName = normalise $ repoRoot </> srcDir </> ((toFilePath . fromString $ moduleName) ++ ".hs")
+resolve repoRoot srcDir moduleName = normalise $ repoRoot </> srcDir </> ((toFilePath . fromString . BSC8.unpack $ moduleName) ++ ".hs")
 
 module'Dependencies :: HsModule -> [ModuleNameS]
 module'Dependencies m = filter (HsModule._name m /=) (allImportedModules . _imports . HsModule._info $ m)
@@ -35,7 +36,7 @@ module'2 p m = do
   let srcDirs = Cabal._srcDirs . Cabal._modules $ p
   forM srcDirs $ \srcDir -> runExceptT $ do
     let path = resolve root srcDir m
-    logDebugNSS "module'2" $ printf "resolve(%s, %s, %s) -> %s" root srcDir m path
+    logDebugNSS "module'2" $ printf "resolve(%s, %s, %s) -> %s" root srcDir (show m) path
     let cm = HsModuleMetadata {HsModule._mPackage = Cabal._name p, HsModule._mName = m, HsModule._mPath = path, HsModule._mPkgK = Cabal.key p}
     parseModule cm
       `catchError` \e1 ->

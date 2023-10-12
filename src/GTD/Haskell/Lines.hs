@@ -4,7 +4,7 @@ module GTD.Haskell.Lines where
 
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Binary (Binary)
-import qualified Data.ByteString.Char8 as BSC8 (ByteString, pack)
+import qualified Data.ByteString.Char8 as BSC8
 import Data.Functor ((<&>))
 import Data.List (isPrefixOf)
 import qualified Data.Map.Strict as Map
@@ -27,16 +27,19 @@ instance Binary Line
 
 type Lines = Map.Map Int Line
 
-dropDirectives :: String -> String
-dropDirectives s = unlines $ (\l -> if "#line" `isPrefixOf` l then "" else l) <$> lines s
+lineDirectiveBS :: BSC8.ByteString
+lineDirectiveBS = BSC8.pack "#line"
+
+dropDirectives :: BSC8.ByteString -> BSC8.ByteString
+dropDirectives s = BSC8.unlines $ (\l -> if lineDirectiveBS `BSC8.isPrefixOf` l then BSC8.empty else l) <$> BSC8.lines s
 
 -- #line 1 "/data/workspace/data/workspace/workspace/repos/personal/haskell-gtd/.repos/filepath-1.4.100.3/System/OsPath.hs"
-buildMap :: String -> Map.Map Int Line
+buildMap :: BSC8.ByteString -> Map.Map Int Line
 buildMap s = do
-  let withNumbers = filter (\(_, l) -> "#line" `isPrefixOf` l) $ zip [1 ..] $ lines s
+  let withNumbers = filter (\(_, l) -> lineDirectiveBS `BSC8.isPrefixOf` l) $ zip [1 ..] $ BSC8.lines s
   let directives = flip mapMaybe withNumbers $ \(n0, l) ->
-        case words l of
-          (_ : n1 : p) -> Just $ (,) (n0 :: Int) Line {num = read n1 :: Int, path = BSC8.pack $ normalise $ drop 1 $ init $ unwords p}
+        case BSC8.words l of
+          (_ : n1 : p) -> Just $ (,) (n0 :: Int) Line {num = (read . BSC8.unpack $ n1) :: Int, path = BSC8.pack $ normalise $ drop 1 $ init $ BSC8.unpack $ BSC8.unwords p}
           _ -> Nothing
   Map.fromList directives
 

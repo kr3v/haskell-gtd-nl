@@ -30,6 +30,7 @@ import System.Directory (getCurrentDirectory)
 import System.FilePath ((</>))
 import Test.Hspec (Spec, beforeAll, describe, it, runIO, shouldBe)
 import Text.Printf (printf)
+import qualified Data.ByteString.Char8 as BSC8
 
 instance Semigroup Usages.Response where
   (<>) :: Usages.Response -> Usages.Response -> Usages.Response
@@ -44,7 +45,7 @@ usagesTest consts0 = do
   cwd <- runIO getCurrentDirectory
 
   let wd = cwd </> "test/integrationTestRepo/fake"
-      req = DefinitionRequest {_workDir = wd, _file = "", _word = ""}
+      req = DefinitionRequest {_workDir = wd, _file = mempty, _word = mempty}
       logF = wd </> descr ++ ".txt"
 
   let lib1 = "lib1/src/Lib1.hs"
@@ -134,9 +135,9 @@ usagesTest consts0 = do
         printf "cwd = %s, wd = %s, logF = %s\n" cwd wd logF
         removeIfExists logF
         runFileLoggingT logF $ runReaderT resetCache consts
-        mstack consts (`execStateT` emptyContext) $ Cabal.load >> (evalD exe3 "return" >>= liftIO . printf "%s %s %s -> %s\n" descr exe3 "return" . show) >> Cabal.store
+        mstack consts (`execStateT` emptyContext) $ Cabal.load >> (evalD exe3 (BSC8.pack "return") >>= liftIO . printf "%s %s %s -> %s\n" descr exe3 "return" . show) >> Cabal.store
 
   beforeAll init $ describe descr $ forM_ tests $ \(ps, f, wd, owd, n, q, r) -> do
     it (printf "n=%s, f=%s, q=`%s`" n f q) $ \ss -> do
       join $ mstack (consts {_args = (_args consts) {_powers = ps}}) (`evalStateT` ss) $ do
-        eval f wd owd q r
+        eval f wd owd (BSC8.pack q) r

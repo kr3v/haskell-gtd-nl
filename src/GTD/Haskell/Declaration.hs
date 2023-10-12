@@ -19,19 +19,18 @@ import Control.DeepSeq (NFData)
 import Control.Lens (Each (..), makeLenses, (%=))
 import Control.Monad.RWS (MonadState, MonadTrans (lift))
 import Control.Monad.State (execStateT)
-import Data.Aeson (FromJSON (..), FromJSONKey (..), ToJSON (..), ToJSONKey, Value)
-import Data.Aeson.Types (Parser, Value (..))
+import Data.Aeson (FromJSON (..), FromJSONKey (..), ToJSON (..), ToJSONKey)
 import Data.Binary (Binary)
 import qualified Data.Binary as Binary
 import Data.ByteString (ByteString)
-import qualified Data.ByteString.Char8 as BSW8
+import qualified Data.ByteString.Char8 as BSC8
 import qualified Data.HashMap.Strict as HMap
 import Data.Hashable (Hashable)
 import qualified Data.Map.Strict as Map
-import Data.Text (unpack)
 import GHC.Generics (Generic)
 import GTD.Cabal.Types (ModuleNameS)
 import GTD.Utils (modifyEachM, overM)
+import GTD.Utils.Orphans ()
 
 instance (Hashable k, Eq k, Binary k, Binary v) => Binary (HMap.HashMap k v) where
   get :: (Hashable k, Eq k, Binary k, Binary v) => Binary.Get (HMap.HashMap k v)
@@ -53,18 +52,6 @@ data SourceSpan = SourceSpan
 emptySourceSpan :: SourceSpan
 emptySourceSpan = SourceSpan mempty 0 0 0 0
 
-instance FromJSON SourceSpanFileName where
-  parseJSON :: Value -> Parser SourceSpanFileName
-  parseJSON (String t) = pure $ BSW8.pack $ unpack t
-
-instance ToJSON SourceSpanFileName where
-  toJSON :: SourceSpanFileName -> Value
-  toJSON = toJSON . BSW8.unpack
-
-instance FromJSONKey SourceSpanFileName
-
-instance ToJSONKey SourceSpanFileName
-
 instance ToJSON SourceSpan
 
 instance FromJSON SourceSpan
@@ -77,7 +64,7 @@ data Declaration = Declaration
   { _declSrcOrig :: SourceSpan,
     _declSrcOthers :: [SourceSpan],
     _declModule :: ModuleNameS,
-    _declName :: String
+    _declName :: BSC8.ByteString
   }
   deriving (NFData, Show, Eq, Generic, Ord)
 
@@ -102,13 +89,13 @@ hasNonEmptyOrig = (/= emptySourceSpan) . _declSrcOrig
 
 ---
 
-type Identifier = String
+type Identifier = BSC8.ByteString
 
 ---
 
 data ClassOrData = ClassOrData
   { _cdtName :: Declaration,
-    _cdtFields :: Map.Map String Declaration,
+    _cdtFields :: HMap.HashMap Identifier Declaration,
     _eWildcard :: Bool
   }
   deriving (NFData, Show, Generic, Eq)
@@ -124,8 +111,8 @@ instance Binary ClassOrData
 ---
 
 data Declarations = Declarations
-  { _decls :: Map.Map String Declaration,
-    _dataTypes :: Map.Map String ClassOrData
+  { _decls :: HMap.HashMap Identifier Declaration,
+    _dataTypes :: HMap.HashMap Identifier ClassOrData
   }
   deriving (NFData, Show, Generic, Eq)
 
@@ -139,29 +126,26 @@ instance Binary Declarations
 
 instance Semigroup Declarations where
   (<>) :: Declarations -> Declarations -> Declarations
-  (<>) (Declarations d1 dt1) (Declarations d2 dt2) = Declarations (Map.unionWith (<>) d1 d2) (dt1 <> dt2)
+  (<>) (Declarations d1 dt1) (Declarations d2 dt2) = Declarations (HMap.unionWith (<>) d1 d2) (dt1 <> dt2)
 
 instance Monoid Declarations where
   mempty :: Declarations
   mempty = Declarations mempty mempty
 
-srcSpans :: Declarations -> [SourceSpan]
-srcSpans Declarations {_decls = ds, _dataTypes = dts} =
-  let ds' = Map.elems ds
-      dts' = concatMap (\cd -> [_cdtName cd] <> Map.elems (_cdtFields cd)) (Map.elems dts)
-   in concatMap (liftA2 (<>) ((: []) . _declSrcOrig) _declSrcOthers) (ds' <> dts')
+declsF :: Declarations -> [Declaration]
+declsF Declarations {_decls = ds, _dataTypes = dts} = do
+  let ds' = HMap.elems ds
+      dts' = concatMap (\cd -> [_cdtName cd] <> HMap.elems (_cdtFields cd)) (HMap.elems dts)
+   in ds' <> dts'
 
-asResolutionMap :: Declarations -> Map.Map Identifier Declaration
-asResolutionMap Declarations {_decls = ds, _dataTypes = dts} =
-  let ds' = Map.elems ds
-      dts' = concatMap (\cd -> [_cdtName cd] <> Map.elems (_cdtFields cd)) (Map.elems dts)
-   in asDeclsMap $ ds' <> dts'
+srcSpans :: Declarations -> [SourceSpan]
+srcSpans d = concatMap (liftA2 (<>) ((: []) . _declSrcOrig) _declSrcOthers) (declsF d)
 
 asDeclsMap :: [Declaration] -> Map.Map Identifier Declaration
 asDeclsMap ds = Map.fromListWith (<>) $ (\d -> (_declName d, d)) <$> ds
 
 asDeclsHMap :: [Declaration] -> HMap.HashMap Identifier Declaration
-asDeclsHMap ds = HMap.fromList $ (\d -> (_declName d, d)) <$> ds
+asDeclsHMap ds = HMap.fromListWith (<>) $ (\d -> (_declName d, d)) <$> ds
 
 declarationsT :: (Monad m) => (Declaration -> Declaration) -> Declarations -> m Declarations
 declarationsT d = execStateT (declarationsTS d)
@@ -190,7 +174,7 @@ instance Binary ModuleImportType
 
 data Module = Module
   { _mName :: ModuleNameS,
-    _mQualifier :: String,
+    _mQualifier :: BSC8.ByteString,
     _mAllowNoQualifier :: Bool,
     _mType :: ModuleImportType,
     _mDecls :: [Declaration],
@@ -213,7 +197,7 @@ instance Semigroup Module where
 
 instance Monoid Module where
   mempty :: Module
-  mempty = Module "" "" True All [] []
+  mempty = Module mempty mempty True All [] []
 
 ---
 
@@ -258,8 +242,8 @@ instance FromJSONKey UsageType
 instance Binary UsageType
 
 data IdentifierWithUsageLocation = IdentifierUsage
-  { _iuModule :: String,
-    _iuName :: String,
+  { _iuModule :: ByteString,
+    _iuName :: ByteString,
     _iuType :: UsageType,
     _iuSourceSpan :: SourceSpan
   }

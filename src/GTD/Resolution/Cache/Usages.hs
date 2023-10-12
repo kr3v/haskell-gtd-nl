@@ -6,7 +6,7 @@
 
 module GTD.Resolution.Cache.Usages (get, getAll, put, remove, exists) where
 
-import Control.Monad (forM, forM_)
+import Control.Monad (forM_)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.RWS (MonadReader (..), asks)
 import qualified Data.Aeson as JSON
@@ -17,15 +17,17 @@ import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 import GHC.Utils.Monad (mapMaybeM)
 import qualified GTD.Cabal.Types as Cabal (Package (..), key, pKey)
-import GTD.Configuration (GTDConfiguration (..), MS0)
+import GTD.Configuration (Args (..), GTDConfiguration (..), MS0)
 import GTD.Resolution.Cache.Utils (binaryGet, binaryPut, pathAsFile)
-import GTD.Resolution.Module.Types
+import GTD.Resolution.Module.Types (UsagesPerTypeInFileMap)
 import GTD.Resolution.Types (Package (..))
-import GTD.Utils (encodeWithTmp1, logDebugNSS, removeIfExists, concatForM)
+import GTD.Utils (concatForM, encodeWithTmp1, logDebugNSS, removeIfExists)
 import System.Directory (createDirectoryIfMissing, listDirectory)
 import System.FilePath (addTrailingPathSeparator, joinPath, splitPath, takeFileName, (</>))
-import Text.Printf (printf)
 import System.Posix (fileExist)
+import Text.Printf (printf)
+import Control.Monad.Logger (LogLevel(..))
+import Control.Monad (when)
 
 reposMarker :: String
 reposMarker = "@repos@"
@@ -103,14 +105,18 @@ put ::
   (MS0 m) => m ()
 put cPkg pkg = do
   logDebugNSS "pStoreU" $ printf "starting - %s (%d)" (show $ Cabal.pKey . Cabal.key $ cPkg) (HMap.size $ _usages pkg)
+  ll <- asks $ _logLevel . _args
+
   paths <- concatForM (HMap.toList $ _usages pkg) $ \(f0, v) -> do
     (d, f) <- __dir'file cPkg $ BSW8.unpack f0
     let p = __path cPkg d f
     liftIO $ createDirectoryIfMissing False d
     _put1 p v
-    encodeWithTmp1 JSON.encodeFile (p ++ ".json") v
+    when (ll == LevelDebug) $ encodeWithTmp1 JSON.encodeFile (p ++ ".json") v
     return [p, p ++ ".json"]
-  __dir'refs cPkg >>= \p1 -> liftIO (binaryPut p1 paths >> encodeWithTmp1 JSON.encodeFile (p1 ++ ".json") paths)
+  __dir'refs cPkg >>= \p1 -> liftIO $ do
+     binaryPut p1 paths
+     when (ll == LevelDebug) $ encodeWithTmp1 JSON.encodeFile (p1 ++ ".json") paths
   logDebugNSS "pStoreU" $ printf "done     - %s" (show $ Cabal.pKey . Cabal.key $ cPkg)
 
 remove ::

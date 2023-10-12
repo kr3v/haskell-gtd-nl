@@ -30,6 +30,7 @@ import GTD.Configuration (Args (_logLevel), GTDConfiguration (..))
 import GTD.Resolution.Cache.Utils (binaryGet, binaryPut, pathAsFile)
 import GTD.Utils (encodeWithTmp, logDebugNSS, removeIfExistsL)
 import System.FilePath (dropExtension, normalise, takeDirectory, (</>))
+import qualified Data.ByteString.Char8 as BSC8
 
 ---
 
@@ -114,13 +115,13 @@ __exportsL :: Cabal.Library -> PackageModules
 __exportsL lib =
   PackageModules
     { _srcDirs = getSymbolicPath <$> (hsSourceDirs . Cabal.libBuildInfo) lib,
-      _exports = Set.fromList $ prettyShow <$> Cabal.exposedModules lib,
-      _reExports = Set.fromList $ prettyShow <$> Cabal.reexportedModules lib,
-      _allKnownModules = Set.fromList $ prettyShow <$> Cabal.explicitLibModules lib
+      _exports = Set.fromList $ BSC8.pack . prettyShow <$> Cabal.exposedModules lib,
+      _reExports = Set.fromList $ BSC8.pack . prettyShow <$> Cabal.reexportedModules lib,
+      _allKnownModules = Set.fromList $ BSC8.pack . prettyShow <$> Cabal.explicitLibModules lib
     }
 
-__pathAsModule :: FilePath -> String
-__pathAsModule = fmap (\x -> if x == '/' then '.' else x) . dropExtension
+__pathAsModule :: FilePath -> BSC8.ByteString
+__pathAsModule = BSC8.pack . fmap (\x -> if x == '/' then '.' else x) . dropExtension
 
 __exportsE :: Cabal.Executable -> PackageModules
 __exportsE exe = do
@@ -129,7 +130,7 @@ __exportsE exe = do
     { _srcDirs = getSymbolicPath <$> (hsSourceDirs . Cabal.buildInfo) exe,
       _exports = Set.singleton mainIs,
       _reExports = Set.empty,
-      _allKnownModules = Set.fromList $ mainIs : (prettyShow <$> Cabal.otherModules (Cabal.buildInfo exe))
+      _allKnownModules = Set.fromList $ mainIs : (BSC8.pack . prettyShow <$> Cabal.otherModules (Cabal.buildInfo exe))
     }
 
 __exportsT :: Cabal.TestSuite -> PackageModules
@@ -138,10 +139,10 @@ __exportsT ts = do
     { _srcDirs = getSymbolicPath <$> (hsSourceDirs . Cabal.testBuildInfo) ts,
       _exports = case Cabal.testInterface ts of
         Cabal.TestSuiteExeV10 _ p -> Set.singleton $ __pathAsModule p
-        Cabal.TestSuiteLibV09 _ p -> Set.singleton $ prettyShow p
+        Cabal.TestSuiteLibV09 _ p -> Set.singleton $ BSC8.pack . prettyShow $ p
         _ -> Set.empty,
       _reExports = Set.empty,
-      _allKnownModules = Set.fromList (prettyShow <$> Cabal.otherModules (Cabal.testBuildInfo ts))
+      _allKnownModules = Set.fromList (BSC8.pack . prettyShow <$> Cabal.otherModules (Cabal.testBuildInfo ts))
     }
 
 __exportsB :: Cabal.Benchmark -> PackageModules
@@ -152,7 +153,7 @@ __exportsB ts = do
         Cabal.BenchmarkExeV10 _ p -> Set.singleton $ __pathAsModule p
         _ -> Set.empty,
       _reExports = Set.empty,
-      _allKnownModules = Set.fromList (prettyShow <$> Cabal.otherModules (Cabal.benchmarkBuildInfo ts))
+      _allKnownModules = Set.fromList (BSC8.pack . prettyShow <$> Cabal.otherModules (Cabal.benchmarkBuildInfo ts))
     }
 
 libraryNameToDesignationName :: LibraryName -> Maybe String

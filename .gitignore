@@ -5,4 +5,4 @@ test/integrationTestRepo/fake/.repos
 test/integrationTestRepo/fake/*.txt
 test/root
 test/samples/*/*.log
-test/samples/*/out.*
+test/samples/*/out.*.json

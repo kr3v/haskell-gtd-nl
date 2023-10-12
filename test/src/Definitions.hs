@@ -22,6 +22,7 @@ import System.Directory (getCurrentDirectory)
 import System.FilePath ((</>))
 import Test.Hspec (Spec, describe, it, runIO, shouldBe)
 import Text.Printf (printf)
+import qualified Data.ByteString.Char8 as BSC8
 
 
 definitionTests :: GTDConfiguration -> Spec
@@ -30,7 +31,7 @@ definitionTests consts = do
 
   let descr = "definitions"
       wd = cwd </> "test/integrationTestRepo/fake"
-      req = DefinitionRequest {_workDir = wd, _file = "", _word = ""}
+      req = DefinitionRequest {_workDir = wd, _file = mempty, _word = mempty}
       logF = wd </> descr ++ ".txt"
 
   runIO $ print descr
@@ -47,7 +48,7 @@ definitionTests consts = do
       exe2 = "executables/app/exe2/Main.hs"
       exe3 = "executables/app/exe3/Main.hs"
       ents = [lib1, lib2, exe1, exe2, exe3]
-  serverState <- runIO $ mstack (`execStateT` emptyContext) $ Cabal.load >> (eval0 lib1 "return" >>= liftIO . print) >> Cabal.store
+  serverState <- runIO $ mstack (`execStateT` emptyContext) $ Cabal.load >> (eval0 lib1 (BSC8.pack "return") >>= liftIO . print) >> Cabal.store
 
   let expectedPreludeReturn =
         let expFile = _repos consts </> "base-4.16.4.0/GHC/Base.hs"
@@ -215,8 +216,8 @@ definitionTests consts = do
                 (x, "qualified module import - go to module via 'original' name", "Data.Map.Strict", expectedDataMapStrict),
                 (x, "ordinary module import - go to module via 'original' name", "Data.Time.Clock.POSIX", expectedDTClockPosix),
                 (x, "qualified module import - go to function through qualifier", "Map.keys", expectedQMapKeys),
-                (x, "", "printf", expectedPrintf),
-                (x, "", "try", expectedTry),
+                (x, mempty, "printf", expectedPrintf),
+                (x, mempty, "try", expectedTry),
                 (x, "hsc support", "getRTSStats", expectedGetRTSStats),
                 (x, "two qualified imports under the same name + type alias: does not work when no qualifier", "Getter", noDefErr),
                 (x, "two qualified imports under the same name + type alias: does not work when no qualifier", "Setter", noDefErr),
@@ -233,4 +234,4 @@ definitionTests consts = do
   describe descr $ forM_ tests $ \(f, n, q, r) -> do
     it (printf "n=%s, f=%s, q=`%s`" n f q) $ do
       join $ mstack (`evalStateT` serverState) $ do
-        eval f q r
+        eval f (BSC8.pack q) r

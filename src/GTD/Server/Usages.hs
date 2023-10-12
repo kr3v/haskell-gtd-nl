@@ -32,7 +32,7 @@ data Request = Request
   { _origWorkDir :: FilePath,
     _workDir :: FilePath,
     _file :: FilePath,
-    _word :: String
+    _word :: BSC8.ByteString
   }
   deriving (Show, Eq, Generic)
 
@@ -60,14 +60,14 @@ usages (Request {_origWorkDir = owd, _workDir = wd, _file = rf0, _word = w}) = d
   let lim = _goToReferences_limit p
 
   let rf = normalise rf0
-  let logTag = printf "usages: %s @ %s / %s" w rf wd
+  let logTag = printf "usages: %s @ %s / %s" (show w) rf wd
 
   r <- definition $ DefinitionRequest {Definition._origWorkDir = owd, Definition._workDir = wd, Definition._file = rf, Definition._word = w}
   forM_ (Definition._err r) throwError
   loc <- case Definition._srcSpan r of
-    [] -> throwError $ printf "no definition found for %s" w
+    [] -> throwError $ printf "no definition found for %s" (show w)
     [x] -> return x
-    _ -> throwError $ printf "more than one definition found for %s?" w
+    _ -> throwError $ printf "more than one definition found for %s?" (show w)
 
   r <- asks _repos
   rs <- splitDirectories <$> asks _repos

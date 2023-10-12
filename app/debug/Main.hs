@@ -68,6 +68,9 @@ import GTD.Configuration (defaultArgs, prepareConstants, repos)
 import GTD.Haskell.Module (emptyHsModule, emptyMetadata)
 import qualified GTD.Haskell.Module as HsModule
 import GTD.Haskell.Parser.GhcLibParser (fakeSettings, parsePragmasIntoDynFlags, showO)
+import qualified GTD.Resolution.Cache.Resolution as ResolutionCache
+import GTD.Resolution.Module (orderedByDependencies)
+import GTD.Resolution.Module.Single (module'Dependencies)
 import GTD.Resolution.Package (package'dependencies'ordered, package'order'default)
 import GTD.Server.Definition (cabalPackage, findAtF)
 import qualified GTD.Server.Definition as Server (resolution)
@@ -78,9 +81,7 @@ import System.Directory (getCurrentDirectory, makeAbsolute, setCurrentDirectory)
 import System.FilePath (isRelative, (</>))
 import System.IO (BufferMode (LineBuffering), hPrint, hSetBuffering, stderr, stdout)
 import Text.Printf (printf)
-import GTD.Resolution.Module.Single (module'Dependencies)
-import GTD.Resolution.Module (orderedByDependencies)
-import qualified GTD.Resolution.Cache.Resolution as ResolutionCache
+import qualified Data.ByteString.Char8 as BSC8
 
 showT2 :: (String, String) -> String
 showT2 (a, b) = "(" ++ a ++ "," ++ b ++ ")"
@@ -190,7 +191,7 @@ order pkgN pkgV t = do
             let deps = Set.intersection pkgsN $ Set.fromList $ depsM m
             let ds = Set.intersection acc1 deps
 
-            liftIO $ printf "%s ->\n\t%s\n\t%s\n" (nmae m) (show deps) (show ds)
+            liftIO $ printf "%s ->\n\t%s\n\t%s\n" (show $ nmae m) (show deps) (show ds)
             return (Set.insert (nmae m) acc1, (acc21 + Set.size deps, acc22 + Set.size ds))
 
           liftIO $ printf "h1: %d, h2: %d\n" h1 h2
@@ -209,7 +210,7 @@ order pkgN pkgV t = do
           return ()
 
     case t of
-      Module -> h HsModule._name module'Dependencies orderedByDependencies findAtF
+      Module -> h (BSC8.unpack . HsModule._name) (fmap show . module'Dependencies) orderedByDependencies findAtF
       Package -> h (show . Cabal.key) (fmap show . Cabal._dependencies) (flip package'dependencies'ordered package'order'default) Cabal.findAt
 
   case x of
@@ -218,7 +219,7 @@ order pkgN pkgV t = do
 
 identifier :: String -> IO ()
 identifier txt = do
-  let content = "{-# LANGUAGE OverloadedRecordDot #-}\nmodule Main where\n" ++ txt
+  let content = GHC.stringToStringBuffer $ "{-# LANGUAGE OverloadedRecordDot #-}\nmodule Main where\n" ++ txt
 
   let dynFlags0 = GHC.defaultDynFlags fakeSettings
   fM <- try (parsePragmasIntoDynFlags dynFlags0 "." content) :: IO (Either SourceError (Maybe (DynFlags, [String])))
@@ -228,7 +229,7 @@ identifier txt = do
 
   let o = GHC.initParserOpts dynFlags
       l = GHC.mkRealSrcLoc (GHC.mkFastString ".") 1 1
-      b = GHC.stringToStringBuffer txt
+      b = GHC.stringToStringBuffer $ txt
       s = GHC.initParserState o b l
       r = GHC.unP GHC.parseIdentifier s
 
@@ -238,7 +239,7 @@ identifier txt = do
 
 parseHeader :: String -> IO ()
 parseHeader file = do
-  content <- readFile file
+  content <- GHC.stringToStringBuffer <$> readFile file
 
   let dynFlags0 = GHC.defaultDynFlags fakeSettings
   fM <- try (parsePragmasIntoDynFlags dynFlags0 "." content) :: IO (Either SourceError (Maybe (DynFlags, [String])))
@@ -248,7 +249,7 @@ parseHeader file = do
 
   let o = GHC.initParserOpts dynFlags
       l = GHC.mkRealSrcLoc (GHC.mkFastString file) 1 1
-      b = GHC.stringToStringBuffer content
+      b = content
       s = GHC.initParserState o b l
       r = GHC.unP GHC.parseHeader s
 
@@ -281,14 +282,16 @@ cabal fileP fileC root = do
 -- cabal v2-run haskell-gtd-nl-debug -- resolution dir --dir "$(pwd)" --file "./app/server/Main.hs" --identifier "return"
 -- cabal v2-run haskell-gtd-nl-debug -- resolution cabal --packageName base --packageVersion "^>=4.16" --module "Prelude" --identifier "return" 2>/dev/null
 resolution :: ResolutionPackage -> String -> IO ()
-resolution pkg ident = do
+resolution pkg identS = do
+  let ident = BSC8.pack identS
   constants <- prepareConstants =<< defaultArgs
   setCurrentDirectory (constants ^. repos)
 
   r <- runStderrLoggingT $ flip runReaderT constants $ flip evalStateT emptyContext $ runExceptT $ do
     Cabal.load
     (cPkg, f) <- case pkg of
-      PCabal {_cpkg = CabalPackage {..}, _module = m} -> do
+      PCabal {_cpkg = CabalPackage {..}, _module = mS} -> do
+        let m = BSC8.pack mS
         ccGetM <- use ccGet
         pkgP <- fst <$> Cabal.get ccGetM _name _version
         cPkgs <- maybeM (throwError "`cabal get` could not find a package by given name and version") findAt (return pkgP)
@@ -314,7 +317,7 @@ resolution pkg ident = do
 
 playground :: FilePath -> IO ()
 playground file = do
-  content <- readFile file
+  content <- GHC.stringToStringBuffer <$> readFile file
 
   let dynFlags0 = GHC.defaultDynFlags fakeSettings
   fM <- try (parsePragmasIntoDynFlags dynFlags0 "." content) :: IO (Either SourceError (Maybe (DynFlags, [String])))
@@ -324,7 +327,7 @@ playground file = do
 
   let o = GHC.initParserOpts dynFlags
       l = GHC.mkRealSrcLoc (GHC.mkFastString file) 1 1
-      b = GHC.stringToStringBuffer content
+      b = content
       s = GHC.initParserState o b l
       r = GHC.unP GHC.parseModule s
 

@@ -44,7 +44,7 @@ localUsagesTest consts0 = do
   cwd <- runIO getCurrentDirectory
 
   let wd = cwd </> "test/integrationTestRepo/fake"
-      req = DefinitionRequest {_workDir = wd, _file = "", _word = ""}
+      req = DefinitionRequest {_workDir = wd, _file = mempty, _word = mempty}
       logF = wd </> descr ++ ".txt"
 
   let lib1 = "lib1/src/Lib1.hs"
@@ -100,7 +100,7 @@ localUsagesTest consts0 = do
           }
 
   let tests =
-        [ (ps, exe3, wd, "", expectedNothing),
+        [ (ps, exe3, wd, mempty, expectedNothing),
           (ps, lib1, wd, "default settings", expectedNothing),
           (allE, lib1, wd, "all=True", expectedNothing),
           (ps, lib2, wd, "default settings", expectedNothing),
@@ -120,7 +120,7 @@ localUsagesTest consts0 = do
         printf "cwd = %s, wd = %s, logF = %s\n" cwd wd logF
         removeIfExists logF
         runFileLoggingT logF $ runReaderT resetCache consts
-        mstack consts (`execStateT` emptyContext) $ Cabal.load >> (evalD exe3 "return" >>= liftIO . printf "%s %s %s -> %s\n" descr exe3 "return" . show) >> Cabal.store
+        mstack consts (`execStateT` emptyContext) $ Cabal.load >> (evalD exe3 (BSC8.pack "return") >>= liftIO . printf "%s %s %s -> %s\n" descr exe3 "return" . show) >> Cabal.store
 
   beforeAll init $ describe descr $ forM_ tests $ \(ps, f, wd, n, r) -> do
     it (printf "n=%s, f=%s" n f) $ \ss -> do

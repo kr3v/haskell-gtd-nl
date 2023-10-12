@@ -23,10 +23,9 @@ import qualified Data.ByteString.Char8 as BSC8
 import qualified Data.Map.Strict as Map
 import GHC.Generics (Generic)
 import qualified GTD.Cabal.Types as Cabal
-import GTD.Configuration (Args (..), GTDConfiguration (_args), MS0, Powers (..), shouldCollectDataForGoToReferences)
+import GTD.Configuration (Args (..), GTDConfiguration (_args), MS0, shouldCollectDataForGoToReferences)
 import GTD.Haskell.Cpphs (haskellApplyCppHs)
-import GTD.Haskell.Declaration (ClassOrData (_cdtName), Declaration (..), Declarations (..), Exports, IdentifierWithUsageLocation, Imports, SourceSpan (..), declSrcOrig, declSrcOthers, declarationsT, iuSourceSpan)
-import qualified GTD.Haskell.Declaration as Declaration
+import GTD.Haskell.Declaration (Declarations (..), Exports, IdentifierWithUsageLocation, Imports, declSrcOrig, declSrcOthers, declarationsT, iuSourceSpan)
 import qualified GTD.Haskell.Lines as Lines
 import qualified GTD.Haskell.Parser.GhcLibParser as GHC
 import GTD.Utils (logDebugNSS, storeIOExceptionToMonadError)
@@ -64,7 +63,7 @@ emptyData =
   HsModuleData
     { _exports0 = Map.empty,
       _imports = [],
-      _locals = Declarations {_decls = Map.empty, _dataTypes = Map.empty},
+      _locals = Declarations {_decls = mempty, _dataTypes = mempty},
       _identifierUsages = []
     }
 
@@ -83,7 +82,7 @@ instance ToJSON HsModuleMetadata
 instance Binary HsModuleMetadata
 
 emptyMetadata :: HsModuleMetadata
-emptyMetadata = HsModuleMetadata {_mPackage = "", _mPkgK = Cabal.emptyPackageKey, _mName = "", _mPath = ""}
+emptyMetadata = HsModuleMetadata {_mPackage = mempty, _mPkgK = Cabal.emptyPackageKey, _mName = mempty, _mPath = mempty}
 
 metadataPrettyShow :: HsModuleMetadata -> String
 metadataPrettyShow m = show (_mPkgK m) ++ ":" ++ show (_mName m)
@@ -126,10 +125,13 @@ emptyHsModule =
 parseModule :: HsModuleMetadata -> (MS0 m, MonadError String m) => m HsModule
 parseModule cm@HsModuleMetadata {_mPath = srcP} = do
   let logTag = "parsing module " ++ srcP
-  logDebugNSS logTag ""
+  logDebugNSS logTag mempty
 
-  src <- storeIOExceptionToMonadError $ readFile srcP
-  srcPostCpp <- haskellApplyCppHs srcP src
+  src <- storeIOExceptionToMonadError $ BSC8.readFile srcP
+  srcPostCpp <-
+    if BSC8.pack "\n#" `BSC8.isInfixOf` src
+      then BSC8.pack <$> haskellApplyCppHs srcP (BSC8.unpack src)
+      else return src
   let lines = Lines.buildMap srcPostCpp
   let srcPostLines = Lines.dropDirectives srcPostCpp
 
@@ -176,4 +178,3 @@ instance FromJSON HsModuleP
 instance ToJSON HsModuleP
 
 instance Binary HsModuleP
-

@@ -1,102 +1,123 @@
 {
-  "_dataTypes": {
-    "Data": {
-      "_cdtFields": {
-        "Data1": {
-          "_declModule": "T4",
-          "_declName": "Data1",
-          "_declSrcOrig": {
-            "_colBegin": 5,
-            "_colEnd": 10,
-            "_fileName": "test/samples/haskellGetIdentifiers/in.4.hs",
-            "_lineBegin": 4,
-            "_lineEnd": 4
-          },
-          "_declSrcOthers": []
-        },
-        "Data1_Dup": {
-          "_declModule": "T4",
-          "_declName": "Data1_Dup",
-          "_declSrcOrig": {
-            "_colBegin": 5,
-            "_colEnd": 14,
-            "_fileName": "test/samples/haskellGetIdentifiers/in.4.hs",
-            "_lineBegin": 11,
-            "_lineEnd": 11
-          },
-          "_declSrcOthers": []
-        },
-        "Data2": {
-          "_declModule": "T4",
-          "_declName": "Data2",
-          "_declSrcOrig": {
-            "_colBegin": 5,
-            "_colEnd": 10,
-            "_fileName": "test/samples/haskellGetIdentifiers/in.4.hs",
-            "_lineBegin": 8,
-            "_lineEnd": 8
-          },
-          "_declSrcOthers": []
-        },
-        "data1_1": {
-          "_declModule": "T4",
-          "_declName": "data1_1",
-          "_declSrcOrig": {
-            "_colBegin": 9,
-            "_colEnd": 16,
-            "_fileName": "test/samples/haskellGetIdentifiers/in.4.hs",
-            "_lineBegin": 12,
-            "_lineEnd": 12
-          },
-          "_declSrcOthers": [
+  "_dataTypes": [
+    [
+      ".Data",
+      {
+        "_cdtFields": [
+          [
+            ".data1_2",
             {
-              "_colBegin": 9,
-              "_colEnd": 16,
-              "_fileName": "test/samples/haskellGetIdentifiers/in.4.hs",
-              "_lineBegin": 5,
-              "_lineEnd": 5
+              "_declModule": "T4",
+              "_declName": ".data1_2",
+              "_declSrcOrig": {
+                "_colBegin": 9,
+                "_colEnd": 16,
+                "_fileName": "test/samples/haskellGetIdentifiers/in.4.hs",
+                "_lineBegin": 6,
+                "_lineEnd": 6
+              },
+              "_declSrcOthers": []
+            }
+          ],
+          [
+            ".data1_1",
+            {
+              "_declModule": "T4",
+              "_declName": ".data1_1",
+              "_declSrcOrig": {
+                "_colBegin": 9,
+                "_colEnd": 16,
+                "_fileName": "test/samples/haskellGetIdentifiers/in.4.hs",
+                "_lineBegin": 12,
+                "_lineEnd": 12
+              },
+              "_declSrcOthers": [
+                {
+                  "_colBegin": 9,
+                  "_colEnd": 16,
+                  "_fileName": "test/samples/haskellGetIdentifiers/in.4.hs",
+                  "_lineBegin": 5,
+                  "_lineEnd": 5
+                }
+              ]
+            }
+          ],
+          [
+            ".Data1_Dup",
+            {
+              "_declModule": "T4",
+              "_declName": ".Data1_Dup",
+              "_declSrcOrig": {
+                "_colBegin": 5,
+                "_colEnd": 14,
+                "_fileName": "test/samples/haskellGetIdentifiers/in.4.hs",
+                "_lineBegin": 11,
+                "_lineEnd": 11
+              },
+              "_declSrcOthers": []
+            }
+          ],
+          [
+            ".Data1",
+            {
+              "_declModule": "T4",
+              "_declName": ".Data1",
+              "_declSrcOrig": {
+                "_colBegin": 5,
+                "_colEnd": 10,
+                "_fileName": "test/samples/haskellGetIdentifiers/in.4.hs",
+                "_lineBegin": 4,
+                "_lineEnd": 4
+              },
+              "_declSrcOthers": []
+            }
+          ],
+          [
+            ".data2_1",
+            {
+              "_declModule": "T4",
+              "_declName": ".data2_1",
+              "_declSrcOrig": {
+                "_colBegin": 9,
+                "_colEnd": 16,
+                "_fileName": "test/samples/haskellGetIdentifiers/in.4.hs",
+                "_lineBegin": 9,
+                "_lineEnd": 9
+              },
+              "_declSrcOthers": []
+            }
+          ],
+          [
+            ".Data2",
+            {
+              "_declModule": "T4",
+              "_declName": ".Data2",
+              "_declSrcOrig": {
+                "_colBegin": 5,
+                "_colEnd": 10,
+                "_fileName": "test/samples/haskellGetIdentifiers/in.4.hs",
+                "_lineBegin": 8,
+                "_lineEnd": 8
+              },
+              "_declSrcOthers": []
             }
           ]
-        },
-        "data1_2": {
+        ],
+        "_cdtName": {
           "_declModule": "T4",
-          "_declName": "data1_2",
+          "_declName": ".Data",
           "_declSrcOrig": {
-            "_colBegin": 9,
-            "_colEnd": 16,
+            "_colBegin": 6,
+            "_colEnd": 10,
             "_fileName": "test/samples/haskellGetIdentifiers/in.4.hs",
-            "_lineBegin": 6,
-            "_lineEnd": 6
+            "_lineBegin": 3,
+            "_lineEnd": 3
           },
           "_declSrcOthers": []
         },
-        "data2_1": {
-          "_declModule": "T4",
-          "_declName": "data2_1",
-          "_declSrcOrig": {
-            "_colBegin": 9,
-            "_colEnd": 16,
-            "_fileName": "test/samples/haskellGetIdentifiers/in.4.hs",
-            "_lineBegin": 9,
-            "_lineEnd": 9
-          },
-          "_declSrcOthers": []
-        }
-      },
-      "_cdtName": {
-        "_declModule": "T4",
-        "_declName": "Data",
-        "_declSrcOrig": {
-          "_colBegin": 6,
-          "_colEnd": 10,
-          "_fileName": "test/samples/haskellGetIdentifiers/in.4.hs",
-          "_lineBegin": 3,
-          "_lineEnd": 3
-        },
-        "_declSrcOthers": []
-      },
-      "_eWildcard": false
-    }
-  },
-  "_decls": {}
+        "_eWildcard": false
+      }
+    ]
+  ],
+  "_decls": []
 }

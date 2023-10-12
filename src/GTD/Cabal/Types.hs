@@ -1,4 +1,5 @@
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -13,15 +14,16 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# LANGUAGE DeriveAnyClass #-}
 
 module GTD.Cabal.Types where
 
 import Control.Applicative (Applicative (..))
+import Control.DeepSeq (NFData)
 import Control.Lens (makeLenses)
 import Control.Monad (forM)
 import Data.Aeson (FromJSON, ToJSON, Value)
 import Data.Aeson.Types (ToJSON (..), Value (..))
+import qualified Data.ByteString.Char8 as BSC8
 import Data.List (find)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (isNothing)
@@ -32,13 +34,13 @@ import Distribution.ModuleName (fromString, toFilePath)
 import Distribution.Pretty (prettyShow)
 import Distribution.Types.VersionRange (VersionRange)
 import qualified Distribution.Version as Cabal
+import GTD.Utils.Orphans ()
 import System.Directory (doesFileExist)
 import System.FilePath ((</>))
-import Control.DeepSeq (NFData)
 
 type PackageNameS = String
 
-type ModuleNameS = String
+type ModuleNameS = BSC8.ByteString
 
 data DesignationType = Library | Executable | TestSuite | Benchmark
   deriving (NFData, Eq, Ord, Read, Show, Generic)
@@ -172,7 +174,7 @@ isMainLib = liftA2 (&&) (isNothing . _desName) ((== Library) . _desType) . _desi
 
 resolve :: Package a -> ModuleNameS -> IO (Maybe FilePath)
 resolve p m = do
-  let mp = toFilePath . fromString $ m
+  let mp = toFilePath . fromString . BSC8.unpack $ m
   let ds = fmap (\d -> _root p </> d </> (mp ++ ".hs")) $ _srcDirs . _modules $ p
   xs <- forM ds $ \d -> (d,) <$> doesFileExist d
   return $ fst <$> find snd xs
