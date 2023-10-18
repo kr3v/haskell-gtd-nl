@@ -1,3 +1,4 @@
+with-compiler: ghc-9.2.5
 packages:
     ./
     ./cpphs-1.20.9.1
