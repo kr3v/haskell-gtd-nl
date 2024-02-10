@@ -7,18 +7,35 @@ This repository contains a VS Code extension and a Haskell server that implement
 The extension:
 - supports only `*.cabal`-based projects,
 - supports multi-folder VS Code workspaces, as long as either `*.cabal` or `cabal.project` files are present in the folders' roots,
-- is likely to work only on Linux (it was not tested on other platforms).
+- works on Linux,
+  - should work on Mac OS, but it was not thoroughly tested,
 
 ## How to install
-1. Install the VS Code extension (`through the `*.vsix` or directly [dbaynak.haskell-gtd-nl](https://marketplace.visualstudio.com/items?itemName=dbaynak.haskell-gtd-nl) from either VS Code "extensions" or the marketplace).
-2. Clone this repository. Execute `cabal install` in its root directory.
+1. Install the VS Code extension (through the `*.vsix` or directly [dbaynak.haskell-gtd-nl](https://marketplace.visualstudio.com/items?itemName=dbaynak.haskell-gtd-nl) from either VS Code "extensions" or the marketplace).
+2. Execute the following actions:
 ```shell
 git clone https://github.com/kr3v/haskell-gtd-nl
 cd haskell-gtd-nl
+```
+
+For Linux, checkout the following tag:
+```shell
 git checkout 0.0.3.3
+```
+
+For MacOS, checkout the following tag:
+```shell
+git checkout 0.0.3.4
+```
+
+There should not be any issues with the latest version, but `0.0.3.4` was tagged long after I worked on the extension, so I cannot guarantee that it works as expected.
+
+Build and install the extension:
+```
 cabal update
 cabal install
 ```
+
 3. The extension should activate when a Haskell file gets opened in VS Code.
 
 It would take some time for the extension to fetch and parse all the dependencies on the first start (it takes minutes). There would be no long pauses like the first initialization after it.
@@ -27,7 +44,9 @@ Notes:
 - on Ubuntu22, I had to install `zlib1g-dev` package for `cabal install` to succeed;
 - on Fedora 34, `zlib-devel` should be installed.
 
-If HLS does not work in your project, enable `haskell-gtd-nl.extension.disable-local-definitions-when-hls-is-active` setting in VS Code extension for 'local' definitions.
+If you don't use HLS, consider disabling `haskell-gtd-nl.extension.disable-local-definitions-when-hls-is-active` setting in VS Code extension - this will provide local definitions in addition to non-local ones.
+
+---
 
 ## Performance
 The first attempt to perform a `go to definition` action will take time (to fetch all the dependencies, to parse & cache them), yet consequent attempts should take much less time.
